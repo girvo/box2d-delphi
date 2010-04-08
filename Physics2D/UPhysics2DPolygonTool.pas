@@ -79,7 +79,7 @@ interface
 {$I Physics2D.inc}
 
 uses
-   UPhysics2DTypes, UPhysics2D, SysUtils, Classes, Math;
+   UPhysics2DTypes, UPhysics2D, Math;
 
 const
    maxVerticesPerPolygon = b2_maxPolygonVertices;
