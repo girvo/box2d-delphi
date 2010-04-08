@@ -361,6 +361,8 @@ function ARGBToGLColor(color: ARGB): TColorVector; {$IFDEF INLINE_AVAIL}inline;{
 function GLColorToTColor(const glcolor: TColorVector): TColor; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function TColorToGLColor(color: TColor; alpha: Byte = 255): TColorVector; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
+function ModifyAlphaValue(col: ARGB; alpha: Byte): ARGB; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+
 implementation
 var
    GLOBAL_ANTIALIASING_STATE: Boolean;
@@ -472,6 +474,12 @@ begin
    Result[1] := GetGValue(color) / 255;
    Result[2] := GetBValue(color) / 255;
    Result[3] := alpha / 255;
+end;
+
+function ModifyAlphaValue(col: ARGB; alpha: Byte): ARGB;
+begin
+   Result := col;
+   TARGB(Result).alpha := alpha;
 end;
 
 { TGLFont }
