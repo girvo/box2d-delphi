@@ -61,8 +61,7 @@ interface
 {$I Physics2D.inc}
 
 uses
-   Math, Classes, SysUtils,
-   Dialogs;
+   Math;
 
 type
    Int8   = ShortInt;
