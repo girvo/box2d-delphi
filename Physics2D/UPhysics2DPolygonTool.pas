@@ -79,7 +79,7 @@ interface
 {$I Physics2D.inc}
 
 uses
-   UPhysics2DTypes, UPhysics2D, Math;
+   UPhysics2DTypes, UPhysics2D, SysUtils, Classes, Math;
 
 const
    maxVerticesPerPolygon = b2_maxPolygonVertices;
@@ -475,7 +475,7 @@ begin
    begin
       earindex := -1;
       for i := 0 to vNum - 1 do
-         if IsEar(i, xrem, yrem, vNum) then
+         if IsEar(i, xrem, yrem, Length(xrem)) then
          begin
             earIndex := i;
             Break;
@@ -501,10 +501,10 @@ begin
       end;
 
       if earIndex = 0 then
-         under := vNum - 1
+         under := Length(xrem) - 1
       else
          under := earIndex - 1;
-      if earindex = vNum - 1 then
+      if earindex = Length(xrem) - 1 then
          over := 0
       else
          over := earIndex + 1;
@@ -598,64 +598,6 @@ begin
          Break;
       end;
 
-     { if currTri = -1 then
-         notDone := False
-      else
-      begin
-         poly := TPolygon.Create(triangulated[currTri]);
-         covered[currTri] := True;
-         index := 0;
-         for i := 0 to 2 * triangulatedLength - 1 do
-         begin
-            while (index >= triangulatedLength) do
-               index := index - triangulatedLength;
-            if covered[index] then
-            begin
-               Inc(index);
-               Continue;
-            end;
-
-            newP := poly.Add(triangulated[index]);
-            if not Assigned(newP) then
-            begin
-               Inc(index);
-               Continue;
-            end;
-
-            if (newP.nVertices > maxVerticesPerPolygon) then
-            begin
-               FreeAndNil(newP);
-               Inc(index);
-               Continue;
-            end;
-
-            if newP.IsConvex then //Or should it be IsUsable?  Maybe re-write IsConvex to apply the angle threshold from Box2d
-            begin
-               poly.SetPoly(newP);
-               FreeAndNil(newP);
-               covered[index] := True;
-            end
-            else
-               FreeAndNil(newP);
-         end;
-
-         poly.MergeParallelEdges(b2_angularSlop);
-         //If identical points are present, a triangle gets
-         //borked by the MergeParallelEdges function, hence
-         //the vertex number check
-         if poly.nVertices >= 3 then
-         begin
-            if bufSize < polyIndex + 1  then
-            begin
-               Inc(bufSize, 5);
-               SetLength(polys, bufSize);
-            end;
-            polys[polyIndex] := poly;
-            Inc(polyIndex); //Must be outside (polyIndex < polysLength) test
-         end
-         else
-            poly.Free;
-      end;     }
       if currTri = -1 then
          notDone := false
       else
@@ -1513,8 +1455,8 @@ begin
    currOut := 0;
    for i := 0 to nVertices - 1 do
    begin
-      newX[currOut] := self.x[i];
-      newY[currOut] := self.y[i];
+      newX[currOut] := x[i];
+      newY[currOut] := y[i];
       if i = firstP then
       begin
          Inc(currOut);
