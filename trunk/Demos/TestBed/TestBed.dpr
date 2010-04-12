@@ -46,7 +46,6 @@ uses
   UTerrainBox in 'Tests\UTerrainBox.pas',
   URopeInWind in 'Tests\URopeInWind.pas',
   UExplosion in 'Tests\UExplosion.pas',
-  UOpenGLCanvasGDIP in '..\..\OpenGL Canvas\UOpenGLCanvasGDIP.pas',
   UOpenGLCanvas in '..\..\OpenGL Canvas\UOpenGLCanvas.pas',
   MSTimer in '..\..\Physics2D\MSTimer.pas',
   UPhysics2D in '..\..\Physics2D\UPhysics2D.pas',

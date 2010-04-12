@@ -85,7 +85,6 @@
 			<DCCReference Include="Tests\UTerrainBox.pas"/>
 			<DCCReference Include="Tests\URopeInWind.pas"/>
 			<DCCReference Include="Tests\UExplosion.pas"/>
-			<DCCReference Include="..\..\OpenGL Canvas\UOpenGLCanvasGDIP.pas"/>
 			<DCCReference Include="..\..\OpenGL Canvas\UOpenGLCanvas.pas"/>
 			<DCCReference Include="..\..\Physics2D\MSTimer.pas"/>
 			<DCCReference Include="..\..\Physics2D\UPhysics2D.pas"/>
