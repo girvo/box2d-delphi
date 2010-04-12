@@ -1,7 +1,7 @@
 unit UOpenGLCanvas;
 
 { This unit is written by Qianyuan Wang. One version is contributed to CnPack(www.cnpack.org) and this version
-   doens't require you install the component. 
+   doesn't require you install the component. 
 
   http://hi.baidu.com/wqyfavor
   wqyfavor@163.com

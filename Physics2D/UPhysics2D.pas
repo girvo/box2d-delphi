@@ -10235,7 +10235,11 @@ begin
             end;
          end;
 
-         if upper < lower - FLT_EPSILON then
+         // The use of epsilon here causes the assert on lower to trip
+         // in some cases. Apparently the use of epsilon was to make edge
+         // shapes work, but now those are handled separately.
+         //if (upper < lower - b2_epsilon)
+         if upper < lower then
          begin
             Result := False;
             Exit;
