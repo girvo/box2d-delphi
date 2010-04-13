@@ -488,7 +488,6 @@ const
    DefaultWindForce: TVector2 = (X: 10; Y: 0); // From left to right
 var
    i: Pb2ControllerEdge;
-   body: Tb2Body;
    shape: Tb2Fixture;
    windforce: TVector2;
    appliedforce: TVector2;
@@ -592,10 +591,6 @@ end;
 procedure Tb2ExplosionController.RecalculateDefaultEnergy;
 var
    i: Pb2ControllerEdge;
-   body: Tb2Body;
-   shape: Tb2Fixture;
-   windforce: TVector2;
-   appliedforce: TVector2;
 begin
    i := m_bodyList;
    FEnergy := 0.0;
@@ -634,7 +629,6 @@ procedure Tb2ExplosionController.Step(const step: Tb2TimeStep);
 var
    i, j: Pb2ControllerEdge;
    body1, body2: Tb2Body;
-   shape: Tb2Fixture;
    totalMass, nTotalMass, divEnergy, linEnergy, angEnergy, ang_impulse: Float;
    bodyCount: Int32;      
    lin_impulse: TVector2;

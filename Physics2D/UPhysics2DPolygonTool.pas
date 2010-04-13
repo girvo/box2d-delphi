@@ -562,7 +562,7 @@ end;
 function PolygonizeTriangles(const triangulated: TTriangleArray;
    triangulatedLength: Int32; var polys: TPolygonArray): Int32;
 var
-   i, polyIndex, bufSize, index: Integer;
+   i, polyIndex, bufSize: Integer;
    newP, poly: TPolygon;
    covered: array of Boolean;
    currTri: Integer;
@@ -1374,7 +1374,6 @@ var
    i: Integer;
    tipT, currOut: Integer;
    newX, newY: TPointFloatArray;
-   p1: TPolygon;
 begin
    //First, find vertices that connect
    firstP := -1;

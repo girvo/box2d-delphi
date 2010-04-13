@@ -292,9 +292,8 @@ type
 var
    flag: Tb2DebugDrawBitsSet;
    i: Integer;
-   SettingArray: TSettingArray;
 begin
-   for i := 0 to High(SettingArray) - 6 do
+   for i := 0 to High(TSettingArray) - 6 do
       TSettingArray(Settings)[i] := chklstVisibility.Checked[i];
 
    flag := [];
@@ -318,7 +317,7 @@ procedure TfrmMain.FormCreate(Sender: TObject);
 var
    i: Integer;
 begin
-   ReportMemoryLeaksOnShutdown := True;
+   //ReportMemoryLeaksOnShutdown := True;
    Randomize;
    DrawPanel := TDrawPanel.Create(Self);
    DrawPanel.Parent := Self;

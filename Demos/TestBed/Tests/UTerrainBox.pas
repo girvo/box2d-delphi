@@ -133,7 +133,6 @@ var
    cshape: Tb2CircleShape;
    fd: Tb2FixtureDef;
    body: Tb2Body;
-   vertices: Tb2PolyVertices;
 begin
    idx := RandomRange(0, 4);
    case idx of
