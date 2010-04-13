@@ -924,11 +924,11 @@ type
    /// is created.
    Tb2Shape = class
    private
+      m_type: Tb2ShapeType;
       m_fixture: Tb2Fixture;
       m_destroyed: Boolean;
       m_baseMass: Tb2MassData; // Density = 1
-   public
-      m_type: Tb2ShapeType;
+   public      
       m_radius: Float;
 
       constructor Create;
