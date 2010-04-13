@@ -281,6 +281,9 @@ type
 	    /// Advance the sweep forward, yielding a new initial state.
     	/// @param t the new initial time.
       procedure Advance(t: Float);
+
+	    /// Normalize the angles. Normalize an angle in radians to be between -pi and pi
+	    procedure Normalize;
       {$ENDIF}
    end;
 
@@ -467,6 +470,7 @@ function GetAngle(const xf: Tb2Transform): Float; {$IFDEF INLINE_AVAIL}inline;{$
 // For Tb2Sweep
 procedure GetTransform(const Sweep: Tb2Sweep; var xf: Tb2Transform; alpha: Float);
 procedure Advance(var Sweep: Tb2Sweep; t: Float);
+procedure Normalize(var Sweep: Tb2Sweep); overload;
 
 {$ENDIF}
 
@@ -1268,6 +1272,20 @@ begin
    end;
 end;
 
+procedure Normalize(var Sweep: Tb2Sweep);
+const
+   Pi2 = 2 * Pi;
+var
+   d: Float;
+begin
+   with Sweep do
+   begin
+      d :=  Pi2 * Floor(a0 / Pi2);
+      a0 := a0 - d;
+      a := a - d;
+   end;
+end;
+
 {$ENDIF}
 
 /// Friction mixing law. Feel free to customize this.
@@ -1932,6 +1950,17 @@ procedure Tb2Sweep.Advance(t: Float);
 begin
 	 c0 := (1.0 - t) * c0 + t * c;
 	 a0 := (1.0 - t) * a0 + t * a;
+end;
+
+procedure Tb2Sweep.Normalize;
+const
+   Pi2 = 2 * Pi;
+var
+   d: Float;
+begin
+   d :=  Pi2 * Floor(a0 / Pi2);
+   a0 := a0 - d;
+   a := a - d;
 end;
 {$ENDIF}
 
