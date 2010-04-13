@@ -85,7 +85,6 @@ end;
 procedure TConfined.Step(var settings: TSettings; timeStep: Float);
 var
    b: Tb2Body;
-   flag: Boolean;
    sleeping: Boolean;
    p: TVector2;
 begin
