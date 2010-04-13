@@ -153,6 +153,8 @@ type
 	   procedure SpawnBomb(const worldPt: TVector2);
 	   procedure CompleteBombSpawn(const p: TVector2);
 
+     procedure SetCanvasTranslation(x, y: Float);
+     procedure SetCanvasTranslationOffset(dx, dy: Float);
      procedure DrawText(const text: string);
 
      // Let derived tests know that a joint was destroyed.
@@ -281,6 +283,7 @@ end;
 procedure TfrmMain.chkAntialiasingClick(Sender: TObject);
 begin
    GLCanvas.Antialiasing := chkAntialiasing.Checked;
+   Caption := FloatToStr(GLCanvas.TranslateX) + '  ' + FloatToStr(GLCanvas.TranslateY);
 end;
 
 procedure TfrmMain.chklstVisibilityClickCheck(Sender: TObject);
@@ -1039,6 +1042,28 @@ begin
    {$ENDIF}
    LaunchBomb(m_bombSpawnPoint, vel);
    m_bombSpawning := False;
+end;
+
+procedure TTester.SetCanvasTranslation(x, y: Float);
+begin
+   with m_debugDraw.Canvas do
+   begin
+      BeginUpdateTransformation;
+      SetTranslateX(x);
+      SetTranslateX(y);
+      EndUpdateTransformation;
+   end;
+end;
+
+procedure TTester.SetCanvasTranslationOffset(dx, dy: Float);
+begin
+   with m_debugDraw.Canvas do
+   begin
+      BeginUpdateTransformation;
+      TranslateX := TranslateX + dx;
+      TranslateY := TranslateY + dy;
+      EndUpdateTransformation;
+   end;
 end;
 
 procedure TTester.DrawText(const text: string);

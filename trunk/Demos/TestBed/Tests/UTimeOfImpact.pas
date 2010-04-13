@@ -33,11 +33,12 @@ implementation
 constructor TTimeOfImpact.Create;
 begin
    inherited;
-	 //m_shapeA.SetAsEdge(b2Vec2(-10.0, 0.0), b2Vec2(10.0, 0.0));
    m_shapeA := Tb2PolygonShape.Create;
    m_shapeB := Tb2PolygonShape.Create;
-	 m_shapeA.SetAsBox(0.2, 1.0, MakeVector(0.5, 1.0), 0.0);
- 	 m_shapeB.SetAsBox(2.0, 0.1);
+	 m_shapeA.SetAsBox(25.0, 5.0);
+	 m_shapeB.SetAsBox(2.5, 2.5);
+   frmMain.ResetView;
+   SetCanvasTranslationOffset(-200, 600);
 end;
 
 destructor TTimeOfImpact.Destroy;
@@ -61,16 +62,16 @@ var
    transformA, transformB: Tb2Transform;
    vertices: Tb2PolyVertices;
 begin
-   sweepA.c0 := b2Vec2_Zero;
-   sweepA.a0 := 0.0;
+   SetValue(sweepA.c0, 24.0, -60.0);
+   sweepA.a0 := 2.95;
    sweepA.c := sweepA.c0;
    sweepA.a := sweepA.a0;
    sweepA.localCenter := b2Vec2_Zero;
 
-   SetValue(sweepB.c0, -0.20382018, 2.1368704);
-   sweepB.a0 := -3.1664171;
-   SetValue(sweepB.c, -0.26699525, 2.3552670);
-   sweepB.a := -3.3926492;
+   SetValue(sweepB.c0, 53.474274, -50.252514);
+   sweepB.a0 := 513.36676; // - 162.0f * b2_pi;
+   SetValue(sweepB.c, 54.595478, -51.083473);
+   sweepB.a := 513.62781; //  - 162.0f * b2_pi;
    sweepB.localCenter := b2Vec2_Zero;
 
    {$IFDEF OP_OVERLOAD}

@@ -3401,11 +3401,11 @@ var
 function b2TimeOfImpact(var output: Tb2TOIOutput; const input: Tb2TOIInput): Float;
 const
    c_tolerance = 0.25 * b2_linearSlop;
-   k_maxIterations = 1000;	// TODO_ERIN b2Settings
+   k_maxIterations = 20;	// TODO_ERIN b2Settings
 var
    sweepA, sweepB: Tb2Sweep;
-   t1, s1, t2, s2, a1, a2, t, s: Float;
-   iter: Int32;
+   t1, s1, t2, s2, a1, a2, t, s, totalRadius, target, tolerance: Float;
+   iter, pushBackIter: Int32;
    cache: Tb2SimplexCache;
    distanceInput: Tb2DistanceInput;
    distanceOutput: Tb2DistanceOutput;
@@ -3421,9 +3421,18 @@ begin
    sweepA := input.sweepA;
    sweepB := input.sweepB;
 
-   //float32 totalRadius = proxyA->m_radius + proxyB->m_radius;
-   //float32 target = b2Max(b2_linearSlop, totalRadius - 3.0f * b2_linearSlop);
-   //float32 tolerance = 0.25f * b2_linearSlop;
+   // Large rotations can make the root finder fail, so we normalize the sweep angles.
+   {$IFDEF OP_OVERLOAD}
+   sweepA.Normalize;
+   sweepB.Normalize;
+   {$ELSE}
+   Normalize(sweepA);
+   Normalize(sweepB);
+   {$ENDIF}
+
+   totalRadius := input.proxyA.m_radius + input.proxyB.m_radius;
+   target := b2Max(b2_linearSlop, totalRadius - 3.0 * b2_linearSlop);
+   tolerance := 0.25 * b2_linearSlop;
    //b2Assert(target > tolerance);
 
    t1 := 0.0;
@@ -3462,6 +3471,14 @@ begin
          Break;
       end;
 
+      if distanceOutput.distance < target + tolerance then
+      begin
+         // Victory!
+         output.state := e_toi_touching;
+         output.t := t1;
+         Break;
+      end;
+
       // Initialize the separating axis.
       toi_separation_fcn.Initialize(cache, input.proxyA, input.proxyB, sweepA, sweepB);
 
@@ -3469,13 +3486,14 @@ begin
       // resolving the deepest point. This loop is bounded by the number of vertices.
       done := False;
       t2 := input.tMax;
+      pushBackIter := 0;
       while True do
       begin
          // Find the deepest point at t2. Store the witness point indices.
          s2 := toi_separation_fcn.FindMinSeparation(indexA, indexB, t2);
 
          // Is the final configuration separated?
-         if s2 > b2_linearSlop + c_tolerance then
+         if s2 > target + tolerance then
          begin
             // Victory!
             output.state := e_toi_separated;
@@ -3484,13 +3502,11 @@ begin
             Break;
          end;
 
-         // Is the final configuration touching?
-         if s2 > b2_linearSlop - c_tolerance then
+         // Has the separation reached tolerance?
+         if s2 > target - tolerance then
          begin
-            // Victory!
-            output.state := e_toi_touching;
-            output.t := t2;
-            done := True;
+            // Advance the sweeps
+            t1 := t2;
             Break;
          end;
 
@@ -3499,7 +3515,7 @@ begin
 
          // Check for initial overlap. This might happen if the root finder
          // runs out of iterations.
-         if s1 < b2_linearSlop - c_tolerance then
+         if s1 < target - tolerance then
          begin
             output.state := e_toi_failed;
             output.t := t1;
@@ -3508,7 +3524,7 @@ begin
          end;
 
          // Check for touching
-         if s1 <= b2_linearSlop + c_tolerance then
+         if s1 <= target + tolerance then
          begin
             // Victory! t1 should hold the TOI (could be 0.0).
             output.state := e_toi_touching;
@@ -3527,7 +3543,7 @@ begin
             if rootIterCount and 1 <> 0 then
             begin
                // Secant rule to improve convergence.
-               t := a1 + (b2_linearSlop - s1) * (a2 - a1) / (s2 - s1);
+               t := a1 + (target - s1) * (a2 - a1) / (s2 - s1);
             end
             else
             begin
@@ -3537,7 +3553,7 @@ begin
 
             s := toi_separation_fcn.Evaluate(indexA, indexB, t);
 
-            if Abs(s - b2_linearSlop) < c_tolerance then
+            if Abs(s - target) < tolerance then
             begin
                // t2 holds a tentative value for t1
                t2 := t;
@@ -3545,7 +3561,7 @@ begin
             end;
 
             // Ensure we continue to bracket the root.
-            if s > b2_linearSlop then
+            if s > target then
             begin
                a1 := t;
                s1 := s;
@@ -3564,6 +3580,10 @@ begin
          end;
 
          b2_toiMaxRootIters := b2Max(b2_toiMaxRootIters, rootIterCount);
+         Inc(pushBackIter);
+
+         if pushBackIter = b2_maxPolygonVertices then
+            Break;
       end;
 
       Inc(iter);
