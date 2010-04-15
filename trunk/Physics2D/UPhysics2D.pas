@@ -2307,19 +2307,20 @@ const
    e_world_clearForces = 4;
 
    // Tb2Contact.m_flags
-   e_contact_islandFlag	 = 1; // Used when crawling contact graph when forming islands.
-   e_contact_touchingFlag	= 2; // Set when the shapes are touching.
-   e_contact_enabledFlag = 4; // This contact can be disabled (by user)
-   e_contact_filterFlag	= 8; // This contact needs filtering because a fixture filter was changed.
+   e_contact_islandFlag	 = $1; // Used when crawling contact graph when forming islands.
+   e_contact_touchingFlag	= $2; // Set when the shapes are touching.
+   e_contact_enabledFlag = $4; // This contact can be disabled (by user)
+   e_contact_filterFlag	= $8; // This contact needs filtering because a fixture filter was changed.
+	 e_contact_bulletHitFlag = $10; // This bullet contact had a TOI event
 
    // Tb2Body.m_flags
-   e_body_islandFlag = 1;
-   e_body_awakeFlag	= 2;
-   e_body_autoSleepFlag	= 4;
-   e_body_bulletFlag = 8;
-   e_body_fixedRotationFlag	= 16;
-   e_body_activeFlag	= 32;
-   e_body_toiFlag = 64;
+   e_body_islandFlag = $1;
+   e_body_awakeFlag	= $2;
+   e_body_autoSleepFlag	= $4;
+   e_body_bulletFlag = $8;
+   e_body_fixedRotationFlag	= $10;
+   e_body_activeFlag	= $20;
+   e_body_toiFlag = $40;
 
 function MakeColor(r, g, b: Single; a: Single = 1.0): RGBA;
 begin
@@ -4831,6 +4832,7 @@ const
    k_toiBaumgarte = 0.75;
 var
    toiContact, contact: Pb2Contact;
+   toiOther: Tb2Body;
    toi: Float;
    found, bullet: Boolean;
    count, iter: Int32;
@@ -4870,6 +4872,13 @@ begin
          begin
             // Bullets only perform TOI with bodies that have their TOI resolved.
             if (other.m_flags and e_body_toiFlag) = 0 then
+            begin
+               ce := ce^.next;
+               Continue;
+            end;
+
+            // No repeated hits on non-static bodies
+            if (other.m_type <> b2_staticBody) and ((ce^.contact^.m_flags and e_contact_bulletHitFlag) <> 0) then
             begin
                ce := ce^.next;
                Continue;
@@ -4930,6 +4939,7 @@ begin
          begin
             toiContact := contact;
             toi := output.t;
+            toiOther := other;
             found := True;
          end;
 
@@ -4939,8 +4949,8 @@ begin
       Inc(iter);
    until (not Found) or (count = 0) or (iter >= 50);
 
-   // Advance the body to its safe time.
-   backup := body.m_sweep;
+   // Advance the body to its safe time. We have to do this even for bodies without a
+	 // TOI so that later TOIs see the correct state.
    body.Advance(toi);
 
    if toiContact = nil then
@@ -4949,6 +4959,7 @@ begin
    Inc(toiContact^.m_toiCount);
 
    // Update all the valid contacts on this body and build a contact island.
+   backup := body.m_sweep;
    count := 0;
    ce := body.m_contactList;
    while Assigned(ce) and (count < b2_maxTOIContactsPerIsland) do
@@ -5035,6 +5046,9 @@ begin
    for iter := 0 to 19 do
       if world_toisolver.Solve(k_toiBaumgarte) then
          Break;
+
+   if toiOther.m_type <> b2_staticBody then
+      toiContact^.m_flags := toiContact^.m_flags or e_contact_bulletHitFlag;
 end;
 
 procedure Tb2World.ClearForces;
