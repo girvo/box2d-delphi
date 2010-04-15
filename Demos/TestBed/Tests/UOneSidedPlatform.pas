@@ -66,7 +66,7 @@ begin
       m_radius := 0.5;
       cshape := Tb2CircleShape.Create;
       cshape.m_radius := m_radius;
-      m_character := body.CreateFixture(cshape, 1.0);
+      m_character := body.CreateFixture(cshape, 20.0);
       body.SetLinearVelocity(MakeVector(0.0, -50.0));
 
       m_state := e_unknown;
