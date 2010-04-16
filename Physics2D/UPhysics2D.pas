@@ -5586,7 +5586,6 @@ begin
    j.m_edgeB.prev := nil;
    j.m_edgeB.next := nil;
 
-   j.Free;
    //b2Assert(m_jointCount > 0);
    Dec(m_jointCount);
 
@@ -5609,6 +5608,7 @@ begin
          edge := edge^.next;
       end;
    end;
+   j.Free;
 end;
 
 {$IFDEF CONTROLLERS}
