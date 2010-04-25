@@ -10046,6 +10046,7 @@ begin
       //Completely wet
       c := p;
       Result := Pi * r2;
+      Exit;
    end;
 
    //Magic
