@@ -3003,8 +3003,8 @@ type
       m_localPoint,
       m_axis: TVector2;
 
-      function Initialize(const cache: Tb2SimplexCache;
-         const proxyA, proxyB: Tb2DistanceProxy; const sweepA, sweepB: Tb2Sweep): Float;
+      function Initialize(const cache: Tb2SimplexCache; const proxyA,
+         proxyB: Tb2DistanceProxy; const sweepA, sweepB: Tb2Sweep; const t1: Float): Float;
       function FindMinSeparation(var indexA, indexB: Int32; t: Float): Float;
       function Evaluate(indexA, indexB: Int32; t: Float): Float;
    end;
@@ -3012,7 +3012,8 @@ type
 { Tb2SeparationFunction }
 
 function Tb2SeparationFunction.Initialize(const cache: Tb2SimplexCache;
-   const proxyA, proxyB: Tb2DistanceProxy; const sweepA, sweepB: Tb2Sweep): Float;
+   const proxyA, proxyB: Tb2DistanceProxy; const sweepA, sweepB: Tb2Sweep;
+   const t1: Float): Float;
 var
    xfA, xfB: Tb2Transform;
    localPointB1, localPointB2, localPointA1, localPointA2, normal: TVector2;
@@ -3026,11 +3027,11 @@ begin
    m_sweepB := sweepB;
 
    {$IFDEF OP_OVERLOAD}
-   m_sweepA.GetTransform(xfA, 0.0);
-   m_sweepB.GetTransform(xfB, 0.0);
+   m_sweepA.GetTransform(xfA, t1);
+   m_sweepB.GetTransform(xfB, t1);
    {$ELSE}
-   GetTransform(m_sweepA, xfA, 0.0);
-   GetTransform(m_sweepB, xfB, 0.0);
+   GetTransform(m_sweepA, xfA, t1);
+   GetTransform(m_sweepB, xfB, t1);
    {$ENDIF}
 
    if cache.count = 1 then
@@ -3481,7 +3482,7 @@ begin
       end;
 
       // Initialize the separating axis.
-      toi_separation_fcn.Initialize(cache, input.proxyA, input.proxyB, sweepA, sweepB);
+      toi_separation_fcn.Initialize(cache, input.proxyA, input.proxyB, sweepA, sweepB, t1);
 
       // Compute the TOI on the separating axis. We do this by successively
       // resolving the deepest point. This loop is bounded by the number of vertices.
@@ -4949,17 +4950,30 @@ begin
       Inc(iter);
    until (not Found) or (count = 0) or (iter >= 50);
 
-   // Advance the body to its safe time. We have to do this even for bodies without a
-	 // TOI so that later TOIs see the correct state.
-   body.Advance(toi);
-
    if toiContact = nil then
+   begin
+      body.Advance(toi);
       Exit;
+   end;
+
+   backup := body.m_sweep;
+   body.Advance(toi);
+   {$IFDEF OP_OVERLOAD}
+   toiContact^.Update(m_contactManager.m_contactListener);
+   if not toiContact^.IsEnabled then
+   {$ELSE}
+   Update(toiContact^, m_contactManager.m_contactListener);
+   if not IsEnabled(toiContact^) then
+   {$ENDIF}
+   begin
+      // Contact disabled. Backup and recurse.
+      body.m_sweep := backup;
+      SolveTOI(body);
+   end;
 
    Inc(toiContact^.m_toiCount);
 
    // Update all the valid contacts on this body and build a contact island.
-   backup := body.m_sweep;
    count := 0;
    ce := body.m_contactList;
    while Assigned(ce) and (count < b2_maxTOIContactsPerIsland) do
@@ -4967,7 +4981,7 @@ begin
       other := ce^.other;
       // Only perform correction with static bodies, so the
       // body won't get pushed out of the world.
-      if other.m_type <> b2_staticBody then
+      if other.m_type = b2_dynamicBody then
       begin
          ce := ce^.next;
          Continue;
@@ -4995,13 +5009,14 @@ begin
          Continue;
       end;
 
-      // The contact likely has some new contact points. The listener
-      // gives the user a chance to disable the contact;
-      {$IFDEF OP_OVERLOAD}
-      contact^.Update(m_contactManager.m_contactListener);
-      {$ELSE}
-      Update(contact^, m_contactManager.m_contactListener);
-      {$ENDIF}
+	   	// The contact likely has some new contact points. The listener
+	  	// gives the user a chance to disable the contact.
+      if contact <> toiContact then
+         {$IFDEF OP_OVERLOAD}
+         contact^.Update(m_contactManager.m_contactListener);
+         {$ELSE}
+         Update(contact^, m_contactManager.m_contactListener);
+         {$ENDIF}
 
       // Did the user disable the contact?
       {$IFDEF OP_OVERLOAD}
@@ -5010,17 +5025,6 @@ begin
       if not IsEnabled(contact^) then
       {$ENDIF}
       begin
-         if contact = toiContact then
-         begin
-            // Restore the body's sweep.
-            body.m_sweep := backup;
-            body.SynchronizeTransform;
-
-            // Recurse because the TOI has been invalidated.
-            SolveTOI(body);
-            Exit;
-         end;
-
          // Skip this contact.
          ce := ce^.next;
          Continue;
