@@ -49,7 +49,6 @@ begin
       ground := m_world.CreateBody(bd);
 
       shape := Tb2PolygonShape.Create;
-      shape.m_radius := 0.0;
       shape.SetAsEdge(MakeVector(-8.0, 1.0), MakeVector(-6.0, 1.0));
       ground.CreateFixture(shape, 0.0, False, False);
       shape.SetAsEdge(MakeVector(-6.0, 1.0), MakeVector(-4.0, 1.0));

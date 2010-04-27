@@ -292,7 +292,7 @@ const
 
 var
    i: Integer;
-   actionCount: Int32;
+   actionCount, height: Int32;
    actor: PActor;
    color: RGBA;
 begin
@@ -355,6 +355,8 @@ begin
          m_rayCastInput.p1), m_rayActor.fraction)), 6.0, c_color5);
       {$ENDIF}
 
+   height := m_tree.ComputeHeight;
+   DrawText(Format('dynamic tree height = %d', [height]));
    Inc(m_stepCount);
 end;
 
