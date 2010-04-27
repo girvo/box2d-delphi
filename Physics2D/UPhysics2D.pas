@@ -257,7 +257,9 @@ type
     	function IsValid: Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Verify that the bounds are sorted.
       function GetCenter: TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Get the center of the AABB.
       function GetExtents: TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Get the extents of the AABB (half-widths).
-      procedure Combine(const aabb1, aabb2: Tb2AABB); {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Combine two AABBs into this one.
+    	function GetPerimeter: Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Get the perimeter length
+      procedure Combine(const aabb: Tb2AABB); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Combine an AABB into this one.
+      procedure Combine(const aabb1, aabb2: Tb2AABB); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Combine two AABBs into this one.
       function Contains(const aabb: Tb2AABB): Boolean; /// Does this aabb contain the provided AABB.
       function RayCast(var output: Tb2RayCastOutput; const input: Tb2RayCastInput): Boolean;
       {$ENDIF}
@@ -460,6 +462,7 @@ type
       //////////////////////////////////////////////////////////////////////
       property DestructionListener: Tb2DestructionListener read m_destructionListener write m_destructionListener;
       property DebugDraw: Tb2DebugDraw read m_debugDraw write m_debugDraw;
+      property GetContactManager: Tb2ContactManager read m_contactManager;
 
       property Gravity: TVector2 read m_gravity;
       property GetBodyList: Tb2Body read m_bodyList;
@@ -756,6 +759,24 @@ type
       next: Int32;
    end;
 
+   /// This is a growable LIFO stack with an initial capacity of N.
+   /// If the stack size exceeds the initial capacity, the heap is used
+   /// to increase the size of the stack.
+   Tb2GrowableStack = class
+   private
+      m_stack: PInt32;
+      m_count, m_capacity: Int32;
+   public
+      constructor Create;
+      destructor Destroy; override;
+
+      procedure Reset;
+      procedure Push(const element: Int32);
+      function Pop: Int32;
+
+      property GetCount: Int32 read m_count write m_count;
+   end;
+
    Tb2DynamicTreeNode = record
    {$IFDEF OP_OVERLOAD}
    public
@@ -765,6 +786,7 @@ type
     	aabb: Tb2AABB; /// This is the fattened AABB.
       userData: Pointer;
       child1, child2: Int32;
+      leafCount: Int32;
       case Byte of
          0: (parent: Int32);
          1: (next: Int32);
@@ -793,6 +815,7 @@ type
       procedure RemoveLeaf(leaf: Int32);
 
       function ComputeHeight(nodeId: Int32): Int32; overload;
+      function CountLeaves(nodeId: Int32): Int32;
    public
       constructor Create;
 
@@ -821,7 +844,7 @@ type
       /// Get the fat AABB for a proxy.
       function GetFatAABB(proxyId: Int32): Pb2AABB; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
-      /// Compute the height of the tree.
+    	/// Compute the height of the binary tree in O(N) time. Should not be called often.
       function ComputeHeight: Int32; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
       /// Query an AABB for overlapping proxies. The callback class
@@ -836,6 +859,8 @@ type
       /// @param input the ray-cast input data. The ray extends from p1 to p1 + maxFraction * (p2 - p1).
       /// @param callback a callback class that is called for each proxy that is hit by the ray.
       procedure RayCast(callback: Tb2GenericCallBackWrapper; const input: Tb2RayCastInput);
+
+      procedure Validate; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
    end;
 
    /// The broad-phase is used for computing pairs and performing volume queries and ray casts.
@@ -2264,14 +2289,15 @@ procedure Initialize(var worldManifold: Tb2WorldManifold;
 function IsValid(const AABB: Tb2AABB): Boolean; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function GetCenter(const AABB: Tb2AABB): TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function GetExtents(const AABB: Tb2AABB): TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-procedure Combine(var AABB: Tb2AABB; const aabb1, aabb2: Tb2AABB); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function GetPerimeter(const AABB: Tb2AABB): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure Combine(var AABB: Tb2AABB; const _aabb: Tb2AABB); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure Combine(var AABB: Tb2AABB; const aabb1, aabb2: Tb2AABB); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function Contains(const AABB, _aabb: Tb2AABB): Boolean;
 function RayCast(const AABB: Tb2AABB; var output: Tb2RayCastOutput; const input: Tb2RayCastInput): Boolean;
 
 /// Tb2Jacobian
 procedure SetZero(var jb: Tb2Jacobian); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-procedure SetValue(var jb: Tb2Jacobian; const x1, x2: TVector2;
-   a1, a2: Float); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure SetValue(var jb: Tb2Jacobian; const x1, x2: TVector2; a1, a2: Float); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function Compute(var jb: Tb2Jacobian; const x1, x2: TVector2; a1, a2: Float): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 /// Tb2DynamicTreeNode
@@ -2575,7 +2601,7 @@ begin
 end;
 
 /// Tb2AABB
-function IsValid(const AABB: Tb2AABB): Boolean; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function IsValid(const AABB: Tb2AABB): Boolean;
 var
    d: TVector2;
 begin
@@ -2587,19 +2613,34 @@ begin
    end;
 end;
 
-function GetCenter(const AABB: Tb2AABB): TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function GetCenter(const AABB: Tb2AABB): TVector2;
 begin
    with AABB do
       Result := b2MiddlePoint(lowerBound, upperBound);
 end;
 
-function GetExtents(const AABB: Tb2AABB): TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function GetExtents(const AABB: Tb2AABB): TVector2;
 begin
    with AABB do
       Result := Multiply(Subtract(upperBound, lowerBound), 0.5);
 end;
 
-procedure Combine(var AABB: Tb2AABB; const aabb1, aabb2: Tb2AABB); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function GetPerimeter(const AABB: Tb2AABB): Float;
+begin
+   with AABB do
+      Result := 2.0 * ((upperBound.x - lowerBound.x) + (upperBound.y - lowerBound.y));
+end;
+
+procedure Combine(var AABB: Tb2AABB; const _aabb: Tb2AABB);
+begin
+   with AABB do
+   begin
+   	  lowerBound := b2Min(lowerBound, _aabb.lowerBound);
+   	  upperBound := b2Max(upperBound, _aabb.upperBound);
+   end;
+end;
+
+procedure Combine(var AABB: Tb2AABB; const aabb1, aabb2: Tb2AABB);
 begin
    with AABB do
    begin
@@ -2698,7 +2739,7 @@ begin
 end;
 
 /// Tb2Jacobian
-procedure SetZero(var jb: Tb2Jacobian); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure SetZero(var jb: Tb2Jacobian);
 begin
    with jb do
    begin
@@ -2709,8 +2750,7 @@ begin
    end;
 end;
 
-procedure SetValue(var jb: Tb2Jacobian; const x1, x2: TVector2;
-   a1, a2: Float); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure SetValue(var jb: Tb2Jacobian; const x1, x2: TVector2; a1, a2: Float);
 begin
    with jb do
    begin
@@ -2721,7 +2761,7 @@ begin
    end;
 end;
 
-function Compute(var jb: Tb2Jacobian; const x1, x2: TVector2; a1, a2: Float): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function Compute(var jb: Tb2Jacobian; const x1, x2: TVector2; a1, a2: Float): Float;
 begin
    with jb do
       Result := b2Dot(linearA, x1) + angularA * a1 + b2Dot(linearB, x2) + angularB * a2;
@@ -4359,6 +4399,17 @@ end;
 function Tb2AABB.GetExtents: TVector2;
 begin
    Result := (upperBound - lowerBound) * 0.5;
+end;
+
+function Tb2AABB.GetPerimeter: Float;
+begin
+   Result := 2.0 * ((upperBound.x - lowerBound.x) + (upperBound.y - lowerBound.y));
+end;
+
+procedure Tb2AABB.Combine(const aabb: Tb2AABB);
+begin
+	 lowerBound := b2Min(lowerBound, aabb.lowerBound);
+	 upperBound := b2Max(upperBound, aabb.upperBound);
 end;
 
 procedure Tb2AABB.Combine(const aabb1, aabb2: Tb2AABB);
@@ -7474,6 +7525,61 @@ begin
    Result := minSeparation >= -1.5 * b2_linearSlop;
 end;
 
+{ Tb2GrowableStack }
+
+const
+   _defaultStackCapacity = 256;
+var
+   _StackArray: array[0.._defaultStackCapacity - 1] of Int32;
+   _GrowableStack: Tb2GrowableStack;
+
+constructor Tb2GrowableStack.Create;
+begin
+   m_stack := @_StackArray[0];
+	 m_count := 0;
+	 m_capacity := _defaultStackCapacity;
+end;
+
+destructor Tb2GrowableStack.Destroy;
+begin
+   Reset;
+   inherited;
+end;
+
+procedure Tb2GrowableStack.Reset;
+begin
+   if m_stack <> @_StackArray[0] then
+      FreeMemory(m_stack);
+   m_stack := @_StackArray[0];
+	 m_count := 0;
+	 m_capacity := _defaultStackCapacity;
+end;
+
+procedure Tb2GrowableStack.Push(const element: Int32);
+var
+   old: PInt32;
+begin
+   if m_count = m_capacity then
+   begin
+      old := m_stack;
+      m_capacity := m_capacity * 2;
+      m_stack := PInt32(GetMemory(m_capacity * sizeof(Int32)));
+      CopyMemory(m_stack, old, m_count * sizeof(Int32));
+      if old <> @_StackArray[0] then
+         FreeMemory(old);
+   end;
+
+   PInt32(Integer(m_stack) + SizeOf(Int32) * m_count)^ := element;
+   Inc(m_count);
+end;
+
+function Tb2GrowableStack.Pop: Int32;
+begin
+   //b2Assert(m_count > 0);
+	 Dec(m_count);
+	 Result := PInt32(Integer(m_stack) + SizeOf(Int32) * m_count)^;
+end;
+
 { Tb2DynamicTreeNode }
 {$IFDEF OP_OVERLOAD}
 function Tb2DynamicTreeNode.IsLeaf: Boolean;
@@ -7532,6 +7638,7 @@ begin
    m_nodes[nodeId].parent := b2_nullNode;
    m_nodes[nodeId].child1 := b2_nullNode;
    m_nodes[nodeId].child2 := b2_nullNode;
+   m_nodes[nodeId].leafCount := 0;
    Inc(m_nodeCount);
    Result := nodeId;
 end;
@@ -7547,8 +7654,10 @@ end;
 
 procedure Tb2DynamicTree.InsertLeaf(leaf: Int32);
 var
-   center, delta1, delta2: TVector2;
-   sibling, child1, child2, node1, node2: Int32;
+   leafAABB, aabb1, aabb2: Tb2AABB;
+   leafCenter: TVector2;
+   norm1, norm2: Float;
+   sibling, _child1, _child2, oldParent, newParent: Int32;
 begin
    Inc(m_insertionCount);
 
@@ -7559,89 +7668,95 @@ begin
       Exit;
    end;
 
-   // Find the best sibling for this node.
+   // Find the best sibling for this node
+   leafAABB := m_nodes[leaf].aabb;
    {$IFDEF OP_OVERLOAD}
-   center := m_nodes[leaf].aabb.GetCenter;
+   leafCenter := leafAABB.GetCenter;
    {$ELSE}
-   center := GetCenter(m_nodes[leaf].aabb);
+   leafCenter := GetCenter(leafAABB);
    {$ENDIF}
    sibling := m_root;
-   if not {$IFDEF OP_OVERLOAD}m_nodes[sibling].IsLeaf{$ELSE}IsLeaf(m_nodes[sibling]){$ENDIF} then
-      repeat
-         child1 := m_nodes[sibling].child1;
-         child2 := m_nodes[sibling].child2;
-
-         {$IFDEF OP_OVERLOAD}
-         delta1 := b2Abs(m_nodes[child1].aabb.GetCenter - center);
-         delta2 := b2Abs(m_nodes[child2].aabb.GetCenter - center);
-         {$ELSE}
-         delta1 := b2Abs(Subtract(GetCenter(m_nodes[child1].aabb), center));
-         delta2 := b2Abs(Subtract(GetCenter(m_nodes[child2].aabb), center));
-         {$ENDIF}
-
-         if delta1.x + delta1.y < delta2.x + delta2.y then
-            sibling := child1
-         else
-            sibling := child2;
-      until {$IFDEF OP_OVERLOAD}m_nodes[sibling].IsLeaf{$ELSE}IsLeaf(m_nodes[sibling]){$ENDIF};
-
-   // Create a parent for the siblings.
-   node1 := m_nodes[sibling].parent;
-   node2 := AllocateNode;
-   with m_nodes[node2] do
+   {$IFDEF OP_OVERLOAD}
+   while not m_nodes[sibling].IsLeaf do
+   {$ELSE}
+   while not IsLeaf(m_nodes[sibling]) do
+   {$ENDIF}
    begin
-      parent := node1;
-      userData := nil;
+      // Expand the node's AABB.
+      with m_nodes[sibling] do
+      begin
+         {$IFDEF OP_OVERLOAD}
+         aabb.Combine(leafAABB);
+         {$ELSE}
+         Combine(aabb, leafAABB);
+         {$ENDIF}
+         Inc(leafCount);
+
+         _child1 := child1;
+         _child2 := child2;
+      end;
+
+      // Surface area heuristic
       {$IFDEF OP_OVERLOAD}
-      aabb.Combine(m_nodes[leaf].aabb, m_nodes[sibling].aabb);
+      aabb1.Combine(leafAABB, m_nodes[_child1].aabb);
+      aabb2.Combine(leafAABB, m_nodes[_child2].aabb);
+      norm1 := (m_nodes[_child1].leafCount + 1) * aabb1.GetPerimeter;
+      norm2 := (m_nodes[_child2].leafCount + 1) * aabb2.GetPerimeter;
       {$ELSE}
-      Combine(aabb, m_nodes[leaf].aabb, m_nodes[sibling].aabb);
+      Combine(aabb1, leafAABB, m_nodes[_child1].aabb);
+      Combine(aabb2, leafAABB, m_nodes[_child2].aabb);
+      norm1 := (m_nodes[_child1].leafCount + 1) * GetPerimeter(aabb1);
+      norm2 := (m_nodes[_child2].leafCount + 1) * GetPerimeter(aabb2);
       {$ENDIF}
+
+      if norm1 < norm2 then
+         sibling := _child1
+      else
+         sibling := _child2;
    end;
 
-   if node1 <> b2_nullNode then
+   // Create a new parent for the siblings.
+   oldParent := m_nodes[sibling].parent;
+   newParent := AllocateNode;
+   with m_nodes[newParent] do
    begin
-      if m_nodes[m_nodes[sibling].parent].child1 = sibling then
-         m_nodes[node1].child1 := node2
+      parent := oldParent;
+      userData := nil;
+      {$IFDEF OP_OVERLOAD}
+      aabb.Combine(leafAABB, m_nodes[sibling].aabb);
+      {$ELSE}
+      Combine(aabb, leafAABB, m_nodes[sibling].aabb);
+      {$ENDIF}
+      leafCount := m_nodes[sibling].leafCount + 1;
+   end;
+
+   if oldParent <> b2_nullNode then
+   begin
+      // The sibling was not the root.
+      if m_nodes[oldParent].child1 = sibling then
+         m_nodes[oldParent].child1 := newParent
       else
-         m_nodes[node1].child2 := node2;
+         m_nodes[oldParent].child2 := newParent;
 
-      m_nodes[node2].child1 := sibling;
-      m_nodes[node2].child2 := leaf;
-      m_nodes[sibling].parent := node2;
-      m_nodes[leaf].parent := node2;
-
-      repeat
-         with m_nodes[node1] do
-         begin
-            {$IFDEF OP_OVERLOAD}
-            if aabb.Contains(m_nodes[node2].aabb) then
-               Break;
-            aabb.Combine(m_nodes[child1].aabb, m_nodes[child2].aabb);
-            {$ELSE}
-            if Contains(aabb, m_nodes[node2].aabb) then
-               Break;
-            Combine(aabb, m_nodes[child1].aabb, m_nodes[child2].aabb);
-            {$ENDIF}
-
-            node2 := node1;
-            node1 := parent;
-         end;
-      until node1 = b2_nullNode;
+      m_nodes[newParent].child1 := sibling;
+      m_nodes[newParent].child2 := leaf;
+      m_nodes[sibling].parent := newParent;
+      m_nodes[leaf].parent := newParent;
    end
    else
    begin
-      m_nodes[node2].child1 := sibling;
-      m_nodes[node2].child2 := leaf;
-      m_nodes[sibling].parent := node2;
-      m_nodes[leaf].parent := node2;
-      m_root := node2;
+      // The sibling was the root.
+      m_nodes[newParent].child1 := sibling;
+      m_nodes[newParent].child2 := leaf;
+      m_nodes[sibling].parent := newParent;
+      m_nodes[leaf].parent := newParent;
+      m_root := newParent;
    end;
 end;
 
 procedure Tb2DynamicTree.RemoveLeaf(leaf: Int32);
 var
-   node1, node2, sibling: Int32;
+   grandParent, _parent, sibling: Int32;
    oldAABB: Tb2AABB;
 begin
    if leaf = m_root then
@@ -7650,51 +7765,49 @@ begin
       Exit;
    end;
 
-   node2 := m_nodes[leaf].parent;
-   with m_nodes[node2] do
+   _parent := m_nodes[leaf].parent;
+   with m_nodes[_parent] do
    begin
-      node1 := parent;
+      grandParent := parent;
       if child1 = leaf then
          sibling := child2
       else
          sibling := child1;
    end;
 
-   if node1 <> b2_nullNode then
+   if grandParent <> b2_nullNode then
    begin
-      // Destroy node2 and connect node1 to sibling.
-      if m_nodes[node1].child1 = node2 then
-         m_nodes[node1].child1 := sibling
-      else
-         m_nodes[node1].child2 := sibling;
-      m_nodes[sibling].parent := node1;
-      FreeNode(node2);
+      // Destroy parent and connect sibling to grandParent.
+      with m_nodes[grandParent] do
+         if child1 = _parent then
+            child1 := sibling
+         else
+            child2 := sibling;
+      m_nodes[sibling].parent := grandParent;
+      FreeNode(_parent);
 
       // Adjust ancestor bounds.
-      while node1 <> b2_nullNode do
-      begin
-         oldAABB := m_nodes[node1].aabb;
-         with m_nodes[node1] do
+      _parent := grandParent;
+      while _parent <> b2_nullNode do
+         with m_nodes[_parent] do
          begin
+            oldAABB := aabb;
             {$IFDEF OP_OVERLOAD}
             aabb.Combine(m_nodes[child1].aabb, m_nodes[child2].aabb);
-            if oldAABB.Contains(aabb) then
-               Break;
             {$ELSE}
             Combine(aabb, m_nodes[child1].aabb, m_nodes[child2].aabb);
-            if Contains(oldAABB, aabb) then
-               Break;
             {$ENDIF}
 
-            node1 := parent;
+            //b2Assert(m_nodes[parent].leafCount > 0);
+            Dec(leafCount);
+            _parent := parent;
          end;
-      end;
    end
    else
    begin
       m_root := sibling;
       m_nodes[sibling].parent := b2_nullNode;
-      FreeNode(node2);
+      FreeNode(_parent);
    end;
 end;
 
@@ -7715,6 +7828,30 @@ begin
       height2 := ComputeHeight(child2);
    end;
    Result := 1 + b2Max(height1, height2);
+end;
+
+function Tb2DynamicTree.CountLeaves(nodeId: Int32): Int32;
+begin
+   if nodeId = b2_nullNode then
+   begin
+      Result := 0;
+      Exit;
+   end;
+
+   //b2Assert(0 <= nodeId && nodeId < m_nodeCapacity);
+   {$IFDEF OP_OVERLOAD}
+   if m_nodes[nodeId].IsLeaf then
+   {$ELSE}
+   if IsLeaf(m_nodes[nodeId]) then
+   {$ENDIF}
+   begin
+      //b2Assert(node->leafCount == 1);
+      Result := 1;
+      Exit;
+   end;
+
+   Result := CountLeaves(m_nodes[nodeId].child1) + CountLeaves(m_nodes[nodeId].child2);
+   //b2Assert(Result == node->leafCount);
 end;
 
 function Tb2DynamicTree.ComputeHeight: Int32;
@@ -7742,21 +7879,10 @@ begin
       upperBound := Add(_aabb.upperBound, _r);
       {$ENDIF}
       userData := _userData;
+      leafCount := 1;
    end;
 
    InsertLeaf(proxyId);
-
-   // Rebalance if necessary.
-   iterationCount := m_nodeCount shr 4;
-   tryCount := 0;
-   height := ComputeHeight;
-   while (height > 64) and (tryCount < 10) do
-   begin
-      Rebalance(iterationCount);
-      height := ComputeHeight;
-      Inc(tryCount);
-   end;
-
    Result := proxyId;
 end;
 
@@ -7829,12 +7955,14 @@ end;
 procedure Tb2DynamicTree.Rebalance(iterations: Int32);
 var
    i: Integer;
-   node: Int32;
+   node, selector: Int32;
+   children: PInt32;
    bit: UInt32;
 begin
    if m_root = b2_nullNode then
       Exit;
 
+   // Rebalance the tree by removing and re-inserting leaves.
    for i := 0 to iterations - 1 do
    begin
       node := m_root;
@@ -7842,11 +7970,13 @@ begin
       bit := 0;
       while not {$IFDEF OP_OVERLOAD}m_nodes[node].IsLeaf{$ELSE}IsLeaf(m_nodes[node]){$ENDIF} do
       begin
-         {int32* children := &m_nodes[node].child1;
-         node := children[(m_path shr bit) and 1]; }
-         node := PInteger(Integer(@m_nodes[node].child1) +
-            ((m_path shr bit) and 1) * SizeOf(Int32))^;
-         bit := (bit + 1) and (8 * SizeOf(bit) - 1);
+         children := @m_nodes[node].child1;
+         selector := (m_path shr bit) and 1;// Child selector based on a bit in the path
+         node := PInt32(Integer(children) + SizeOf(Int32) * selector)^; // Select the child nod
+
+         // Keep bit between 0 and 31 because m_path has 32 bits
+         // bit = (bit + 1) % 31
+         bit := (bit + 1) and $1F;
       end;
       Inc(m_path);
 
@@ -7866,19 +7996,15 @@ begin
 end;
 
 procedure Tb2DynamicTree.Query(callback: Tb2GenericCallBackWrapper; const _aabb: Tb2AABB);
-const
-   k_stackSize = 128;
 var
-   stack: array[0..k_stackSize - 1] of Int32;
-   count, nodeId: Int32;
+   nodeId: Int32;
 begin
-   stack[0] := m_root;
-   count := 1;
+   _GrowableStack.Reset;
+   _GrowableStack.Push(m_root);
 
-   while count > 0 do
+   while _GrowableStack.GetCount > 0 do
    begin
-      Dec(count);
-      nodeId := stack[count];
+      nodeId := _GrowableStack.Pop;
       if nodeId = b2_nullNode then
          Continue;
 
@@ -7896,17 +8022,8 @@ begin
             end
             else
             begin
-               if count < k_stackSize then
-               begin
-                  stack[count] := child1;
-                  Inc(count);
-               end;
-
-               if count < k_stackSize then
-               begin
-                  stack[count] := child2;
-                  Inc(count);
-               end;
+				       _GrowableStack.Push(child1);
+				       _GrowableStack.Push(child2);
             end;
          end;
    end;
@@ -7914,14 +8031,11 @@ end;
 
 procedure Tb2DynamicTree.RayCast(callback: Tb2GenericCallBackWrapper;
    const input: Tb2RayCastInput);
-const
-   k_stackSize = 128;
 var
-   stack: array[0..k_stackSize - 1] of Int32;
    maxFraction, value: Float;
    r, t, v, abs_v, c, h: TVector2;
    segmentAABB: Tb2AABB;
-   count, nodeId: Int32;
+   nodeId: Int32;
    subInput: Tb2RayCastInput;
 begin
    {$IFDEF OP_OVERLOAD}
@@ -7952,13 +8066,12 @@ begin
    segmentAABB.lowerBound := b2Min(input.p1, t);
    segmentAABB.upperBound := b2Max(input.p1, t);
 
-   stack[0] := m_root;
-   count := 1;
+   _GrowableStack.Reset;
+   _GrowableStack.Push(m_root);
 
-   while count > 0 do
+   while _GrowableStack.GetCount > 0 do
    begin
-      Dec(count);
-      nodeId := stack[count];
+      nodeId := _GrowableStack.Pop;
       if nodeId = b2_nullNode then
          Continue;
 
@@ -8011,20 +8124,16 @@ begin
          end
          else
          begin
-            if count < k_stackSize then
-            begin
-               stack[count] := child1;
-               Inc(count)
-            end;
-
-            if count < k_stackSize then
-            begin
-               stack[count] := child2;
-               Inc(count)
-            end;
+ 			      _GrowableStack.Push(child1);
+			      _GrowableStack.Push(child2);
          end;
       end;
    end;
+end;
+
+procedure Tb2DynamicTree.Validate;
+begin
+   CountLeaves(m_root);
 end;
 
 { Tb2BroadPhase }
@@ -14519,6 +14628,7 @@ initialization
    b2_gjkIters := 0;
    b2_gjkMaxIters := 0;
 
+   _GrowableStack := Tb2GrowableStack.Create;
    world_query_wrapper := Tb2WorldQueryWrapper.Create;
    world_raycast_wrapper := Tb2WorldRayCastWrapper.Create;
    world_solve_island := Tb2Island.Create;
@@ -14540,6 +14650,7 @@ finalization
    b2_defaultFilter.Free;
    b2_defaultListener.Free;
 
+   _GrowableStack.Free;
    world_query_wrapper.Free;
    world_raycast_wrapper.Free;
    world_solve_island.Free;

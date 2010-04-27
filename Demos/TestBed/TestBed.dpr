@@ -52,7 +52,8 @@ uses
   UPhysics2DControllers in '..\..\Physics2D\UPhysics2DControllers.pas',
   UPhysics2DHelper in '..\..\Physics2D\UPhysics2DHelper.pas',
   UPhysics2DPolygonTool in '..\..\Physics2D\UPhysics2DPolygonTool.pas',
-  UPhysics2DTypes in '..\..\Physics2D\UPhysics2DTypes.pas';
+  UPhysics2DTypes in '..\..\Physics2D\UPhysics2DTypes.pas',
+  UTiles in 'Tests\UTiles.pas';
 
 {$R *.res}
 

@@ -152,7 +152,7 @@ type
       FAutoFree: Boolean;
       FEnergy: Float; // All kinetic energy produced by explosion
       
-      procedure FSetEnergy(value: Double);
+      procedure FSetEnergy(value: Float);
       procedure RecalculateDefaultEnergy;
    public
       constructor Create;
@@ -425,6 +425,14 @@ begin
             {$ELSE}
             f := Multiply(d, G / r2 * body1.GetMass * body2.GetMass);
             {$ENDIF}
+
+            if reject then
+               {$IFDEF OP_OVERLOAD}
+               f := -f;
+               {$ELSE}
+               f := Negative(f);
+               {$ENDIF}
+
             body1.ApplyForce(f, body1.GetWorldCenter);
             {$IFDEF OP_OVERLOAD}
             body2.ApplyForce(-1.0 * f, body2.GetWorldCenter);
@@ -582,7 +590,7 @@ begin
    FAutoFree := False;
 end;
 
-procedure Tb2ExplosionController.FSetEnergy(value: Double);
+procedure Tb2ExplosionController.FSetEnergy(value: Float);
 begin
    FEnergy := value;
    FEnergySet := True;
@@ -630,17 +638,17 @@ var
    i, j: Pb2ControllerEdge;
    body1, body2: Tb2Body;
    totalMass, nTotalMass, divEnergy, linEnergy, angEnergy, ang_impulse: Float;
-   bodyCount: Int32;      
+   bodyCount: Int32;
    lin_impulse: TVector2;
 begin
    if FExploded then
       Exit;
    if FTriggered then
    begin
-      totalMass := 0;     
-      bodyCount := 0;          
+      totalMass := 0;
+      bodyCount := 0;
 
-      i := m_bodyList;    
+      i := m_bodyList;
       while Assigned(i) do
          with i^.body do
          begin
