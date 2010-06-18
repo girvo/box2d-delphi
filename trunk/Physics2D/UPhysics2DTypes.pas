@@ -77,8 +77,12 @@ type
    TPointFloatArray = array of TPointFloat;
 
    PPointF = ^TPointF;
-   TPointF = record
+   TPointF = packed record
       x, y: TPointFloat;
+      {$IFDEF OP_OVERLOAD}
+      procedure SetZero; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      procedure SetValue(x, y: TPointFloat); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      {$ENDIF}
    end;
    TPointsF = array of TPointF;
 
@@ -288,6 +292,7 @@ type
    end;
 
 const
+   b2Pnt2_Zero: TPointF = (X: 0.0; Y: 0.0);
    b2Vec2_Zero: TVector2 = (X: 0.0; Y: 0.0);
    b2Vec3_Zero: TVector3 = (X: 0.0; Y: 0.0; Z: 0.0);
    b2Mat22_identity: TMatrix22 = (col1: (X: 1.0; Y: 0.0); col2: (X: 0.0; Y: 1.0));
@@ -367,8 +372,11 @@ const
    /// A body cannot sleep if its angular velocity is above this tolerance.
    b2_angularSleepTolerance = 2.0 / 180.0;		// 2 degrees/s
 
+function MakePoint(x, y: TPointFloat): TPointF; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function MakeVector(x, y: Float): TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-procedure SetZero(var v: TVector2); {$IFNDEF OP_OVERLOAD}overload;{$ENDIF} {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure SetZero(var p: TPointF); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure SetZero(var v: TVector2); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure SetValue(var p: TPointF; ax, ay: TPointFloat); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure SetValue(var v: TVector2; ax, ay: Float); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure SetValue(var v: TVector3; ax, ay, az: Float); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
@@ -508,6 +516,7 @@ function b2MulT(const A, B: TMatrix22): TMatrix22; overload; {$IFDEF INLINE_AVAI
 function b2Mul(const T: Tb2Transform; const v: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2MulT(const T: Tb2Transform; const v: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2Mul(const A: TMatrix33; const v: TVector3): TVector3; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2MulT(const A, B: Tb2Transform): Tb2Transform; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2Abs(const a: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2Abs(const a: TMatrix22): TMatrix22; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
@@ -564,15 +573,35 @@ begin
    Result := (hi - lo) * Random + lo;
 end;
 
+function MakePoint(x, y: TPointFloat): TPointF;
+begin
+   Result.x := x;
+   Result.y := y;
+end;
+
 function MakeVector(x, y: Float): TVector2;
 begin
    Result.x := x;
    Result.y := y;
 end;
 
+procedure SetZero(var p: TPointF);
+begin
+   p := b2Pnt2_Zero;
+end;
+
 procedure SetZero(var v: TVector2);
 begin
    v := b2Vec2_Zero;
+end;
+
+procedure SetValue(var p: TPointF; ax, ay: TPointFloat);
+begin
+   with p do
+   begin
+      x := ax;
+      y := ay;
+   end;
 end;
 
 procedure SetValue(var v: TVector2; ax, ay: Float);
@@ -1381,7 +1410,12 @@ end;
 
 function b2Clamp(const a, low, high: Float): Float;
 begin
-   Result := b2Max(low, b2Min(a, high));
+   if a < low then
+      Result := low
+   else if a > high then
+      Result := high
+   else
+      Result := a;
 end;
 
 function b2MiddlePoint(const a, b: TVector2): TVector2;
@@ -1533,6 +1567,16 @@ begin
 end;
 {$ENDIF}
 
+function b2MulT(const A, B: Tb2Transform): Tb2Transform;
+begin
+   Result.R := b2MulT(A.R, B.R);
+   {$IFDEF OP_OVERLOAD}
+   Result.position := B.position - A.position;
+   {$ELSE}
+   Result.position := Subtract(B.position, A.position);
+   {$ENDIF}
+end;
+
 function b2Abs(const a: TVector2): TVector2;
 begin
    Result.x := Abs(a.x);
@@ -1544,6 +1588,24 @@ begin
    Result.col1 := b2Abs(a.col1);
    Result.col2 := b2Abs(a.col2);
 end;
+
+{ TPointF }
+
+{$IFDEF OP_OVERLOAD}
+
+procedure TPointF.SetZero;
+begin
+   x := 0.0;
+   y := 0.0;
+end;
+
+procedure TPointF.SetValue(x, y: TPointFloat);
+begin
+   Self.x := x;
+   Self.y := y;
+end;
+
+{$ENDIF}
 
 { TVector2 }
 

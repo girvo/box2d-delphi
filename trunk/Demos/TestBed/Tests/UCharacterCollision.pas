@@ -30,6 +30,7 @@ var
    fd: Tb2FixtureDef;
    d, angle, delta: Float;
    cshape: Tb2CircleShape;
+   lshape: Tb2LoopShape;
    vertices: array[0..5] of TVector2;
 begin
    inherited;
@@ -78,16 +79,24 @@ begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
 
-      shape := Tb2PolygonShape.Create;
-      d := 2.0 * b2_polygonRadius;
-      shape.SetAsEdge(MakeVector(-1.0 + d, 3.0), MakeVector(1.0 - d, 3.0));
-      ground.CreateFixture(shape, 0.0, False, False);
-      shape.SetAsEdge(MakeVector(1.0, 3.0 + d), MakeVector(1.0, 5.0 - d));
-      ground.CreateFixture(shape, 0.0, False, False);
-      shape.SetAsEdge(MakeVector(1.0 - d, 5.0), MakeVector(-1.0 + d, 5.0));
-      ground.CreateFixture(shape, 0.0, False, False);
-      shape.SetAsEdge(MakeVector(-1.0, 5.0 - d), MakeVector(-1.0, 3.0 + d));
-      ground.CreateFixture(shape, 0.0);
+			SetValue(vertices[0], -1.0, 3.0);
+			SetValue(vertices[1], 1.0, 3.0);
+			SetValue(vertices[2], 1.0, 5.0);
+			SetValue(vertices[3], -1.0, 5.0);
+			lshape := Tb2LoopShape.Create;
+      lshape.SetVertices(@vertices[0], 4);
+			ground.CreateFixture(lshape, 0.0);
+
+			//b2PolygonShape shape;
+			//float32 d = 2.0f * b2_polygonRadius;
+			//shape.SetAsEdge(b2Vec2(-1.0f + d, 3.0f), b2Vec2(1.0f - d, 3.0f));
+			//ground->CreateFixture(&shape, 0.0f);
+			//shape.SetAsEdge(b2Vec2(1.0f, 3.0f + d), b2Vec2(1.0f, 5.0f - d));
+			//ground->CreateFixture(&shape, 0.0f);
+			//shape.SetAsEdge(b2Vec2(1.0f - d, 5.0f), b2Vec2(-1.0f + d, 5.0f));
+			//ground->CreateFixture(&shape, 0.0f);
+			//shape.SetAsEdge(b2Vec2(-1.0f, 5.0f - d), b2Vec2(-1.0f, 3.0f + d));
+			//ground->CreateFixture(&shape, 0.0f);
    end;
 
    // Square character
@@ -108,6 +117,7 @@ begin
       body.CreateFixture(fd);
    end;
 
+   Exit; //
    // Hexagon character
    begin
       bd := Tb2BodyDef.Create;

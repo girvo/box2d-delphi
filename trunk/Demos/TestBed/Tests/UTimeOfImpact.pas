@@ -75,11 +75,11 @@ begin
    sweepB.localCenter := b2Vec2_Zero;
 
    {$IFDEF OP_OVERLOAD}
-   input.proxyA.SetShape(m_shapeA);
-   input.proxyB.SetShape(m_shapeB);
+   input.proxyA.SetShape(m_shapeA, 0);
+   input.proxyB.SetShape(m_shapeB, 0);
    {$ELSE}
-   SetShape(input.proxyA, m_shapeA);
-   SetShape(input.proxyB, m_shapeB);
+   SetShape(input.proxyA, m_shapeA, 0);
+   SetShape(input.proxyB, m_shapeB, 0);
    {$ENDIF}
    input.sweepA := sweepA;
    input.sweepB := sweepB;
