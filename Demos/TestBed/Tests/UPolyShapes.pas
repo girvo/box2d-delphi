@@ -95,7 +95,7 @@ begin
       Exit;
    end;
 
-   if b2TestOverlap(fixture.GetShape, m_circle, fixture.GetBody.GetTransform^, m_transform) then
+   if b2TestOverlap(fixture.GetShape, m_circle, 0, 0, fixture.GetBody.GetTransform^, m_transform) then
    begin
       DrawFixture(fixture);
       Inc(m_count);
@@ -194,7 +194,7 @@ begin
    {$ENDIF}
    callback.m_debugDraw := m_debugDraw;
 
-   callback.m_circle.ComputeAABB(aabb, callback.m_transform);
+   callback.m_circle.ComputeAABB(aabb, callback.m_transform, 0);
    m_world.QueryAABB(callback, aabb);
 
    m_debugDraw.DrawCircle(callback.m_circle.m_p, callback.m_circle.m_radius, color);

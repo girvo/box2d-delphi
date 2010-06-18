@@ -15,13 +15,13 @@
 // Please unflag to calculate time used by physics in each step.
 {$DEFINE COMPUTE_PHYSICSTIME}
 
-{ Though Delphi 2007(up) supports operator overloading but in fact
+{ Though Delphi 2006(up) supports operator overloading but in fact
   Add(vector1, vector2) performs faster than vector1 + vector2. }
 {.$DEFINE BETTER_PERFORMANCE}
 
 {.$DEFINE DEBUG_SIMULATE_D2007}
 {.$DEFINE DEBUG_SIMULATE_D2005}
-{.$DEFINE DEBUG_SIMULATE_D7}
+{$DEFINE DEBUG_SIMULATE_D7}
 
 // Operator overloading and inline availability
 // BDS 2010 (BDS 7.0)

@@ -74,11 +74,11 @@ begin
    inherited;
 
    {$IFDEF OP_OVERLOAD}
-   input.proxyA.SetShape(m_polygonA);
-   input.proxyB.SetShape(m_polygonB);
+   input.proxyA.SetShape(m_polygonA, 0);
+   input.proxyB.SetShape(m_polygonB, 0);
    {$ELSE}
-   SetShape(input.proxyA, m_polygonA);
-   SetShape(input.proxyB, m_polygonB);
+   SetShape(input.proxyA, m_polygonA, 0);
+   SetShape(input.proxyB, m_polygonB, 0);
    {$ENDIF}
    input.transformA := m_transformA;
    input.transformB := m_transformB;

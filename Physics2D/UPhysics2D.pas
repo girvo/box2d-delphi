@@ -97,13 +97,19 @@ type
    Tb2Controller = class;
    {$ENDIF}
 
+   /// The features that intersect to form the contact point
+   /// This must be 4 bytes or less.
+   Tb2ContactFeature = record
+      indexA: UInt8; ///< Feature index on shapeA
+      indexB: UInt8; ///< Feature index on shapeB
+      typeA: UInt8;  ///< The feature type on shapeA
+      typeB: UInt8;  ///< The feature type on shapeB
+   end;
+
    Tb2ContactID = record
       /// The features that intersect to form the contact point
       case Integer of
-         0: (referenceEdge: UInt8; ///< The edge that defines the outward contact normal.
-            incidentEdge: UInt8; ///< The edge most anti-parallel to the reference edge.
-            incidentVertex: UInt8; ///< The vertex (0 or 1) on the incident edge that was clipped.
-            flip: UInt8); ///< A value of 1 indicates that the reference edge is on shape2.
+         0: (cf: Tb2ContactFeature);
          1: (key: UInt32); ///< Used to quickly compare contact ids.
    end;
 
@@ -114,11 +120,12 @@ type
       m_vertices: PVector2;
       m_count: Int32;
       m_radius: Float;
+      m_buffer: array[0..1] of TVector2;
 
       {$IFDEF OP_OVERLOAD}
       /// Initialize the proxy using the given shape. The shape
       /// must remain in scope while the proxy is in use.
-      procedure SetShape(shape: Tb2Shape);
+      procedure SetShape(shape: Tb2Shape; index: Int32);
 
       /// Get the supporting vertex index in the given direction.
       function GetSupport(const d: TVector2): Int32;
@@ -184,6 +191,7 @@ type
       normalImpulse: Float; ///< the non-penetration impulse
       tangentImpulse: Float; ///< the friction impulse
       id: Tb2ContactID; ///< uniquely identifies a contact point between two shapes
+      isNew: Boolean;
    end;
 
    /// A manifold for two touching convex shapes.
@@ -518,17 +526,18 @@ type
    /// The class manages contact between two shapes. A contact exists for each overlapping
    /// AABB in the broad-phase (except if filtered). Therefore a contact object may exist
    /// that has no contact points.
-   Tb2ContactType = (b2_circleContact, b2_circlepolyContact, b2_polypolyContact);
-   Tb2ContactEvaluateProc = procedure(var manifold: Tb2Manifold; A, B: TObject;
-      const xfA, xfB: Tb2Transform; ABfixture: Boolean);
+   //Tb2ContactType = (b2_circleContact, b2_circlepolyContact, b2_polypolyContact);
+   Tb2ContactEvaluateProc = procedure(contact: Pb2Contact; var manifold: Tb2Manifold;
+      A, B: TObject; const xfA, xfB: Tb2Transform; ABfixture: Boolean);
 
    Tb2Contact = record
-      m_type: Tb2ContactType;
+      //m_type: Tb2ContactType;
       m_flags: UInt16;
 
       m_prev, m_next: Pb2Contact; // World pool and list pointers.
       m_nodeA, m_nodeB: Tb2ContactEdge; // Nodes for connecting bodies.
       m_fixtureA, m_fixtureB: Tb2Fixture;
+      m_indexA, m_indexB: Int32;
 
       m_manifold: Tb2Manifold;
       m_toiCount: Int32;
@@ -759,24 +768,6 @@ type
       next: Int32;
    end;
 
-   /// This is a growable LIFO stack with an initial capacity of N.
-   /// If the stack size exceeds the initial capacity, the heap is used
-   /// to increase the size of the stack.
-   Tb2GrowableStack = class
-   private
-      m_stack: PInt32;
-      m_count, m_capacity: Int32;
-   public
-      constructor Create;
-      destructor Destroy; override;
-
-      procedure Reset;
-      procedure Push(const element: Int32);
-      function Pop: Int32;
-
-      property GetCount: Int32 read m_count write m_count;
-   end;
-
    Tb2DynamicTreeNode = record
    {$IFDEF OP_OVERLOAD}
    public
@@ -942,11 +933,12 @@ type
    end;
 
    /// The various collision shape types supported by Box2D.
-   Tb2ShapeType = (e_unknownShape = -1, e_circleShape, e_polygonShape);
+   Tb2ShapeType = (e_unknownShape = -1, e_circleShape, e_edgeShape,
+      e_polygonShape, e_loopShape);
 
    /// A shape is used for collision detection. You can create a shape however you like.
    /// Shapes used for simulation in b2World are created automatically when a b2Fixture
-   /// is created.
+   /// is created. Shapes may encapsulate a one or more child shapes.
    Tb2Shape = class
    private
       m_type: Tb2ShapeType;
@@ -962,22 +954,27 @@ type
       /// Clone the concrete shape using the provided allocator.
       function Clone: Tb2Shape; virtual; abstract;
 
+     	/// Get the number of child primitives.
+	    function GetChildCount: Int32; virtual; abstract;
+
       /// Test a point for containment in this shape. This only works for convex shapes.
       /// @param xf the shape world transform.
       /// @param p a point in world coordinates.
       function TestPoint(const xf: Tb2Transform; const p: TVector2): Boolean; virtual; abstract;
 
-      /// Cast a ray against this shape.
+      /// Cast a ray against a child shape.
       /// @param output the ray-cast results.
       /// @param input the ray-cast input parameters.
       /// @param transform the transform to be applied to the shape.
+      /// @param childIndex the child shape index
       function RayCast(var output: Tb2RayCastOutput; const input: Tb2RayCastInput;
-         const transform: Tb2Transform): Boolean; virtual; abstract;
+         const transform: Tb2Transform; childIndex: Int32): Boolean; virtual; abstract;
 
-      /// Given a transform, compute the associated axis aligned bounding box for this shape.
+      /// Given a transform, compute the associated axis aligned bounding box for a child shape.
       /// @param aabb returns the axis aligned box.
       /// @param xf the world transform of the shape.
-      procedure ComputeAABB(var aabb: Tb2AABB; const xf: Tb2Transform); virtual; abstract;
+      /// @param childIndex the child shape
+      procedure ComputeAABB(var aabb: Tb2AABB; const xf: Tb2Transform; childIndex: Int32); virtual; abstract;
 
       /// Compute the mass properties of this shape using its dimensions and density.
       /// The inertia tensor is computed about the local origin.
@@ -1012,6 +1009,15 @@ type
       groupIndex: Int16;
    end;
 
+   /// This proxy is used internally to connect fixtures to the broad-phase.
+   Pb2FixtureProxy = ^Tb2FixtureProxy;
+   Tb2FixtureProxy = record
+      aabb: Tb2AABB;
+      fixture: Tb2Fixture;
+      childIndex: Int32;
+      proxyId: Int32;
+   end;
+
    /// A fixture definition is used to create a fixture. This class defines an
    /// abstract fixture definition. You can reuse fixture definitions safely.
    Tb2FixtureDef = class
@@ -1034,7 +1040,6 @@ type
       m_shape: Tb2Shape;
       destructor Destroy2;
    protected
-      m_aabb: Tb2AABB;
       m_density: Float;
 
       m_next: Tb2Fixture;
@@ -1043,15 +1048,17 @@ type
       m_friction,
       m_restitution: Float;
 
-      m_proxyId: Int32;
+      m_proxies: array of Tb2FixtureProxy;
+      m_proxyCount: Int32;
+
       m_filter: Tb2Filter;
 
       m_isSensor: Boolean;
       m_userData: Pointer;
 
       // These support body activation/deactivation.
-      procedure CreateProxy(broadPhase: Tb2BroadPhase; const xf: Tb2Transform);
-      procedure DestroyProxy(broadPhase: Tb2BroadPhase);
+      procedure CreateProxies(broadPhase: Tb2BroadPhase; const xf: Tb2Transform);
+      procedure DestroyProxies(broadPhase: Tb2BroadPhase);
       procedure Synchronize(broadPhase: Tb2BroadPhase; const xf1, xf2: Tb2Transform);
 
    public
@@ -1074,7 +1081,7 @@ type
       /// Cast a ray against this shape.
       /// @param output the ray-cast results.
       /// @param input the ray-cast input parameters.
-      function RayCast(var output: Tb2RayCastOutput; const input: Tb2RayCastInput): Boolean;
+      function RayCast(var output: Tb2RayCastOutput; const input: Tb2RayCastInput; childIndex: Int32): Boolean;
 
       /// Get the mass data for this fixture. The mass data is based on the density and
       /// the shape. The rotational inertia is about the shape's origin. This operation
@@ -1084,7 +1091,7 @@ type
       /// Get the fixture's AABB. This AABB may be enlarge and/or stale.
       /// If you need a more accurate AABB, compute it using the shape and
       /// the body transform.
-      function GetAABB: Pb2AABB; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function GetAABB(childIndex: Int32): Pb2AABB; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
       property GetShape: Tb2Shape read m_shape;
       property GetBody: Tb2Body read m_body;
@@ -1301,15 +1308,6 @@ type
       m_flags: UInt16;
       m_islandIndex: Int32;
 
-      m_xf: Tb2Transform; // the body origin transform
-      m_sweep: Tb2Sweep; // the swept motion for CCD
-
-      m_linearVelocity: TVector2;
-      m_angularVelocity: Float;
-
-      m_force: TVector2;
-      m_torque: Float;
-
       m_world: Tb2World;
       m_prev, m_next: Tb2Body;
 
@@ -1331,9 +1329,6 @@ type
       m_linearDamping: Float;
       m_angularDamping: Float;
 
-      m_sleepTime: Float;
-      m_userData: Pointer;
-
       destructor Destroy2; // Only free heap
       procedure ComputeStoredInertia;
 
@@ -1344,6 +1339,18 @@ type
 	    // It may lie, depending on the collideConnected flag.
 	    function ShouldCollide(other: Tb2Body): Boolean;
       procedure Advance(t: Float);
+   protected
+      m_xf: Tb2Transform; // the body origin transform
+      m_sweep: Tb2Sweep; // the swept motion for CCD
+
+      m_linearVelocity: TVector2;
+      m_angularVelocity: Float;
+
+      m_force: TVector2;
+      m_torque: Float;
+
+      m_sleepTime: Float;
+      m_userData: Pointer;
    public
       constructor Create(bd: Tb2BodyDef; world: Tb2World);
       destructor Destroy; override;
@@ -1376,6 +1383,10 @@ type
       /// @param fixture the fixture to be removed.
       /// @warning This function is locked during callbacks.
       procedure DestroyFixture(fixture: Tb2Fixture; DoFree: Boolean = True);
+
+      /// Destroy all fixtures. If ResetMass is False, Self becomes a virtual body
+      /// which doesn't react to collisions but keep all physical features.
+      procedure DestroyFixtures(ResetMass: Boolean);
 
       /// Set the position of the body's origin and rotation.
       /// This breaks any contacts and wakes the other bodies.
@@ -1552,10 +1563,11 @@ type
       constructor Create;
 
       function Clone: Tb2Shape; override;
+      function GetChildCount: Int32; override;
       function TestPoint(const xf: Tb2Transform; const p: TVector2): Boolean; override;
       function RayCast(var output: Tb2RayCastOutput; const input: Tb2RayCastInput;
-         const transform: Tb2Transform): Boolean; override;
-      procedure ComputeAABB(var aabb: Tb2AABB; const xf: Tb2Transform); override;
+         const transform: Tb2Transform; childIndex: Int32): Boolean; override;
+      procedure ComputeAABB(var aabb: Tb2AABB; const xf: Tb2Transform; childIndex: Int32); override;
       procedure ComputeMass(var massData: Tb2MassData; density: Float); override;
       function ComputeSubmergedArea(const normal: TVector2; offset: Float;
          const xf: Tb2Transform; var c: TVector2): Float; override;
@@ -1585,10 +1597,11 @@ type
       constructor Create;
 
       function Clone: Tb2Shape; override;
+      function GetChildCount: Int32; override;
       function TestPoint(const xf: Tb2Transform; const p: TVector2): Boolean; override;
       function RayCast(var output: Tb2RayCastOutput; const input: Tb2RayCastInput;
-         const xf: Tb2Transform): Boolean; override;
-      procedure ComputeAABB(var aabb: Tb2AABB; const xf: Tb2Transform); override;
+         const transform: Tb2Transform; childIndex: Int32): Boolean; override;
+      procedure ComputeAABB(var aabb: Tb2AABB; const xf: Tb2Transform; childIndex: Int32); override;
       procedure ComputeMass(var massData: Tb2MassData; density: Float); override;
       function ComputeSubmergedArea(const normal: TVector2; offset: Float;
          const xf: Tb2Transform; var c: TVector2): Float; override;
@@ -1613,11 +1626,59 @@ type
       procedure SetAsEdge(const v1, v2: TVector2);
 
       /// Get the supporting vertex index in the given direction.
-      function GetSupport(const d: TVector2): Int32;
+      //function GetSupport(const d: TVector2): Int32;
 	    /// Get the supporting vertex in the given direction.
-    	function GetSupportVertex(const d: TVector2): PVector2;
+    	//function GetSupportVertex(const d: TVector2): PVector2;
 
       property GetVertexCount: Int32 read m_vertexCount;
+   end;
+
+   /// A line segment (edge) shape. These can be connected in chains or loops
+   /// to other edge shapes. The connectivity information is used to ensure
+   /// correct contact normals.
+   Tb2EdgeShape = class(Tb2Shape)
+   public
+      m_vertex1, m_vertex2: TVector2; /// These are the edge vertices
+	    /// Optional adjacent vertices. These are used for smooth collision.
+    	m_vertex0, m_vertex3: TVector2;
+	    m_hasVertex0, m_hasVertex3: Boolean;
+
+      constructor Create;
+
+      procedure SetVertices(const v1, v2: TVector2); // implements C++ "Set" function
+      function Clone: Tb2Shape; override;
+      function GetChildCount: Int32; override;
+      function TestPoint(const xf: Tb2Transform; const p: TVector2): Boolean; override;
+      function RayCast(var output: Tb2RayCastOutput; const input: Tb2RayCastInput;
+         const transform: Tb2Transform; childIndex: Int32): Boolean; override;
+      procedure ComputeAABB(var aabb: Tb2AABB; const xf: Tb2Transform; childIndex: Int32); override;
+      procedure ComputeMass(var massData: Tb2MassData; density: Float); override;
+      function ComputeSubmergedArea(const normal: TVector2; offset: Float;
+         const xf: Tb2Transform; var c: TVector2): Float; override;
+   end;
+
+   /// A loop shape is a free form sequence of line segments that form a circular list.
+   /// The loop may cross upon itself, but this is not recommended for smooth collision.
+   /// The loop has double sided collision, so you can use inside and outside collision.
+   /// Therefore, you may use any winding order.
+   Tb2LoopShape = class(Tb2Shape)
+   public
+      m_vertices: TVectorArray;
+      m_count: Int32;
+
+      constructor Create;
+
+      procedure SetVertices(pv: PVector2; count: Int32);
+      procedure GetChildEdge(edge: Tb2EdgeShape; index: Int32);
+      function Clone: Tb2Shape; override;
+      function GetChildCount: Int32; override;
+      function TestPoint(const xf: Tb2Transform; const p: TVector2): Boolean; override;
+      function RayCast(var output: Tb2RayCastOutput; const input: Tb2RayCastInput;
+         const transform: Tb2Transform; childIndex: Int32): Boolean; override;
+      procedure ComputeAABB(var aabb: Tb2AABB; const xf: Tb2Transform; childIndex: Int32); override;
+      procedure ComputeMass(var massData: Tb2MassData; density: Float); override;
+      function ComputeSubmergedArea(const normal: TVector2; offset: Float;
+         const xf: Tb2Transform; var c: TVector2): Float; override;
    end;
 
    ////////////////////////////////////////////////////////////
@@ -1898,6 +1959,7 @@ type
       lowerAngle, upperAngle: Float; /// The lower(upper) angle for the joint limit (radians).
 
       enableMotor: Boolean; /// A flag to enable the joint motor.
+      motorOnBodyB: Boolean; /// Only apply motor to bodyB
       motorSpeed: Float; /// The desired motor speed. Usually in radians per second.
       maxMotorTorque: Float; /// The maximum motor torque used to achieve the desired motor speed. Usually in N-m.
 
@@ -1923,6 +1985,7 @@ type
 	    m_motorMass: Float;	// effective mass for motor/limit angular constraint.
 
       m_enableMotor: Boolean;
+      m_motorOnBodyB: Boolean; /// Only apply motor to bodyB
       m_maxMotorTorque, m_motorSpeed: Float;
 
       m_enableLimit: Boolean;
@@ -1956,6 +2019,7 @@ type
 
       property IsLimitEnabled: Boolean read m_enableLimit;
       property IsMotorEnabled: Boolean read m_enableMotor;
+      property MotorOnBodyB: Boolean read m_motorOnBodyB write m_motorOnBodyB;
       property GetLowerLimit: Float read m_lowerAngle;
       property GetUpperLimit: Float read m_upperAngle;
       property GetMotorSpeed: Float read m_motorSpeed;
@@ -2248,18 +2312,26 @@ procedure b2GetPointStates(var state1, state2: Tb2PointStateArray;
    const manifold1, manifold2: Tb2Manifold);
 
 // Evaluate functions for different contacts
-procedure b2CollideCircles(var manifold: Tb2Manifold; A, B: TObject;
+procedure b2CollideCircles(contact: Pb2Contact; var manifold: Tb2Manifold; A, B: TObject;
    const xfA, xfB: Tb2Transform; ABfixture: Boolean);
-procedure b2CollidePolygonAndCircle(var manifold: Tb2Manifold; A, B: TObject;
+procedure b2CollidePolygonAndCircle(contact: Pb2Contact; var manifold: Tb2Manifold; A, B: TObject;
    const xfA, xfB: Tb2Transform; ABfixture: Boolean);
-procedure b2CollidePolygons(var manifold: Tb2Manifold; A, B: TObject;
+procedure b2CollideEdgeAndCircle(contact: Pb2Contact; var manifold: Tb2Manifold;
+   A, B: TObject; const xfA, xfB: Tb2Transform; ABfixture: Boolean);
+procedure b2CollideEdgeAndPolygon(contact: Pb2Contact; var manifold: Tb2Manifold;
+   A, B: TObject; const xfA, xfB: Tb2Transform; ABfixture: Boolean);
+procedure b2CollideLoopAndCircle(contact: Pb2Contact; var manifold: Tb2Manifold;
+   A, B: TObject; const xfA, xfB: Tb2Transform; ABfixture: Boolean);
+procedure b2CollideLoopAndPolygon(contact: Pb2Contact; var manifold: Tb2Manifold;
+   A, B: TObject; const xfA, xfB: Tb2Transform; ABfixture: Boolean);
+procedure b2CollidePolygons(contact: Pb2Contact; var manifold: Tb2Manifold; A, B: TObject;
    const xfA, xfB: Tb2Transform; ABfixture: Boolean);
 
 procedure b2Distance(var output: Tb2DistanceOutput;	var cache: Tb2SimplexCache;
    const input: Tb2DistanceInput);
 
 function b2TestOverlap(const a, b: Tb2AABB): Boolean; overload;
-function b2TestOverlap(shapeA, shapeB: Tb2Shape;
+function b2TestOverlap(shapeA, shapeB: Tb2Shape; indexA, indexB: Int32;
    const xfA, xfB: Tb2Transform): Boolean; overload;
 
 function b2TimeOfImpact(var output: Tb2TOIOutput; const input: Tb2TOIInput): Float;
@@ -2277,7 +2349,7 @@ function IsEnabled(const contact: Tb2Contact): Boolean; {$IFDEF INLINE_AVAIL}inl
 procedure Update(var contact: Tb2Contact; listener: Tb2ContactListener);
 
 /// Tb2DistanceProxy
-procedure SetShape(var dp: Tb2DistanceProxy; shape: Tb2Shape);
+procedure SetShape(var dp: Tb2DistanceProxy; shape: Tb2Shape; index: Int32);
 function GetSupport(const dp: Tb2DistanceProxy; const d: TVector2): Int32;
 function GetSupportVertex(const dp: Tb2DistanceProxy; const d: TVector2): PVector2;
 
@@ -2348,6 +2420,10 @@ const
    e_body_activeFlag	= $20;
    e_body_toiFlag = $40;
 
+   // Tb2ContactFeature
+   e_contact_feature_vertex = 0;
+   e_contact_feature_face = 1;
+
 function MakeColor(r, g, b: Single; a: Single = 1.0): RGBA;
 begin
    Result[0] := r;
@@ -2359,20 +2435,41 @@ end;
 //////////// Implements <b2Contact.cpp> InitializeRegisters and AddType
 type
    TContactCreateRecord = record
-      ContactType: Tb2ContactType;
+      //ContactType: Tb2ContactType;
       EvaluateProc: Tb2ContactEvaluateProc;
       Primary: Boolean;
    end;
 
 const
-   ContactCreateRecords: array[e_circleShape..e_polygonShape,
-      e_circleShape..e_polygonShape] of TContactCreateRecord = (
-      ((ContactType: b2_circleContact; EvaluateProc: b2CollideCircles; Primary: True),
-       (ContactType: b2_circlepolyContact; EvaluateProc: b2CollidePolygonAndCircle; Primary: False)),
-      ((ContactType: b2_circlepolyContact; EvaluateProc: b2CollidePolygonAndCircle; Primary: True),
-       (ContactType: b2_polypolyContact; EvaluateProc: b2CollidePolygons; Primary: True)));
+   // e_circleShape, e_edgeShape, e_polygonShape, e_loopShape
+   ContactCreateRecords: array[e_circleShape..e_loopShape,
+      e_circleShape..e_loopShape] of TContactCreateRecord = (
+      // e_circleShape with
+      ((EvaluateProc: b2CollideCircles; Primary: True), // with e_circleShape
+       (EvaluateProc: b2CollideEdgeAndCircle; Primary: False), // with e_edgeShape
+       (EvaluateProc: b2CollidePolygonAndCircle; Primary: False), // with e_polygonShape
+       (EvaluateProc: b2CollideLoopAndCircle; Primary: False)), // with e_loopShape
 
-function NewContact(fixtureA, fixtureB: Tb2Fixture): Pb2Contact;
+      // e_edgeShape with
+      ((EvaluateProc: b2CollideEdgeAndCircle; Primary: True), // with e_circleShape
+       (EvaluateProc: nil; Primary: True), // with e_edgeShape
+       (EvaluateProc: b2CollideEdgeAndPolygon; Primary: True), // with e_polygonShape
+       (EvaluateProc: nil; Primary: True)), // with e_loopShape
+
+      // e_polygonShape with
+      ((EvaluateProc: b2CollidePolygonAndCircle; Primary: True), // with e_circleShape
+       (EvaluateProc: b2CollideEdgeAndPolygon; Primary: False), // with e_edgeShape
+       (EvaluateProc: b2CollidePolygons; Primary: True), // with e_polygonShape
+       (EvaluateProc: b2CollideLoopAndPolygon; Primary: False)), // with e_loopShape
+
+      // e_loopShape with
+      ((EvaluateProc: b2CollideLoopAndCircle; Primary: True), // with e_circleShape
+       (EvaluateProc: nil; Primary: False), // with e_edgeShape
+       (EvaluateProc: b2CollideLoopAndPolygon; Primary: True), // with e_polygonShape
+       (EvaluateProc: nil; Primary: False)) // with e_loopShape
+       );
+
+function NewContact(fixtureA, fixtureB: Tb2Fixture; indexA, indexB: Int32): Pb2Contact;
 begin
    New(Result);
    FillChar(Result^, SizeOf(Tb2Contact), 0);
@@ -2381,17 +2478,21 @@ begin
       m_flags := e_contact_enabledFlag;
       with ContactCreateRecords[fixtureA.m_shape.m_type][fixtureB.m_shape.m_type] do
       begin
-         m_type := ContactType;
+         //m_type := ContactType;
          m_evaluateProc := EvaluateProc;
          if Primary then
          begin
             m_fixtureA := fixtureA;
             m_fixtureB := fixtureB;
+            m_indexA := indexA;
+            m_indexB := indexB;
          end
          else
          begin
             m_fixtureA := fixtureB;
             m_fixtureB := fixtureA;
+            m_indexA := indexB;
+            m_indexB := indexA;
          end;
       end;
    end;
@@ -2462,6 +2563,7 @@ var
    bodyA, bodyB: Tb2Body;
    mp1, mp2: Pb2ManifoldPoint;
    id2key: UInt32;
+   found: Boolean;
 begin
    with contact do
    begin
@@ -2479,14 +2581,15 @@ begin
       // Is this contact a sensor?
       if sensor then
       begin
-         touching := b2TestOverlap(m_fixtureA.m_shape, m_fixtureB.m_shape, bodyA.m_xf, bodyB.m_xf);
+         touching := b2TestOverlap(m_fixtureA.m_shape, m_fixtureB.m_shape,
+            m_indexA, m_indexB, bodyA.m_xf, bodyB.m_xf);
 
          // Sensors don't generate manifolds.
          m_manifold.pointCount := 0;
       end
       else
       begin
-         m_evaluateProc(m_manifold, m_fixtureA, m_fixtureB, bodyA.m_xf, bodyB.m_xf, True);
+         m_evaluateProc(@contact, m_manifold, m_fixtureA, m_fixtureB, bodyA.m_xf, bodyB.m_xf, True);
          touching := m_manifold.pointCount > 0;
 
          // Match old contact ids to new contact ids and copy the
@@ -2497,6 +2600,7 @@ begin
             mp2^.normalImpulse := 0.0;
             mp2^.tangentImpulse := 0.0;
             id2key := mp2^.id.key;
+            found := False;
 
             for j := 0 to oldManifold.pointCount - 1 do
             begin
@@ -2506,8 +2610,15 @@ begin
                begin
                   mp2^.normalImpulse := mp1^.normalImpulse;
                   mp2^.tangentImpulse := mp1^.tangentImpulse;
+                  found := True;
                   Break;
                end;
+            end;
+
+            if not found then
+            begin
+               mp2^.normalImpulse := 0.0;
+               mp2^.tangentImpulse := 0.0;
             end;
          end;
 
@@ -2824,7 +2935,7 @@ begin
       // Area weighted centroid    
 
       {$IFDEF OP_OVERLOAD}        
-      Result := Result + triangleArea * inv3 * (p1 + p2 + p3);
+      Result.AddBy(triangleArea * inv3 * (p1 + p2 + p3));
       {$ELSE}
       AddBy(Result, Multiply(Add(p1, p2, p3), triangleArea * inv3));
       {$ENDIF}
@@ -2842,7 +2953,7 @@ end;
 { b2Distance.cpp }
 {$IFDEF OP_OVERLOAD}
 { Tb2DistanceProxy }
-procedure Tb2DistanceProxy.SetShape(shape: Tb2Shape);
+procedure Tb2DistanceProxy.SetShape(shape: Tb2Shape; index: Int32);
 begin
    case shape.m_type of
       e_circleShape:
@@ -2857,6 +2968,27 @@ begin
          begin
             Self.m_vertices := @m_vertices[0];
             Self.m_count := m_vertexCount;
+            Self.m_radius := m_radius;
+         end;
+      e_edgeShape:
+         with Tb2EdgeShape(shape) do
+         begin
+            Self.m_vertices := @m_vertex1;
+            Self.m_count := 2;
+            Self.m_radius := m_radius;
+         end;
+      e_loopShape:
+         with Tb2LoopShape(shape) do
+         begin
+            //b2Assert(0 <= index && index < loop->m_count);
+            m_buffer[0] := m_vertices[index];
+            if index + 1 < m_count then
+               m_buffer[1] := m_vertices[index + 1]
+            else
+               m_buffer[1] := m_vertices[0];
+
+            Self.m_vertices := @m_buffer[0];
+            Self.m_count := 2;
             Self.m_radius := m_radius;
          end;
    end;
@@ -2933,15 +3065,15 @@ begin
    {$ENDIF}
 end;
 {$ELSE}
-procedure SetShape(var dp: Tb2DistanceProxy; shape: Tb2Shape);
+procedure SetShape(var dp: Tb2DistanceProxy; shape: Tb2Shape; index: Int32);
 begin
    with dp do
       case shape.m_type of
          e_circleShape:
             with Tb2CircleShape(shape) do
             begin
-               m_vertices := @m_p;
-               m_count := 1;
+               dp.m_vertices := @m_p;
+               dp.m_count := 1;
                dp.m_radius := m_radius;
             end;
          e_polygonShape:
@@ -2949,6 +3081,27 @@ begin
             begin
                dp.m_vertices := @m_vertices[0];
                dp.m_count := m_vertexCount;
+               dp.m_radius := m_radius;
+            end;
+         e_edgeShape:
+            with Tb2EdgeShape(shape) do
+            begin
+               dp.m_vertices := @m_vertex1;
+               dp.m_count := 2;
+               dp.m_radius := m_radius;
+            end;
+         e_loopShape:
+            with Tb2LoopShape(shape) do
+            begin
+               //b2Assert(0 <= index && index < loop->m_count);
+               m_buffer[0] := m_vertices[index];
+               if index + 1 < m_count then
+                  m_buffer[1] := m_vertices[index + 1]
+               else
+                  m_buffer[1] := m_vertices[0];
+
+               dp.m_vertices := @m_buffer[0];
+               dp.m_count := 2;
                dp.m_radius := m_radius;
             end;
       end;
@@ -4290,7 +4443,7 @@ begin
 end;
 
 /// Determine if two generic shapes overlap.
-function b2TestOverlap(shapeA, shapeB: Tb2Shape;
+function b2TestOverlap(shapeA, shapeB: Tb2Shape; indexA, indexB: Int32;
    const xfA, xfB: Tb2Transform): Boolean; overload;
 var
    input: Tb2DistanceInput;
@@ -4300,11 +4453,11 @@ begin
    with input do
    begin
       {$IFDEF OP_OVERLOAD}
-      proxyA.SetShape(shapeA);
-      proxyB.SetShape(shapeB);
+      proxyA.SetShape(shapeA, indexA);
+      proxyB.SetShape(shapeB, indexB);
       {$ELSE}
-      SetShape(proxyA, shapeA);
-      SetShape(proxyB, shapeB);
+      SetShape(proxyA, shapeA, indexA);
+      SetShape(proxyB, shapeB, indexB);
       {$ENDIF}
       transformA := xfA;
       transformB := xfB;
@@ -4887,7 +5040,7 @@ var
    toiOther: Tb2Body;
    toi: Float;
    found, bullet: Boolean;
-   count, iter: Int32;
+   count, iter, indexA, indexB: Int32;
    ce: Pb2ContactEdge;
    other: Tb2Body;
    fixtureA, fixtureB: Tb2Fixture;
@@ -4961,8 +5114,13 @@ begin
             Continue;
          end;
 
-         fixtureA := contact^.m_fixtureA;
-         fixtureB := contact^.m_fixtureB;
+         with contact^ do
+         begin
+            fixtureA := m_fixtureA;
+            fixtureB := m_fixtureB;
+			      indexA := m_indexA;
+			      indexB := m_indexB;
+         end;
 
          // Cull sensors.
          if fixtureA.IsSensor or fixtureB.IsSensor then
@@ -4975,11 +5133,11 @@ begin
          with input do
          begin
             {$IFDEF OP_OVERLOAD}
-            proxyA.SetShape(fixtureA.m_shape);
-            proxyB.SetShape(fixtureB.m_shape);
+            proxyA.SetShape(fixtureA.m_shape, indexA);
+            proxyB.SetShape(fixtureB.m_shape, indexB);
             {$ELSE}
-            SetShape(proxyA, fixtureA.m_shape);
-            SetShape(proxyB, fixtureB.m_shape);
+            SetShape(proxyA, fixtureA.m_shape, indexA);
+            SetShape(proxyB, fixtureB.m_shape, indexB);
             {$ENDIF}
             sweepA := fixtureA.m_body.m_sweep;
             sweepB := fixtureB.m_body.m_sweep;
@@ -5122,6 +5280,7 @@ end;
 
 procedure Tb2World.DrawDebugData;
 var
+   i: Integer;
    xf: Tb2Transform;
    b: Tb2Body;
    f: Tb2Fixture;
@@ -5189,14 +5348,14 @@ begin
          while Assigned(c) do
             with c^ do
             begin
-               {$IFDEF OP_OVERLOAD}
+               (*{$IFDEF OP_OVERLOAD}
                DrawSegment(m_fixtureA.m_aabb.GetCenter,
                   m_fixtureB.m_aabb.GetCenter, m_pairColor);
                {$ELSE}
                DrawSegment(GetCenter(m_fixtureA.m_aabb),
                   GetCenter(m_fixtureB.m_aabb), m_pairColor);
                {$ENDIF}
-               c := m_next;
+               c := m_next;*)
             end;
       end;
 
@@ -5214,20 +5373,22 @@ begin
             f := b.GetFixtureList;
             while Assigned(f) do
             begin
-               aabb := m_contactManager.m_broadPhase.GetFatAABB(f.m_proxyId)^;
-               {$IFDEF OP_OVERLOAD}
-               vs[0].SetValue(aabb.lowerBound.x, aabb.lowerBound.y);
-               vs[1].SetValue(aabb.upperBound.x, aabb.lowerBound.y);
-               vs[2].SetValue(aabb.upperBound.x, aabb.upperBound.y);
-               vs[3].SetValue(aabb.lowerBound.x, aabb.upperBound.y);
-               {$ELSE}
-               SetValue(vs[0], aabb.lowerBound.x, aabb.lowerBound.y);
-               SetValue(vs[1], aabb.upperBound.x, aabb.lowerBound.y);
-               SetValue(vs[2], aabb.upperBound.x, aabb.upperBound.y);
-               SetValue(vs[3], aabb.lowerBound.x, aabb.upperBound.y);
-               {$ENDIF}
-               DrawPolygon4(vs, 4, m_aabbColor);
-
+               for i := 0 to f.m_proxyCount - 1 do
+               begin
+					        aabb := m_contactManager.m_broadPhase.GetFatAABB(f.m_proxies[i].proxyId)^;
+                  {$IFDEF OP_OVERLOAD}
+                  vs[0].SetValue(aabb.lowerBound.x, aabb.lowerBound.y);
+                  vs[1].SetValue(aabb.upperBound.x, aabb.lowerBound.y);
+                  vs[2].SetValue(aabb.upperBound.x, aabb.upperBound.y);
+                  vs[3].SetValue(aabb.lowerBound.x, aabb.upperBound.y);
+                  {$ELSE}
+                  SetValue(vs[0], aabb.lowerBound.x, aabb.lowerBound.y);
+                  SetValue(vs[1], aabb.upperBound.x, aabb.lowerBound.y);
+                  SetValue(vs[2], aabb.upperBound.x, aabb.upperBound.y);
+                  SetValue(vs[3], aabb.lowerBound.x, aabb.upperBound.y);
+                  {$ENDIF}
+                  DrawPolygon4(vs, 4, m_aabbColor);
+               end;
                f := f.m_next;
             end;
             b := b.m_next;
@@ -5273,10 +5434,10 @@ var
 
 function Tb2WorldQueryWrapper.QueryCallback(proxyId: Int32): Boolean;
 var
-   fixture: Tb2Fixture;
+   proxy: Pb2FixtureProxy;
 begin
-   fixture := Tb2Fixture(broadPhase.GetUserData(proxyId));
-   Result := callback.ReportFixture(fixture);
+	 proxy := Pb2FixtureProxy(broadPhase.GetUserData(proxyId));
+	 Result := callback.ReportFixture(proxy^.fixture);
 end;
 
 { Tb2WorldRayCastWrapper }
@@ -5284,16 +5445,15 @@ end;
 function Tb2WorldRayCastWrapper.RayCastCallback(const input: Tb2RayCastInput;
    proxyId: Int32): Float;
 var
-   userData: Pointer;
+   proxy: Pb2FixtureProxy;
    fixture: Tb2Fixture;
    output: Tb2RayCastOutput;
    fraction: Float;
    point: TVector2;
 begin
-   userData := broadPhase.GetUserData(proxyId);
-   fixture := Tb2Fixture(userData);
-
-   if fixture.RayCast(output, input) then
+   proxy := Pb2FixtureProxy(broadPhase.GetUserData(proxyId));
+   fixture := proxy^.fixture;
+   if fixture.RayCast(output, input, proxy^.childIndex) then
    begin
       fraction := output.fraction;
       {$IFDEF OP_OVERLOAD}
@@ -5343,7 +5503,7 @@ procedure Tb2World.DrawShape(fixture: Tb2Fixture; const xf: Tb2Transform;
   const color: RGBA);
 var
    i: Integer;
-   center: TVector2;
+   center, v1, v2: TVector2;
    vertices: Tb2PolyVertices;
 begin
    with m_debugDraw do
@@ -5354,6 +5514,13 @@ begin
                center := b2Mul(xf, m_p);
                m_debugDraw.DrawSolidCircle(center, xf.R.col1, m_radius, color);
             end;
+         e_edgeShape:
+            with Tb2EdgeShape(fixture.m_shape) do
+            begin
+               v1 := b2Mul(xf, m_vertex1);
+               v2 := b2Mul(xf, m_vertex2);
+               m_debugDraw.DrawSegment(v1, v2, color);
+            end;
          e_polygonShape:
             with Tb2PolygonShape(fixture.m_shape) do
             begin
@@ -5362,6 +5529,17 @@ begin
                   vertices[i] := b2Mul(xf, m_vertices[i]);
 
                DrawSolidPolygon(vertices, m_vertexCount, color);
+            end;
+         e_loopShape:
+            with Tb2LoopShape(fixture.m_shape) do
+            begin
+               v1 := b2Mul(xf, m_vertices[m_count - 1]);
+               for i := 0 to m_count - 1 do
+               begin
+                  v2 := b2Mul(xf, m_vertices[i]);
+                  m_debugDraw.DrawSegment(v1, v2, color);
+                  v1 := v2;
+               end;
             end;
       end;
 end;
@@ -5488,7 +5666,7 @@ begin
       if Assigned(m_destructionListener) then
          m_destructionListener.SayGoodbye(f0);
 
-      f0.DestroyProxy(m_contactManager.m_broadPhase);
+      f0.DestroyProxies(m_contactManager.m_broadPhase);
       f0.Free;
    end;
    body.m_fixtureList := nil;
@@ -5812,6 +5990,7 @@ var
    bodyA, bodyB: Tb2Body;
    mp1, mp2: Pb2ManifoldPoint;
    id2key: UInt32;
+   found: Boolean;
 begin
    oldManifold := m_manifold;
    m_flags := m_flags or e_contact_enabledFlag; // Re-enable this contact.
@@ -5827,14 +6006,15 @@ begin
    // Is this contact a sensor?
    if sensor then
    begin
-      touching := b2TestOverlap(m_fixtureA.m_shape, m_fixtureB.m_shape, bodyA.m_xf, bodyB.m_xf);
+      touching := b2TestOverlap(m_fixtureA.m_shape, m_fixtureB.m_shape,
+         m_indexA, m_indexB, bodyA.m_xf, bodyB.m_xf);
 
       // Sensors don't generate manifolds.
       m_manifold.pointCount := 0;
    end
    else
    begin
-      m_evaluateProc(m_manifold, m_fixtureA, m_fixtureB, bodyA.m_xf, bodyB.m_xf, True);
+      m_evaluateProc(@Self, m_manifold, m_fixtureA, m_fixtureB, bodyA.m_xf, bodyB.m_xf, True);
       touching := m_manifold.pointCount > 0;
 
       // Match old contact ids to new contact ids and copy the
@@ -5845,6 +6025,7 @@ begin
          mp2^.normalImpulse := 0.0;
          mp2^.tangentImpulse := 0.0;
          id2key := mp2^.id.key;
+         found := False;
 
          for j := 0 to oldManifold.pointCount - 1 do
          begin
@@ -5854,8 +6035,15 @@ begin
             begin
                mp2^.normalImpulse := mp1^.normalImpulse;
                mp2^.tangentImpulse := mp1^.tangentImpulse;
+               found := True;
                Break;
             end;
+         end;
+
+         if not found then
+         begin
+            mp2^.normalImpulse := 0.0;
+            mp2^.tangentImpulse := 0.0;
          end;
       end;
 
@@ -6695,13 +6883,21 @@ end;
 
 procedure Tb2ContactManager.AddPair(proxyUserDataA, proxyUserDataB: Pointer);
 var
-   fixtureA, fixtureB, fA, fB: Tb2Fixture;
+   proxyA, proxyB: Pb2FixtureProxy;
+   indexA, indexB: Int32;
+   fixtureA, fixtureB: Tb2Fixture;
    bodyA, bodyB: Tb2Body;
    edge: Pb2ContactEdge;
    c: Pb2Contact;
 begin
-   fixtureA := Tb2Fixture(proxyUserDataA);
-   fixtureB := Tb2Fixture(proxyUserDataB);
+	 proxyA := Pb2FixtureProxy(proxyUserDataA);
+	 proxyB := Pb2FixtureProxy(proxyUserDataB);
+
+	 fixtureA := proxyA^.fixture;
+	 fixtureB := proxyB^.fixture;
+
+	 indexA := proxyA^.childIndex;
+	 indexB := proxyB^.childIndex;
 
    bodyA := fixtureA.m_body;
    bodyB := fixtureB.m_body;
@@ -6715,12 +6911,14 @@ begin
    begin
       if edge.other = bodyA then
       begin
-         fA := edge^.contact.m_fixtureA;
-         fB := edge^.contact.m_fixtureB;
-
-         if ((fA = fixtureA) and (fB = fixtureB)) or
-            ((fA = fixtureB) and (fB = fixtureA)) then // A contact already exists.
-            Exit;
+         with edge^.contact^ do
+         begin
+            if ((m_fixtureA = fixtureA) and (m_fixtureB = fixtureB) and
+               (m_indexA = indexA) and (m_indexB = indexB)) or
+               ((m_fixtureA = fixtureB) and (m_fixtureB = fixtureA) and
+               (m_indexA = indexB) and (m_indexB = indexA)) then // A contact already exists.
+               Exit;
+         end;
       end;
 
       edge := edge^.next;
@@ -6735,15 +6933,15 @@ begin
       Exit;
 
    // Call the factory.
-   c := NewContact(fixtureA, fixtureB);
+   c := NewContact(fixtureA, fixtureB, indexA, indexB);
 
    with c^ do
    begin
       // Contact creation may swap fixtures.
-      fixtureA := m_fixtureA;
-      fixtureB := m_fixtureB;
-      bodyA := fixtureA.m_body;
-      bodyB := fixtureB.m_body;
+      indexA := m_indexA;
+      indexB := m_indexB;
+      bodyA := m_fixtureA.m_body;
+      bodyB := m_fixtureB.m_body;
 
       // Insert into the world.
       m_prev := nil;
@@ -6892,8 +7090,8 @@ begin
          c^.m_flags := c^.m_flags and (not e_contact_filterFlag);
       end;
 
-      proxyIdA := fixtureA.m_proxyId;
-      proxyIdB := fixtureB.m_proxyId;
+		  proxyIdA := fixtureA.m_proxies[c^.m_indexA].proxyId;
+		  proxyIdB := fixtureB.m_proxies[c^.m_indexB].proxyId;
       overlap := m_broadPhase.TestOverlap(proxyIdA, proxyIdB);
 
       // Here we destroy contacts that cease to overlap in the broad-phase.
@@ -7527,6 +7725,25 @@ end;
 
 { Tb2GrowableStack }
 
+type
+   /// This is a growable LIFO stack with an initial capacity of N.
+   /// If the stack size exceeds the initial capacity, the heap is used
+   /// to increase the size of the stack.
+   Tb2GrowableStack = class
+   private
+      m_stack: PInt32;
+      m_count, m_capacity: Int32;
+   public
+      constructor Create;
+      destructor Destroy; override;
+
+      procedure Reset;
+      procedure Push(const element: Int32);
+      function Pop: Int32;
+
+      property GetCount: Int32 read m_count write m_count;
+   end;
+
 const
    _defaultStackCapacity = 256;
 var
@@ -7904,7 +8121,6 @@ var
    d: TVector2;
 begin
    //b2Assert(0 <= proxyId && proxyId < m_nodeCapacity);
-
    //b2Assert(m_nodes[proxyId].IsLeaf());
 
    if {$IFDEF OP_OVERLOAD}m_nodes[proxyId].aabb.Contains(aabb)
@@ -8263,7 +8479,7 @@ procedure Tb2BroadPhase.MoveProxy(proxyId: Int32; const aabb: Tb2AABB;
    const displacement: TVector2);
 begin
    if m_tree.MoveProxy(proxyId, aabb, displacement) then
-      BufferMove(proxyId);   
+      BufferMove(proxyId);
 end;
 
 function Tb2BroadPhase.GetFatAABB(proxyId: Int32): Pb2AABB;
@@ -8389,8 +8605,10 @@ end;
 
 constructor Tb2Fixture.Create(body: Tb2Body; def: Tb2FixtureDef;
    AutoFreeShape: Boolean = True);
+var
+   i: Integer;
+   childCount: Int32;
 begin
-   m_proxyId := e_nullProxy;
    m_userData := def.userData;
    m_friction := def.friction;
    m_restitution := def.restitution;
@@ -8406,12 +8624,24 @@ begin
    if AutoFreeShape then
       def.shape.Free;
    m_shape.m_fixture := Self;
+
+	 // Reserve proxy space
+	 childCount := m_shape.GetChildCount;
+   SetLength(m_proxies, childCount);
+   for i := 0 to childCount - 1 do
+   begin
+	  	m_proxies[i].fixture := nil;
+	  	m_proxies[i].proxyId := e_nullProxy;
+   end;
+   m_proxyCount := 0;
 end;
 
 destructor Tb2Fixture.Destroy;
+var
+   childCount: Int32;
 begin
-   // The proxy must be destroyed before calling this.
-   //b2Assert(m_proxyId == b2BroadPhase::e_nullProxy);
+   // The proxies must be destroyed before calling this.
+	 //b2Assert(m_proxyCount == 0);
 
    if Assigned(m_body) then
       m_body.DestroyFixture(Self, False);
@@ -8430,43 +8660,66 @@ begin
    end;
 end;
 
-procedure Tb2Fixture.CreateProxy(broadPhase: Tb2BroadPhase; const xf: Tb2Transform);
+procedure Tb2Fixture.CreateProxies(broadPhase: Tb2BroadPhase; const xf: Tb2Transform);
+var
+   i: Integer;
 begin
-   //b2Assert(m_proxyId == b2BroadPhase::e_nullProxy);
-   // Create proxy in the broad-phase.
-   m_shape.ComputeAABB(m_aabb, xf);
-   m_proxyId := broadPhase.CreateProxy(m_aabb, Self);
+   //b2Assert(m_proxyCount == 0);
+
+   // Create proxies in the broad-phase.
+   m_proxyCount := m_shape.GetChildCount;
+
+   // Create proxies in the broad-phase.
+   for i := 0 to m_proxyCount - 1 do
+      with m_proxies[i] do
+      begin
+         m_shape.ComputeAABB(aabb, xf, i);
+         proxyId := broadPhase.CreateProxy(aabb, @m_proxies[i]);
+         fixture := Self;
+         childIndex := i;
+      end;
 end;
 
-procedure Tb2Fixture.DestroyProxy(broadPhase: Tb2BroadPhase);
+procedure Tb2Fixture.DestroyProxies(broadPhase: Tb2BroadPhase);
+var
+   i: Integer;
 begin
-   if m_proxyId = e_nullProxy then
-      Exit;
-   // Destroy proxy in the broad-phase.
-   broadPhase.DestroyProxy(m_proxyId);
-   m_proxyId := e_nullProxy;
+   // Destroy proxies in the broad-phase.
+   for i := 0 to m_proxyCount - 1 do
+      with m_proxies[i] do
+      begin
+         broadPhase.DestroyProxy(proxyId);
+         proxyId := e_nullProxy;
+      end;
+
+   m_proxyCount := 0;
 end;
 
 procedure Tb2Fixture.Synchronize(broadPhase: Tb2BroadPhase; const xf1, xf2: Tb2Transform);
 var
+   i: Integer;
    aabb1, aabb2: Tb2AABB;
    displacement: TVector2;
 begin
-   if m_proxyId = e_nullProxy then
+   if m_proxyCount = 0 then
       Exit;
 
-   // Compute an AABB that covers the swept shape (may miss some rotation effect).
-   m_shape.ComputeAABB(aabb1, xf1);
-   m_shape.ComputeAABB(aabb2, xf2);
+   for i := 0 to m_proxyCount - 1 do
+      with m_proxies[i] do
+      begin
+         // Compute an AABB that covers the swept shape (may miss some rotation effect).
+         m_shape.ComputeAABB(aabb1, xf1, childIndex);
+         m_shape.ComputeAABB(aabb2, xf2, childIndex);
 
-   {$IFDEF OP_OVERLOAD}
-   m_aabb.Combine(aabb1, aabb2);
-   displacement := xf2.position - xf1.position;
-   {$ELSE}
-   Combine(m_aabb, aabb1, aabb2);
-   displacement := Subtract(xf2.position, xf1.position);
-   {$ENDIF}
-   broadPhase.MoveProxy(m_proxyId, m_aabb, displacement);
+         {$IFDEF OP_OVERLOAD}
+         aabb.Combine(aabb1, aabb2);
+         displacement := xf2.position - xf1.position;
+         {$ELSE}
+         Combine(aabb, aabb1, aabb2);
+         displacement := Subtract(xf2.position, xf1.position);
+         {$ENDIF}
+         broadPhase.MoveProxy(proxyId, aabb, displacement);
+      end;
 end;
 
 function Tb2Fixture.GetType: Tb2ShapeType;
@@ -8508,9 +8761,10 @@ begin
    Result := m_shape.TestPoint(m_body.m_xf, p);
 end;
 
-function Tb2Fixture.RayCast(var output: Tb2RayCastOutput; const input: Tb2RayCastInput): Boolean;
+function Tb2Fixture.RayCast(var output: Tb2RayCastOutput;
+   const input: Tb2RayCastInput; childIndex: Int32): Boolean;
 begin
-   Result := m_shape.RayCast(output, input, m_body.m_xf);
+   Result := m_shape.RayCast(output, input, m_body.m_xf, childIndex);
 end;
 
 procedure Tb2Fixture.GetMassData(var massData: Tb2MassData);
@@ -8518,9 +8772,10 @@ begin
    m_shape.ComputeMass(massData, m_density);
 end;
 
-function Tb2Fixture.GetAABB: Pb2AABB;
+function Tb2Fixture.GetAABB(childIndex: Int32): Pb2AABB;
 begin
-   Result := @m_aabb;
+   //b2Assert(0 <= childIndex && childIndex < m_proxyCount);
+	 Result := @m_proxies[childIndex].aabb;
 end;
 
 //////////////////////////////////////////////////////////////
@@ -8827,7 +9082,7 @@ begin
 
    Result := Tb2Fixture.Create(Self, def, AutoFreeShape);
    if m_flags and e_body_activeFlag <> 0 then
-      Result.CreateProxy(m_world.m_contactManager.m_broadPhase, m_xf);
+      Result.CreateProxies(m_world.m_contactManager.m_broadPhase, m_xf);
 
    Result.m_body := Self;
    Result.m_next := m_fixtureList;
@@ -8859,8 +9114,8 @@ end;
 
 procedure Tb2Body.DestroyFixture(fixture: Tb2Fixture; DoFree: Boolean = True);
 var
-   node: ^Tb2Fixture;
-   //found: Boolean;
+   node: Tb2Fixture;
+   found: Boolean;
    edge: Pb2ContactEdge;
    c: Pb2Contact;
 begin
@@ -8872,21 +9127,21 @@ begin
 
    // Remove the fixture from this body's singly linked list.
    //b2Assert(m_fixtureCount > 0);
-   node := @m_fixtureList;
-   //found := False;
-   while Assigned(node^) do
+   node := m_fixtureList;
+   found := False;
+   while Assigned(node) do
    begin
-      if node^ = fixture then
+      if node = fixture then
       begin
-         node^ := fixture.m_next;
-         //found := True;
+         found := True;
          Break;
       end;
-      node := @(node^.m_next);
+      node := node.m_next;
    end;
 
    // You tried to remove a shape that is not attached to this body.
-   //b2Assert(found);
+   if not found then
+      Exit;
 
    // Destroy any contacts associated with the fixture.
    edge := m_contactList;
@@ -8906,7 +9161,7 @@ begin
    if m_flags and e_body_activeFlag <> 0 then
    begin
       //b2Assert(fixture->m_proxyId != b2BroadPhase::e_nullProxy);
-      fixture.DestroyProxy(m_world.m_contactManager.m_broadPhase);
+      fixture.DestroyProxies(m_world.m_contactManager.m_broadPhase);
    end
    else
       ;//b2Assert(fixture->m_proxyId == b2BroadPhase::e_nullProxy);
@@ -8914,8 +9169,55 @@ begin
    if DoFree then
       fixture.Destroy2; // Call a destructor without side effects.
    Dec(m_fixtureCount);
+   if m_fixtureCount = 0 then
+      m_fixtureList := nil;
    // Reset the mass data.
    ResetMassData;
+end;
+
+procedure Tb2Body.DestroyFixtures(ResetMass: Boolean);
+var
+   node, tmpnode: Tb2Fixture;
+   edge: Pb2ContactEdge;
+   c: Pb2Contact;
+begin
+   if m_world.IsLocked then
+      Exit;
+
+   // Destroy all contacts
+   edge := m_contactList;
+   while Assigned(edge) do
+   begin
+      c := edge^.contact;
+      m_world.m_contactManager.Destroy(c);
+      edge := edge^.next;
+   end;
+
+   if m_flags and e_body_activeFlag <> 0 then
+   begin
+      node := m_fixtureList;
+      while Assigned(node) do
+      begin
+         node.DestroyProxies(m_world.m_contactManager.m_broadPhase);
+         node := node.m_next;
+      end;
+   end;
+
+   // Free all fixtures
+   node := m_fixtureList;
+   while Assigned(node) do
+   begin
+      tmpnode := node.m_next;
+      node.Destroy2;
+      node := tmpnode;
+   end;
+
+   m_fixtureList := nil;
+   m_fixtureCount := 0;
+
+   if ResetMass then
+      ResetMassData;
+   // If not ResetMass, this body becomes a shape-less massed object
 end;
 
 procedure Tb2Body.SynchronizeFixtures;
@@ -9176,7 +9478,10 @@ begin
    while Assigned(f) do
    begin
       if IsZero(f.m_density) then
+      begin
+         f := f.m_next;
          Continue;
+      end;
 
       f.GetMassData(massData);
       m_mass := m_mass + massData.mass;
@@ -9376,7 +9681,7 @@ begin
       f := m_fixtureList;
       while Assigned(f) do
       begin
-         f.CreateProxy(m_world.m_contactManager.m_broadPhase, m_xf);
+         f.CreateProxies(m_world.m_contactManager.m_broadPhase, m_xf);
          f := f.m_next;
       end;
       // Contacts are created the next time step.
@@ -9389,7 +9694,7 @@ begin
       f := m_fixtureList;
       while Assigned(f) do
       begin
-         f.DestroyProxy(m_world.m_contactManager.m_broadPhase);
+         f.DestroyProxies(m_world.m_contactManager.m_broadPhase);
          f := f.m_next;
       end;
 
@@ -9468,8 +9773,8 @@ begin
    end;
 end;
 
-procedure b2CollideCircles(var manifold: Tb2Manifold; A, B: TObject;
-   const xfA, xfB: Tb2Transform; ABfixture: Boolean);
+procedure b2CollideCircles(contact: Pb2Contact; var manifold: Tb2Manifold;
+   A, B: TObject; const xfA, xfB: Tb2Transform; ABfixture: Boolean);
 var
    pA, pB, d: TVector2;
    circleA, circleB: Tb2CircleShape;
@@ -9510,8 +9815,8 @@ begin
    end;
 end;
 
-procedure b2CollidePolygonAndCircle(var manifold: Tb2Manifold; A, B: TObject;
-   const xfA, xfB: Tb2Transform; ABfixture: Boolean);
+procedure b2CollidePolygonAndCircle(contact: Pb2Contact; var manifold: Tb2Manifold;
+   A, B: TObject; const xfA, xfB: Tb2Transform; ABfixture: Boolean);
 var
    circle: Tb2CircleShape;
    polygon: Tb2PolygonShape;
@@ -9653,6 +9958,240 @@ begin
 end;
 
 type
+   Tb2EdgeType = (b2_isolated, b2_concave, b2_flat, b2_convex);
+
+/// Compute the collision manifold between an edge and a circle.
+procedure b2CollideEdgeAndCircle(contact: Pb2Contact; var manifold: Tb2Manifold;
+   A, B: TObject; const xfA, xfB: Tb2Transform; ABfixture: Boolean);
+var
+   edgeA: Tb2EdgeShape;
+   circleB: Tb2CircleShape;
+   Q, pA, pB, e, P, d, n: TVector2;
+   u, v, radius, dd, den: Float;
+   cf: Tb2ContactFeature;
+begin
+   if ABfixture then
+   begin
+      edgeA := Tb2EdgeShape(Tb2Fixture(A).m_shape);
+      circleB := Tb2CircleShape(Tb2Fixture(B).m_shape);
+   end
+   else
+   begin
+      edgeA := Tb2EdgeShape(A);
+      circleB := Tb2CircleShape(B);
+   end;
+
+   manifold.pointCount := 0;
+
+   // Compute circle in frame of edge
+   Q := b2MulT(xfA, b2Mul(xfB, circleB.m_p));
+
+   pA := edgeA.m_vertex1;
+   pB := edgeA.m_vertex2;
+   {$IFDEF OP_OVERLOAD}
+   e := pB - pA;
+
+   // Barycentric coordinates
+   u := b2Dot(e, pB - Q);
+   v := b2Dot(e, Q - pA);
+   {$ELSE}
+   e := Subtract(pB, pA);
+
+   // Barycentric coordinates
+   u := b2Dot(e, Subtract(pB, Q));
+   v := b2Dot(e, Subtract(Q, pA));
+   {$ENDIF}
+
+   radius := edgeA.m_radius + circleB.m_radius;
+
+   cf.indexB := 0;
+   cf.typeB := e_contact_feature_vertex;
+
+   // Region pA
+   if v <= 0.0 then
+   begin
+      {$IFDEF OP_OVERLOAD}
+      d := Q - pA;
+      {$ELSE}
+      d := Subtract(Q, pA);
+      {$ENDIF}
+      dd := b2Dot(d, d);
+      if dd > radius * radius then
+         Exit;
+
+      // Is there an edge connected to pA?
+      if edgeA.m_hasVertex0 then
+         // Is the circle in Region AB of the previous edge?
+         {$IFDEF OP_OVERLOAD}
+         if b2Dot(pA - edgeA.m_vertex0, pA - Q) > 0.0 then
+         {$ELSE}
+         if b2Dot(Subtract(pA, edgeA.m_vertex0), Subtract(pA, Q)) > 0.0 then
+         {$ENDIF}
+            Exit;
+
+      cf.indexA := 0;
+      cf.typeA := e_contact_feature_vertex;
+      with manifold do
+      begin
+         pointCount := 1;
+         manifoldType := e_manifold_circles;
+         localNormal := b2Vec2_Zero;
+         localPoint := pA;
+         points[0].id.key := 0;
+         points[0].id.cf := cf;
+         points[0].localPoint := circleB.m_p;
+      end;
+      Exit;
+   end;
+
+   // Region pB
+   if u <= 0.0 then
+   begin
+      {$IFDEF OP_OVERLOAD}
+      d := Q - pB;
+      {$ELSE}
+      d := Subtract(Q, pB);
+      {$ENDIF}
+      dd := b2Dot(d, d);
+      if dd > radius * radius then
+         Exit;
+
+      // Is there an edge connected to pB?
+      if edgeA.m_hasVertex3 then
+         // Is the circle in Region AB of the next edge?
+         {$IFDEF OP_OVERLOAD}
+         if b2Dot(edgeA.m_vertex3 - pB, Q - pB) > 0.0 then
+         {$ELSE}
+         if b2Dot(Subtract(edgeA.m_vertex3, pB), Subtract(Q, pB)) > 0.0 then
+         {$ENDIF}
+            Exit;
+
+      cf.indexA := 1;
+      cf.typeA := e_contact_feature_vertex;
+      with manifold do
+      begin
+         pointCount := 1;
+         manifoldType := e_manifold_circles;
+         localNormal := b2Vec2_Zero;
+         localPoint := pB;
+         points[0].id.key := 0;
+         points[0].id.cf := cf;
+         points[0].localPoint := circleB.m_p;
+      end;
+      Exit;
+   end;
+
+   // Region AB
+   den := b2Dot(e, e);
+   //b2Assert(den > 0.0f);
+   {$IFDEF OP_OVERLOAD}
+   P := (1.0 / den) * (u * pA + v * pB);
+   d := Q - P;
+   {$ELSE}
+   P := Multiply(Add(Multiply(pA, u), Multiply(pB, v)), 1.0 / den);
+   d := Subtract(Q, P);
+   {$ENDIF}
+   dd := b2Dot(d, d);
+   if dd > radius * radius then
+      Exit;
+
+   n.x := -e.y;
+   n.y := e.x;
+   {$IFDEF OP_OVERLOAD}
+   if b2Dot(n, Q - pA) < 0.0 then
+   {$ELSE}
+   if b2Dot(n, Subtract(Q, pA)) < 0.0 then
+   {$ENDIF}
+     SetValue(n, -n.x, -n.y);
+   {$IFDEF OP_OVERLOAD}
+   n.Normalize;
+   {$ELSE}
+   Normalize(n);
+   {$ENDIF}
+
+   cf.indexA := 0;
+   cf.typeA := e_contact_feature_face;
+   with manifold do
+   begin
+      pointCount := 1;
+      manifoldType := e_manifold_faceA;
+      localNormal := n;
+      localPoint := pA;
+      points[0].id.key := 0;
+      points[0].id.cf := cf;
+      points[0].localPoint := circleB.m_p;
+   end;
+end;
+
+const
+   e_ep_edgeA = 1;
+   e_ep_edgeB = 2;
+
+type
+   Tb2EPAxis = record
+      AxisType: Byte;
+      index: Int32;
+      separation: Float;
+   end;
+
+function b2EPEdgeSeparation(const v1, v2, n: TVector2; polygonB: Tb2PolygonShape; radius: Float): Tb2EPAxis;
+const
+	 k_relativeTol = 0.98;
+	 k_absoluteTol = 0.001;
+var
+   i: Integer;
+   s, s1, s2: Float;
+begin
+   // EdgeA separation
+   Result.AxisType := e_ep_edgeA;
+   Result.index := 0;
+   {$IFDEF OP_OVERLOAD}
+   Result.separation := b2Dot(n, polygonB.m_vertices[0] - v1);
+   {$ELSE}
+   Result.separation := b2Dot(n, Subtract(polygonB.m_vertices[0], v1));
+   {$ENDIF}
+   for i := 0 to polygonB.m_vertexCount - 1 do
+   begin
+      {$IFDEF OP_OVERLOAD}
+      s := b2Dot(n, polygonB.m_vertices[i] - v1);
+      {$ELSE}
+      s := b2Dot(n, Subtract(polygonB.m_vertices[i], v1));
+      {$ENDIF}
+      if s < Result.separation then
+         Result.separation := s;
+   end;
+end;
+
+function b2EPPolygonSeparation(const v1, v2, n: TVector2; polygonB: Tb2PolygonShape; radius: Float): Tb2EPAxis;
+var
+   i: Integer;
+   s, s1, s2: Float;
+begin
+   Result.AxisType := e_ep_edgeB;
+   Result.index := 0;
+   Result.separation := -FLT_MAX;
+   for i := 0 to polygonB.m_vertexCount - 1 do
+   begin
+      {$IFDEF OP_OVERLOAD}
+      s1 := b2Dot(polygonB.m_normals[i], v1 - polygonB.m_vertices[i]);
+      s2 := b2Dot(polygonB.m_normals[i], v2 - polygonB.m_vertices[i]);
+      {$ELSE}
+      s1 := b2Dot(polygonB.m_normals[i], Subtract(v1, polygonB.m_vertices[i]));
+      s2 := b2Dot(polygonB.m_normals[i], Subtract(v2, polygonB.m_vertices[i]));
+      {$ENDIF}
+      s := b2Min(s1, s2);
+      if s > Result.separation then
+      begin
+         Result.index := i;
+         Result.separation := s;
+
+         if s > radius then
+            Exit;
+      end;
+   end;
+end;
+
+type
    /// Used for computing contact manifolds.
    PClipVertex = ^TClipVertex;
    TClipVertex = record
@@ -9663,9 +10202,61 @@ type
    PClipVertices = ^TClipVertices;
    TClipVertices = array[0..1] of TClipVertex;
 
+procedure b2FindIncidentEdge(var c: TClipVertices; poly1, poly2: Tb2PolygonShape;
+   edge1: Int32); overload;
+var
+   i: Integer;
+   index, i1, i2: Int32;
+   normal1: TVector2;
+   minDot, dot: Float;
+begin
+   //b2Assert(0 <= edge1 && edge1 < poly1.m_vertexCount);
+
+   // Get the normal of the reference edge in poly2's frame.
+   normal1 := poly1.m_normals[edge1];
+
+   // Find the incident edge on poly2.
+   index := 0;
+   minDot := FLT_MAX;
+   for i := 0 to poly2.m_vertexCount - 1 do
+   begin
+      dot := b2Dot(normal1, poly2.m_normals[i]);
+      if dot < minDot then
+      begin
+         minDot := dot;
+         index := i;
+      end;
+   end;
+
+   // Build the clip vertices for the incident edge.
+   i1 := index;
+   if i1 + 1 < poly2.m_vertexCount then
+      i2 := i1 + 1
+   else
+      i2 := 0;
+
+   with c[0], id.cf do
+   begin
+      v := poly2.m_vertices[i1];
+      indexA := edge1;
+      indexB := i1;
+      typeA := e_contact_feature_face;
+      typeB := e_contact_feature_vertex;
+   end;
+
+   with c[1], id.cf do
+   begin
+      v := poly2.m_vertices[i2];
+      indexA := edge1;
+      indexB := i2;
+      typeA := e_contact_feature_face;
+      typeB := e_contact_feature_vertex;
+   end;
+end;
+
 /// Clipping for contact manifolds.
 function b2ClipSegmentToLine(var vOut: TClipVertices; const vIn: TClipVertices;
-   const normal: TVector2; offset: Float): Int32;
+   const normal: TVector2; offset: Float; vertexIndexA: Int32): Int32;
 var
    distance0, distance1, interp: Float;
 begin
@@ -9697,12 +10288,367 @@ begin
       {$ELSE}
       vOut[Result].v := Add(vIn[0].v, Multiply(Subtract(vIn[1].v, vIn[0].v), interp));
       {$ENDIF}
-      if distance0 > 0.0 then
-         vOut[Result].id := vIn[0].id
-      else
-         vOut[Result].id := vIn[1].id;
+
+      // VertexA is hitting edgeB.
+      with vOut[Result].id.cf do
+      begin
+         indexA := vertexIndexA;
+         indexB := vIn[0].id.cf.indexB;
+         typeA := e_contact_feature_vertex;
+         typeB := e_contact_feature_face;
+      end;
       Inc(Result);
    end;
+end;
+
+// Collide and edge and polygon. This uses the SAT and clipping to produce up to 2 contact points.
+// Edge adjacency is handle to produce locally valid contact points and normals. This is intended
+// to allow the polygon to slide smoothly over an edge chain.
+//
+// Algorithm
+// 1. Classify front-side or back-side collision with edge.
+// 2. Compute separation
+// 3. Process adjacent edges
+// 4. Classify adjacent edge as convex, flat, null, or concave
+// 5. Skip null or concave edges. Concave edges get a separate manifold.
+// 6. If the edge is flat, compute contact points as normal. Discard boundary points.
+// 7. If the edge is convex, compute it's separation.
+// 8. Use the minimum separation of up to three edges. If the minimum separation
+//    is not the primary edge, return.
+// 9. If the minimum separation is the primary edge, compute the contact points and return.
+var
+   static_polygonshape1, static_polygonshape2: Tb2PolygonShape;
+procedure b2CollideEdgeAndPolygon(contact: Pb2Contact; var manifold: Tb2Manifold;
+   A, B: TObject; const xfA, xfB: Tb2Transform; ABfixture: Boolean);
+const
+   k_relativeTol = 0.98;
+   k_absoluteTol = 0.001;
+var
+   i: Integer;
+   xf: Tb2Transform;
+   edgeA: Tb2EdgeShape;
+   polygonB_in, poly1, poly2: Tb2PolygonShape;
+   v1, v2, e, edgeNormal, v0, v3, e0, n0, e2, n2: TVector2;
+   isFrontSide: Boolean;
+   edgeAxis, axis, polygonAxis, primaryAxis: Tb2EPAxis;
+   types: array[0..1] of Tb2EdgeType;
+   s, totalRadius, frontOffset, sideOffset1, sideOffset2: Float;
+   incidentEdge, clipPoints1, clipPoints2: TClipVertices;
+   clipVertex: PClipVertex;
+   iv1, iv2, pointCount: Int32;
+   tangent: TVector2 absolute e;
+   planePoint: TVector2 absolute v0;
+begin
+   if ABfixture then
+   begin
+      edgeA := Tb2EdgeShape(Tb2Fixture(A).m_shape);
+      polygonB_in := Tb2PolygonShape(Tb2Fixture(B).m_shape);
+   end
+   else
+   begin
+      edgeA := Tb2EdgeShape(A);
+      polygonB_in := Tb2PolygonShape(B);
+   end;
+
+   manifold.pointCount := 0;
+   xf := b2MulT(xfA, xfB);
+
+	 // Create a polygon for edge shape A
+	 static_polygonshape1.SetAsEdge(edgeA.m_vertex1, edgeA.m_vertex2);
+
+   // Build static_polygonshape2 in frame A
+   static_polygonshape2.m_radius := polygonB_in.m_radius;
+   static_polygonshape2.m_vertexCount := polygonB_in.m_vertexCount;
+   static_polygonshape2.m_centroid := b2Mul(xf, polygonB_in.m_centroid);
+   for i := 0 to static_polygonshape2.m_vertexCount - 1 do
+   begin
+      static_polygonshape2.m_vertices[i] := b2Mul(xf, polygonB_in.m_vertices[i]);
+      static_polygonshape2.m_normals[i] := b2Mul(xf.R, polygonB_in.m_normals[i]);
+   end;
+
+   totalRadius := static_polygonshape1.m_radius + static_polygonshape2.m_radius;
+   // Edge geometry
+   v1 := edgeA.m_vertex1;
+   v2 := edgeA.m_vertex2;
+   {$IFDEF OP_OVERLOAD}
+   e := v2 - v1;
+   {$ELSE}
+   e := Subtract(v2, v1);
+   {$ENDIF}
+   edgeNormal.x := e.y;
+   edgeNormal.y := -e.x;
+   {$IFDEF OP_OVERLOAD}
+   edgeNormal.Normalize;
+   {$ELSE}
+   Normalize(edgeNormal);
+   {$ENDIF}
+
+   // Determine side
+   {$IFDEF OP_OVERLOAD}
+   isFrontSide := b2Dot(edgeNormal, static_polygonshape2.m_centroid - v1) >= 0.0;
+   {$ELSE}
+   isFrontSide := b2Dot(edgeNormal, Subtract(static_polygonshape2.m_centroid, v1)) >= 0.0;
+   {$ENDIF}
+   if not isFrontSide then
+   begin
+      // flip normal for backside collision
+      {$IFDEF OP_OVERLOAD}
+      edgeNormal := -edgeNormal;
+      {$ELSE}
+      edgeNormal := Negative(edgeNormal);
+      {$ENDIF}
+   end;
+
+   // Compute primary separating axis
+   edgeAxis := b2EPEdgeSeparation(v1, v2, edgeNormal, static_polygonshape2, totalRadius);
+   if edgeAxis.separation > totalRadius then
+   begin
+      // Shapes are separated
+      Exit;
+   end;
+
+   // Classify adjacent edges
+   types[0] := b2_isolated;
+   types[1] := b2_isolated;
+   if edgeA.m_hasVertex0 then
+   begin
+      v0 := edgeA.m_vertex0;
+      {$IFDEF OP_OVERLOAD}
+      s := b2Dot(edgeNormal, v0 - v1);
+      {$ELSE}
+      s := b2Dot(edgeNormal, Subtract(v0, v1));
+      {$ENDIF}
+      if s > 0.1 * b2_linearSlop then
+         types[0] := b2_concave
+      else if s >= -0.1 * b2_linearSlop then
+         types[0] := b2_flat
+      else
+         types[0] := b2_convex;
+   end;
+
+   if edgeA.m_hasVertex3 then
+   begin
+      v3 := edgeA.m_vertex3;
+      {$IFDEF OP_OVERLOAD}
+      s := b2Dot(edgeNormal, v3 - v2);
+      {$ELSE}
+      s := b2Dot(edgeNormal, Subtract(v3, v2));
+      {$ENDIF}
+      if s > 0.1 * b2_linearSlop then
+         types[1] := b2_concave
+      else if s >= -0.1 * b2_linearSlop then
+         types[1] := b2_flat
+      else
+         types[1] := b2_convex;
+   end;
+
+   if types[0] = b2_convex then
+   begin
+     // Check separation on previous edge.
+     v0 := edgeA.m_vertex0;
+     {$IFDEF OP_OVERLOAD}
+     e0 := v1 - v0;
+     {$ELSE}
+     e0 := Subtract(v1, v0);
+     {$ENDIF}
+     n0.x := e0.y;
+     n0.y := -e0.x;
+     {$IFDEF OP_OVERLOAD}
+     n0.Normalize;
+     if not isFrontSide then
+        n0 := -n0;
+     {$ELSE}
+     Normalize(n0);
+     if not isFrontSide then
+        n0 := Negative(n0);
+     {$ENDIF}
+
+     axis := b2EPEdgeSeparation(v0, v1, n0, static_polygonshape2, totalRadius);
+     if axis.separation > edgeAxis.separation then
+        Exit;
+   end;
+
+   if types[1] = b2_convex then
+   begin
+      // Check separation on next edge.
+      v3 := edgeA.m_vertex3;
+      {$IFDEF OP_OVERLOAD}
+      e2 := v3 - v2;
+      {$ELSE}
+      e2 := Subtract(v3, v2);
+      {$ENDIF}
+      n2.x := e2.y;
+      n2.y := -e2.x;
+      {$IFDEF OP_OVERLOAD}
+      n2.Normalize;
+      if not isFrontSide then
+         n2 := -n2;
+      {$ELSE}
+      Normalize(n2);
+      if not isFrontSide then
+         n2 := Negative(n2);
+      {$ENDIF}
+
+      axis := b2EPEdgeSeparation(v2, v3, n2, static_polygonshape2, totalRadius);
+      if axis.separation > edgeAxis.separation then
+         Exit; // The polygon should collide with the next edge
+   end;
+
+   polygonAxis := b2EPPolygonSeparation(v1, v2, edgeNormal, static_polygonshape2, totalRadius);
+   if polygonAxis.separation > totalRadius then
+      Exit;
+
+   if polygonAxis.separation > k_relativeTol * edgeAxis.separation + k_absoluteTol then
+      primaryAxis := polygonAxis
+   else
+      primaryAxis := edgeAxis;
+
+   if edgeAxis.AxisType = e_ep_edgeA then
+   begin
+      poly1 := static_polygonshape1;
+      poly2 := static_polygonshape2;
+      if not isFrontSide then
+         edgeAxis.index := 1;
+      manifold.manifoldType := e_manifold_faceA;
+   end
+   else
+   begin
+      poly1 := static_polygonshape2;
+      poly2 := static_polygonshape1;
+      manifold.manifoldType := e_manifold_faceB;
+   end;
+
+   b2FindIncidentEdge(incidentEdge, poly1, poly2, edgeAxis.index);
+
+   iv1 := edgeAxis.index;
+   if edgeAxis.index + 1 < poly1.m_vertexCount then
+      iv2 := edgeAxis.index + 1
+   else
+      iv2 := 0;
+
+   v1 := poly1.m_vertices[iv1];
+   v2 := poly1.m_vertices[iv2];
+
+   {$IFDEF OP_OVERLOAD}
+   tangent := v2 - v1;
+   tangent.Normalize;
+   {$ELSE}
+   tangent := Subtract(v2, v1);
+   Normalize(tangent);
+   {$ENDIF}
+
+   // edgeNormal works as normal variable in C++
+   edgeNormal := b2Cross(tangent, 1.0);
+   planePoint := b2MiddlePoint(v1, v2);
+
+   // Face offset.
+   frontOffset := b2Dot(edgeNormal, v1);
+
+   // Side offsets, extended by polytope skin thickness.
+   sideOffset1 := -b2Dot(tangent, v1) + totalRadius;
+   sideOffset2 := b2Dot(tangent, v2) + totalRadius;
+
+   // Clip incident edge against extruded edge1 side edges.
+   // Clip to box side 1
+   {$IFDEF OP_OVERLOAD}
+   if b2ClipSegmentToLine(clipPoints1, incidentEdge, -tangent, sideOffset1, iv1) < b2_maxManifoldPoints then
+   {$ELSE}
+   if b2ClipSegmentToLine(clipPoints1, incidentEdge, Negative(tangent), sideOffset1, iv1) < b2_maxManifoldPoints then
+   {$ENDIF}
+      Exit;
+
+   // Clip to negative box side 1
+   if b2ClipSegmentToLine(clipPoints2, clipPoints1,  tangent, sideOffset2, iv2) < b2_maxManifoldPoints then
+      Exit;
+
+   // Now clipPoints2 contains the clipped points.
+   if edgeAxis.AxisType = e_ep_edgeA then
+   begin
+      manifold.localNormal := edgeNormal;
+      manifold.localPoint := planePoint;
+   end
+   else
+   begin
+      manifold.localNormal := b2MulT(xf.R, edgeNormal);
+      manifold.localPoint := b2MulT(xf, planePoint);
+   end;
+
+   pointCount := 0;
+   for i := 0 to b2_maxManifoldPoints - 1 do
+   begin
+      clipVertex := @clipPoints2[i];
+      if b2Dot(edgeNormal, clipVertex^.v) - frontOffset <= totalRadius then
+         with manifold.points[pointCount] do
+         begin
+            if edgeAxis.AxisType = e_ep_edgeA then
+            begin
+               localPoint := b2MulT(xf, clipVertex^.v);
+               id := clipVertex^.id;
+            end
+            else
+            begin
+               localPoint := clipVertex^.v;
+               with id.cf, clipVertex^.id do
+               begin
+                  typeA := cf.typeB; // cf is clipVertex^.id.cf
+                  typeB := cf.typeA;
+                  indexA := cf.indexB;
+                  indexB := cf.indexA;
+               end;
+            end;
+
+            if (id.cf.typeA = e_contact_feature_vertex) and (types[id.cf.indexA] = b2_flat) then
+               Continue;
+
+            Inc(pointCount);
+         end;
+   end;
+
+   manifold.pointCount := pointCount;
+end;
+
+var
+   static_edgeshape: Tb2EdgeShape;
+procedure b2CollideLoopAndCircle(contact: Pb2Contact; var manifold: Tb2Manifold;
+   A, B: TObject; const xfA, xfB: Tb2Transform; ABfixture: Boolean);
+var
+   loop: Tb2LoopShape;
+   circle: Tb2CircleShape;
+begin
+   if ABfixture then
+   begin
+      loop := Tb2LoopShape(Tb2Fixture(A).m_shape);
+      circle := Tb2CircleShape(Tb2Fixture(B).m_shape);
+   end
+   else
+   begin
+      loop := Tb2LoopShape(A);
+      circle := Tb2CircleShape(B);
+   end;
+
+   loop.GetChildEdge(static_edgeshape, contact^.m_indexA);
+	 b2CollideEdgeAndCircle(contact,	manifold, static_edgeshape, circle, xfA, xfB, False);
+end;
+
+procedure b2CollideLoopAndPolygon(contact: Pb2Contact; var manifold: Tb2Manifold;
+   A, B: TObject; const xfA, xfB: Tb2Transform; ABfixture: Boolean);
+var
+   loop: Tb2LoopShape;
+   poly: Tb2PolygonShape;
+begin
+   if ABfixture then
+   begin
+      loop := Tb2LoopShape(Tb2Fixture(A).m_shape);
+      poly := Tb2PolygonShape(Tb2Fixture(B).m_shape);
+   end
+   else
+   begin
+      loop := Tb2LoopShape(A);
+      poly := Tb2PolygonShape(B);
+   end;
+
+   loop.GetChildEdge(static_edgeshape, contact^.m_indexA);
+	 b2CollideEdgeAndPolygon(contact,	manifold, static_edgeshape, poly, xfA, xfB, False);
 end;
 
 // Find the separation between poly1 and poly2 for a give edge normal on poly1.
@@ -9844,8 +10790,8 @@ begin
    Result := bestSeparation;
 end;
 
-procedure b2FindIncidentEdge(c: PClipVertices; poly1, poly2: Tb2PolygonShape;
-   const xf1, xf2: Tb2Transform; edge1: Int32);
+procedure b2FindIncidentEdge(var c: TClipVertices; poly1, poly2: Tb2PolygonShape;
+   const xf1, xf2: Tb2Transform; edge1: Int32); overload;
 var
    i: Integer;
    index, i1, i2: Int32;
@@ -9877,15 +10823,23 @@ begin
    else
       i2 := 0;
 
-   c^[0].v := b2Mul(xf2, poly2.m_vertices[i1]);
-   c^[0].id.referenceEdge := edge1;
-   c^[0].id.incidentEdge := i1;
-   c^[0].id.incidentVertex := 0;
+   with c[0], id.cf do
+   begin
+      v := b2Mul(xf2, poly2.m_vertices[i1]);
+      indexA := edge1;
+      indexB := i1;
+      typeA := e_contact_feature_face;
+      typeB := e_contact_feature_vertex;
+   end;
 
-   c^[1].v := b2Mul(xf2, poly2.m_vertices[i2]);
-   c^[1].id.referenceEdge := edge1;
-   c^[1].id.incidentEdge := i2;
-   c^[1].id.incidentVertex := 1;
+   with c[1], id.cf do
+   begin
+      v := b2Mul(xf2, poly2.m_vertices[i2]);
+      indexA := edge1;
+      indexB := i2;
+      typeA := e_contact_feature_face;
+      typeB := e_contact_feature_vertex;
+   end;
 end;
 
 // Find edge normal of max separation on A - return if separating axis is found
@@ -9893,13 +10847,14 @@ end;
 // Choose reference edge as min(minA, minB)
 // Find incident edge
 // Clip the normal points from 1 to 2
-procedure b2CollidePolygons(var manifold: Tb2Manifold; A, B: TObject;
-   const xfA, xfB: Tb2Transform; ABfixture: Boolean);
+procedure b2CollidePolygons(contact: Pb2Contact; var manifold: Tb2Manifold;
+   A, B: TObject; const xfA, xfB: Tb2Transform; ABfixture: Boolean);
 var
    polyA, polyB: Tb2PolygonShape;
    i: Integer;
    edgeA, edgeB: Int32;
    edge1: Int32; // reference edge
+   iv1, iv2: Int32;
    flip: UInt8;
    totalRadius, separationA, separationB: Float;
    poly1, poly2: Tb2PolygonShape; // reference poly and incident poly
@@ -9910,6 +10865,7 @@ var
    frontOffset, sideOffset1, sideOffset2: Float;
    np: Int32; // Clip incident edge against extruded edge1 side edges.
    pointCount: Int32;
+   cfSwap: Tb2ContactFeature;
 begin
    if ABfixture then
    begin
@@ -9958,13 +10914,16 @@ begin
       flip := 0;
    end;
 
-   b2FindIncidentEdge(@incidentEdge, poly1, poly2, xf1, xf2, edge1);
+   b2FindIncidentEdge(incidentEdge, poly1, poly2, xf1, xf2, edge1);
 
-   v11 := poly1.m_vertices[edge1];
+   iv1 := edge1;
    if edge1 + 1 < poly1.m_vertexCount then
-      v12 := poly1.m_vertices[edge1+1]
+      iv2 := edge1 + 1
    else
-      v12 := poly1.m_vertices[0];
+      iv2 := 0;
+
+   v11 := poly1.m_vertices[iv1];
+   v12 := poly1.m_vertices[iv2];
 
    {$IFDEF OP_OVERLOAD}
    localTangent := v12 - v11;
@@ -9992,15 +10951,15 @@ begin
 
    // Clip to box side 1
    {$IFDEF OP_OVERLOAD}
-   np := b2ClipSegmentToLine(clipPoints1, incidentEdge, -tangent, sideOffset1);
+   np := b2ClipSegmentToLine(clipPoints1, incidentEdge, -tangent, sideOffset1, iv1);
    {$ELSE}
-   np := b2ClipSegmentToLine(clipPoints1, incidentEdge, Negative(tangent), sideOffset1);
+   np := b2ClipSegmentToLine(clipPoints1, incidentEdge, Negative(tangent), sideOffset1, iv1);
    {$ENDIF}
    if np < 2 then
       Exit;
 
    // Clip to negative box side 1
-   np := b2ClipSegmentToLine(clipPoints2, clipPoints1, tangent, sideOffset2);
+   np := b2ClipSegmentToLine(clipPoints2, clipPoints1, tangent, sideOffset2, iv2);
    if np < 2 then
       Exit;
 
@@ -10016,7 +10975,17 @@ begin
          begin
             localPoint := b2MulT(xf2, clipPoints2[i].v);
             id := clipPoints2[i].id;
-            id.flip := flip;
+            if flip <> 0 then
+               with id.cf do
+               begin
+                  // Swap features
+                  cfSwap := id.cf;
+                  indexA := cfSwap.indexB;
+                  indexB := cfSwap.indexA;
+                  typeA := cfSwap.typeB;
+                  typeB := cfSwap.typeA;
+               end;
+
             Inc(pointCount);
          end;
    end;
@@ -10041,6 +11010,11 @@ begin
    Tb2CircleShape(Result).m_p := m_p;
 end;
 
+function Tb2CircleShape.GetChildCount: Int32;
+begin
+   Result := 1;
+end;
+
 function Tb2CircleShape.TestPoint(const xf: Tb2Transform; const p: TVector2): Boolean;
 var
    center, d: TVector2;
@@ -10060,11 +11034,13 @@ end;
 // x = s + a * r
 // norm(x) = radius
 function Tb2CircleShape.RayCast(var output: Tb2RayCastOutput;
-  const input: Tb2RayCastInput; const transform: Tb2Transform): Boolean;
+   const input: Tb2RayCastInput; const transform: Tb2Transform;
+   childIndex: Int32): Boolean;
 var
    s, r: TVector2;
    b, c, rr, sigma, a: Float;
 begin
+   //B2_NOT_USED(childIndex);
    {$IFDEF OP_OVERLOAD}
    s := input.p1 - (transform.position + b2Mul(transform.R, m_p));
    {$ELSE}
@@ -10114,10 +11090,12 @@ begin
    Result := False;
 end;
 
-procedure Tb2CircleShape.ComputeAABB(var aabb: Tb2AABB; const xf: Tb2Transform);
+procedure Tb2CircleShape.ComputeAABB(var aabb: Tb2AABB;
+   const xf: Tb2Transform; childIndex: Int32);
 var
    p: TVector2;
 begin
+   //B2_NOT_USED(childIndex);
    {$IFDEF OP_OVERLOAD}
    p := xf.position + b2Mul(xf.R, m_p);
    {$ELSE}
@@ -10219,6 +11197,11 @@ begin
    end;
 end;
 
+function Tb2PolygonShape.GetChildCount: Int32;
+begin
+   Result := 1;
+end;
+
 function Tb2PolygonShape.TestPoint(const xf: Tb2Transform; const p: TVector2): Boolean;
 var
    i: Integer;
@@ -10245,21 +11228,23 @@ begin
 end;
 
 function Tb2PolygonShape.RayCast(var output: Tb2RayCastOutput;
-   const input: Tb2RayCastInput; const xf: Tb2Transform): Boolean;
+   const input: Tb2RayCastInput; const transform: Tb2Transform;
+   childIndex: Int32): Boolean;
 var
    i: Integer;
    index: Int32;
    p1, p2, d, q, r: TVector2;
    numerator, denominator, t, rr, s, lower, upper: Float;
 begin
+   //B2_NOT_USED(childIndex);
    // Put the ray into the polygon's frame of reference.
    {$IFDEF OP_OVERLOAD}
-   p1 := b2MulT(xf.R, input.p1 - xf.position);
-   p2 := b2MulT(xf.R, input.p2 - xf.position);
+   p1 := b2MulT(transform.R, input.p1 - transform.position);
+   p2 := b2MulT(transform.R, input.p2 - transform.position);
    d := p2 - p1;
    {$ELSE}
-   p1 := b2MulT(xf.R, Subtract(input.p1, xf.position));
-   p2 := b2MulT(xf.R, Subtract(input.p2, xf.position));
+   p1 := b2MulT(transform.R, Subtract(input.p1, transform.position));
+   p2 := b2MulT(transform.R, Subtract(input.p2, transform.position));
    d := Subtract(p2, p1);
    {$ENDIF}
 
@@ -10399,7 +11384,7 @@ begin
       if index >= 0 then
       begin
          output.fraction := lower;
-         output.normal := b2Mul(xf.R, m_normals[index]);
+         output.normal := b2Mul(transform.R, m_normals[index]);
          Result := True;
          Exit;
       end;
@@ -10408,11 +11393,13 @@ begin
    Result := False;
 end;
 
-procedure Tb2PolygonShape.ComputeAABB(var aabb: Tb2AABB; const xf: Tb2Transform);
+procedure Tb2PolygonShape.ComputeAABB(var aabb: Tb2AABB;
+   const xf: Tb2Transform; childIndex: Int32);
 var
    i: Integer;
    lower, upper, v, r: TVector2;
 begin
+   //B2_NOT_USED(childIndex);
    lower := b2Mul(xf, m_vertices[0]);
    upper := lower;
 
@@ -10772,7 +11759,7 @@ begin
    {$ENDIF}
 end;
 
-function Tb2PolygonShape.GetSupport(const d: TVector2): Int32;
+{function Tb2PolygonShape.GetSupport(const d: TVector2): Int32;
 var
    i: Integer;
    bestValue, value: Float;
@@ -10808,6 +11795,315 @@ begin
       end;
    end;
    Result := @m_vertices[bestIndex];
+end;}
+
+{ Tb2EdgeShape }
+
+constructor Tb2EdgeShape.Create;
+begin
+   m_type := e_edgeShape;
+   m_radius := b2_polygonRadius;
+	 m_hasVertex0 := False;
+   m_hasVertex3 := False;
+end;
+
+procedure Tb2EdgeShape.SetVertices(const v1, v2: TVector2);
+begin
+   m_vertex1 := v1;
+   m_vertex2 := v2;
+   m_hasVertex0 := False;
+   m_hasVertex3 := False;
+end;
+
+function Tb2EdgeShape.Clone: Tb2Shape;
+begin
+   Result := Tb2EdgeShape.Create;
+   Result.m_type := m_type;
+   Result.m_radius := m_radius;
+
+   with Tb2EdgeShape(Result) do
+   begin
+      m_vertex1 := Self.m_vertex1;
+      m_vertex2 := Self.m_vertex2;
+      m_hasVertex0 := Self.m_hasVertex0;
+      m_hasVertex3 := Self.m_hasVertex3;
+   end;
+end;
+
+function Tb2EdgeShape.GetChildCount: Int32;
+begin
+   Result := 1;
+end;
+
+function Tb2EdgeShape.TestPoint(const xf: Tb2Transform; const p: TVector2): Boolean;
+begin
+   //B2_NOT_USED(xf);
+   //B2_NOT_USED(p);
+   Result := False;
+end;
+
+// p = p1 + t * d
+// v = v1 + s * e
+// p1 + t * d = v1 + s * e
+// s * e - t * d = p1 - v1
+function Tb2EdgeShape.RayCast(var output: Tb2RayCastOutput;
+   const input: Tb2RayCastInput; const transform: Tb2Transform;
+   childIndex: Int32): Boolean;
+var
+   p1, p2, d, e, normal, q: TVector2;
+   numerator, denominator, t, rr, s: Float;
+begin
+   //B2_NOT_USED(childIndex);
+   {$IFDEF OP_OVERLOAD}
+   // Put the ray into the edge's frame of reference.
+   p1 := b2MulT(transform.R, input.p1 - transform.position);
+   p2 := b2MulT(transform.R, input.p2 - transform.position);
+   d := p2 - p1;
+
+   e := m_vertex2 - m_vertex1;
+   normal.x := e.y;
+   normal.y := -e.x;
+   normal.Normalize;
+
+   // q := p1 + t * d
+   // dot(normal, q - m_vertex1) := 0
+   // dot(normal, p1 - m_vertex1) + t * dot(normal, d) := 0
+   numerator := b2Dot(normal, m_vertex1 - p1);
+   {$ELSE}
+   // Put the ray into the edge's frame of reference.
+   p1 := b2MulT(transform.R, Subtract(input.p1, transform.position));
+   p2 := b2MulT(transform.R, Subtract(input.p2, transform.position));
+   d := Subtract(p2, p1);
+
+   e := Subtract(m_vertex2, m_vertex1);
+   normal.x := e.y;
+   normal.y := -e.x;
+   Normalize(normal);
+
+   // q := p1 + t * d
+   // dot(normal, q - m_vertex1) := 0
+   // dot(normal, p1 - m_vertex1) + t * dot(normal, d) := 0
+   numerator := b2Dot(normal, Subtract(m_vertex1, p1));
+   {$ENDIF}
+
+   denominator := b2Dot(normal, d);
+
+   if denominator = 0.0 then
+   begin
+      Result := False;
+      Exit;
+   end;
+
+   t := numerator / denominator;
+   if (t < 0.0) or (1.0 < t) then
+   begin
+      Result := False;
+      Exit;
+   end;
+
+   {$IFDEF OP_OVERLOAD}
+   q := p1 + t * d;
+   {$ELSE}
+   q := Add(p1, Multiply(d, t));
+   {$ENDIF}
+
+   // q := m_vertex1 + s * r
+   // s := dot(q - m_vertex1, r) / dot(r, r)
+   rr := b2Dot(e, e);
+   if rr = 0.0 then
+   begin
+      Result := False;
+      Exit;
+   end;
+
+   {$IFDEF OP_OVERLOAD}
+   s := b2Dot(q - m_vertex1, e) / rr;
+   {$ELSE}
+   s := b2Dot(Subtract(q, m_vertex1), e) / rr;
+   {$ENDIF}
+   if (s < 0.0) or (1.0 < s) then
+   begin
+      Result := False;
+      Exit;
+   end;
+
+   output.fraction := t;
+   if numerator > 0.0 then
+      {$IFDEF OP_OVERLOAD}
+      output.normal := -normal
+      {$ELSE}
+      output.normal := Negative(normal)
+      {$ENDIF}
+   else
+      output.normal := normal;
+
+   Result := True;
+end;
+
+procedure Tb2EdgeShape.ComputeAABB(var aabb: Tb2AABB;
+   const xf: Tb2Transform; childIndex: Int32);
+var
+   v1, v2, lower, upper, r: TVector2;
+begin
+   //B2_NOT_USED(childIndex);
+   v1 := b2Mul(xf, m_vertex1);
+   v2 := b2Mul(xf, m_vertex2);
+
+   lower := b2Min(v1, v2);
+   upper := b2Max(v1, v2);
+
+   SetValue(r, m_radius, m_radius);
+   {$IFDEF OP_OVERLOAD}
+   aabb.lowerBound := lower - r;
+   aabb.upperBound := upper + r;
+   {$ELSE}
+   aabb.lowerBound := Subtract(lower, r);
+   aabb.upperBound := Add(upper, r);
+   {$ENDIF}
+end;
+
+procedure Tb2EdgeShape.ComputeMass(var massData: Tb2MassData; density: Float);
+begin
+   //B2_NOT_USED(density);
+   massData.mass := 0.0;
+   massData.center := b2MiddlePoint(m_vertex1, m_vertex2);
+   massData.I := 0.0;
+end;
+
+function Tb2EdgeShape.ComputeSubmergedArea(const normal: TVector2;
+   offset: Float; const xf: Tb2Transform; var c: TVector2): Float;
+begin
+   Result := 0.0;
+end;
+
+{ Tb2LoopShape }
+
+constructor Tb2LoopShape.Create;
+begin
+   m_type := e_loopShape;
+   m_radius := b2_polygonRadius;
+   m_vertices := nil;
+   m_count := 0;
+end;
+
+procedure Tb2LoopShape.SetVertices(pv: PVector2; count: Int32);
+var
+   i: Integer;
+begin
+   m_count := count;
+   SetLength(m_vertices, count);
+   for i := 0 to count - 1 do
+   begin
+      m_vertices[i] := pv^;
+      Inc(pv);
+   end;
+end;
+
+procedure Tb2LoopShape.GetChildEdge(edge: Tb2EdgeShape; index: Int32);
+var
+   i0, i1, i2, i3: Int32;
+begin
+   //b2Assert(2 <= m_count);
+   //b2Assert(0 <= index && index < m_count);
+   edge.m_type := e_edgeShape;
+   edge.m_radius := m_radius;
+   edge.m_hasVertex0 := True;
+   edge.m_hasVertex3 := True;
+
+   if index - 1 >= 0 then
+      i0 := index - 1
+   else
+      i0 := m_count - 1;
+   i1 := index;
+   if index + 1 < m_count then
+      i2 := index + 1
+   else
+      i2 := 0;
+   i3 := index + 2;
+   while i3 >= m_count do
+      Dec(i3, m_count);
+
+   edge.m_vertex0 := m_vertices[i0];
+   edge.m_vertex1 := m_vertices[i1];
+   edge.m_vertex2 := m_vertices[i2];
+   edge.m_vertex3 := m_vertices[i3];
+end;
+
+function Tb2LoopShape.Clone: Tb2Shape;
+begin
+   Result := Tb2LoopShape.Create;
+   Result.m_type := m_type;
+   Result.m_radius := m_radius;
+
+   with Tb2LoopShape(Result) do
+   begin
+      m_count := Self.m_count;
+      SetLength(m_vertices, m_count);
+      Move(Self.m_vertices[0], m_vertices[0], SizeOf(TVector2) * m_count);
+   end;
+end;
+
+function Tb2LoopShape.GetChildCount: Int32;
+begin
+   Result := m_count;
+end;
+
+function Tb2LoopShape.TestPoint(const xf: Tb2Transform;
+   const p: TVector2): Boolean;
+begin
+	 //B2_NOT_USED(xf);
+	 //B2_NOT_USED(p);
+   Result := False;
+end;
+
+function Tb2LoopShape.RayCast(var output: Tb2RayCastOutput;
+   const input: Tb2RayCastInput; const transform: Tb2Transform;
+   childIndex: Int32): Boolean;
+var
+   i2: Int32;
+begin
+   //b2Assert(childIndex < m_count);
+   i2 := childIndex + 1;
+   if i2 = m_count then
+      i2 := 0;
+
+   static_edgeshape.m_vertex1 := m_vertices[childIndex];
+   static_edgeshape.m_vertex2 := m_vertices[i2];
+
+   Result := static_edgeshape.RayCast(output, input, transform, 0);
+end;
+
+procedure Tb2LoopShape.ComputeAABB(var aabb: Tb2AABB; const xf: Tb2Transform;
+   childIndex: Int32);
+var
+   i2: Int32;
+   v1, v2: TVector2;
+begin
+   //b2Assert(childIndex < m_count);
+
+   i2 := childIndex + 1;
+   if i2 = m_count then
+      i2 := 0;
+
+   v1 := b2Mul(xf, m_vertices[childIndex]);
+   v2 := b2Mul(xf, m_vertices[i2]);
+
+   aabb.lowerBound := b2Min(v1, v2);
+   aabb.upperBound := b2Max(v1, v2);
+end;
+
+procedure Tb2LoopShape.ComputeMass(var massData: Tb2MassData; density: Float);
+begin
+   //B2_NOT_USED(density);
+   massData.mass := 0.0;
+   massData.center := b2Vec2_Zero;
+   massData.I := 0.0;
+end;
+
+function Tb2LoopShape.ComputeSubmergedArea(const normal: TVector2;
+   offset: Float; const xf: Tb2Transform; var c: TVector2): Float;
+begin
+   Result := 0.0;
 end;
 
 { Tb2DistanceJointDef }
@@ -10829,6 +12125,7 @@ end;
 
 constructor Tb2DistanceJointDef.Create;
 begin
+   inherited;
    JointType := e_distanceJoint;
    localAnchorA := b2Vec2_Zero;
    localAnchorB := b2Vec2_Zero;
@@ -11132,6 +12429,7 @@ end;
 
 constructor Tb2PrismaticJointDef.Create;
 begin
+   inherited;
    JointType := e_prismaticJoint;
    localAnchorA := b2Vec2_Zero;
    localAnchorB := b2Vec2_Zero;
@@ -11754,6 +13052,7 @@ end;
 
 constructor Tb2MouseJointDef.Create;
 begin
+    inherited;
 		JointType := e_mouseJoint;
     target := b2Vec2_Zero;
 		maxForce := 0.0;
@@ -11962,6 +13261,7 @@ const
 
 constructor Tb2PulleyJointDef.Create;
 begin
+   inherited;
    JointType := e_pulleyJoint;
    SetValue(groundAnchorA, -1.0, 1.0);
    SetValue(groundAnchorB, 1.0, 1.0);
@@ -12469,6 +13769,7 @@ end;
 
 constructor Tb2RevoluteJointDef.Create;
 begin
+   inherited;
    JointType := e_revoluteJoint;
    localAnchorA := b2Vec2_Zero;
    localAnchorB := b2Vec2_Zero;
@@ -12479,6 +13780,7 @@ begin
    motorSpeed := 0.0;
    enableLimit := False;
    enableMotor := False;
+   motorOnBodyB := False;
 end;
 
 procedure Tb2RevoluteJointDef.Initialize(bodyA, bodyB: Tb2Body; const anchor: TVector2);
@@ -12508,6 +13810,7 @@ begin
    m_motorSpeed := def.motorSpeed;
    m_enableLimit := def.enableLimit;
    m_enableMotor := def.enableMotor;
+   m_motorOnBodyB := def.motorOnBodyB;
    m_limitState := e_inactiveLimit;
 end;
 
@@ -12580,7 +13883,10 @@ begin
       col3.z := i1 + i2;
    end;
 
-   m_motorMass := i1 + i2;
+   if m_motorOnBodyB then
+      m_motorMass := i2
+   else
+      m_motorMass := i1 + i2;
    if m_motorMass > 0.0 then
       m_motorMass := 1.0 / m_motorMass;
 
@@ -12665,15 +13971,27 @@ begin
    // Solve motor constraint.
    if m_enableMotor and (m_limitState <> e_equalLimits) then
    begin
-      fCdot := w2 - w1 - m_motorSpeed;
-      fimpulse := m_motorMass * (-fCdot);
-      oldImpulse := m_motorImpulse;
-      maxImpulse := step.dt * m_maxMotorTorque;
-      m_motorImpulse := b2Clamp(m_motorImpulse + fimpulse, -maxImpulse, maxImpulse);
-      fimpulse := m_motorImpulse - oldImpulse;
-
-      w1 := w1 - i1 * fimpulse;
-      w2 := w2 + i2 * fimpulse;
+      if m_motorOnBodyB then
+      begin
+         fCdot := w2 - m_motorSpeed;
+         fimpulse := m_motorMass * (-fCdot);
+         oldImpulse := m_motorImpulse;
+         maxImpulse := step.dt * m_maxMotorTorque;
+         m_motorImpulse := b2Clamp(m_motorImpulse + fimpulse, -maxImpulse, maxImpulse);
+         fimpulse := m_motorImpulse - oldImpulse;
+         w2 := w2 + i2 * fimpulse;
+      end
+      else
+      begin
+         fCdot := w2 - w1 - m_motorSpeed;
+         fimpulse := m_motorMass * (-fCdot);
+         oldImpulse := m_motorImpulse;
+         maxImpulse := step.dt * m_maxMotorTorque;
+         m_motorImpulse := b2Clamp(m_motorImpulse + fimpulse, -maxImpulse, maxImpulse);
+         fimpulse := m_motorImpulse - oldImpulse;
+         w1 := w1 - i1 * fimpulse;
+         w2 := w2 + i2 * fimpulse;
+      end;
    end;
 
    // Solve limit constraint.
@@ -13013,6 +14331,7 @@ end;
 
 constructor Tb2GearJointDef.Create;
 begin
+   inherited;
 	 JointType := e_gearJoint;
 	 joint1 := nil;
 	 joint2 := nil;
@@ -13268,6 +14587,7 @@ end;
 
 constructor Tb2FrictionJointDef.Create;
 begin
+   inherited;
    JointType := e_frictionJoint;
    localAnchorA := b2Vec2_Zero;
    localAnchorB := b2Vec2_Zero;
@@ -13567,6 +14887,7 @@ end;
 
 constructor Tb2LineJointDef.Create;
 begin
+   inherited;
    JointType := e_lineJoint;
    localAnchorA := b2Vec2_Zero;
    localAnchorB := b2Vec2_Zero;
@@ -14160,6 +15481,7 @@ end;
 
 constructor Tb2WeldJointDef.Create;
 begin
+   inherited;
    JointType := e_weldJoint;
    localAnchorA := b2Vec2_Zero;
    localAnchorB := b2Vec2_Zero;
@@ -14415,6 +15737,7 @@ end;
 
 constructor Tb2FixedJointDef.Create;
 begin
+   inherited;
 	 JointType := e_fixedJoint;
 end;
 
@@ -14641,6 +15964,9 @@ initialization
    distance_simplex := Tb2Simplex.Create;
    toi_separation_fcn := Tb2SeparationFunction.Create;
    island_solve_contact_solver := Tb2ContactSolver.Create;
+   static_edgeshape := Tb2EdgeShape.Create;
+   static_polygonshape1 := Tb2PolygonShape.Create;
+   static_polygonshape2 := Tb2PolygonShape.Create;
 
    {$IFDEF COMPUTE_PHYSICSTIME}
    QueryPerformanceFrequency(vCounterFrequency);
@@ -14662,6 +15988,9 @@ finalization
    distance_simplex.Free;
    toi_separation_fcn.Free;
    island_solve_contact_solver.Free;
+   static_edgeshape.Free;
+   static_polygonshape1.Free;
+   static_polygonshape2.Free;
 
 end.
 

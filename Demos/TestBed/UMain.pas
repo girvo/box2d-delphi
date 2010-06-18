@@ -168,6 +168,8 @@ type
 
 const
    DefaultStep = 1 / 60;
+   velocityIterations = 8;
+   positionIterations = 3;
 
 var
   frmMain: TfrmMain;
@@ -398,13 +400,13 @@ end;
 procedure TfrmMain.FormMouseWheelDown(Sender: TObject; Shift: TShiftState;
   MousePos: TPoint; var Handled: Boolean);
 begin
-   GLCanvas.SetEqualScale(b2Max(GLCanvas.ScaleX * 0.9, 0.5));
+   GLCanvas.SetEqualScale(b2Max(GLCanvas.ScaleX * 0.9, 0.01));
 end;
 
 procedure TfrmMain.FormMouseWheelUp(Sender: TObject; Shift: TShiftState;
   MousePos: TPoint; var Handled: Boolean);
 begin
-   GLCanvas.SetEqualScale(b2Min(GLCanvas.ScaleX * 1.1, 60.0));
+   GLCanvas.SetEqualScale(b2Min(GLCanvas.ScaleX * 1.1, 1000.0));
 end;
 
 procedure TfrmMain.rdoFixedStepClick(Sender: TObject);
@@ -769,7 +771,7 @@ begin
          m_RemainTime := 0.0;
          if settings.singleStep then
          begin
-            m_world.Step(DefaultStep, 8, 3, True);
+            m_world.Step(DefaultStep, velocityIterations, positionIterations, True);
             settings.singleStep := False;
             Inc(m_stepCount);
          end
@@ -780,19 +782,19 @@ begin
       end
       else
       begin
-         if settings.realTime then // Make sure that every frame is processed using a time step pf 1/60s.
+         if settings.realTime then // Make sure that every frame is processed using a time step of 1/60s.
          begin
             timeStep := timeStep + m_RemainTime;
             while timeStep > DefaultStep do
             begin
-               m_world.Step(DefaultStep, 8, 3);
+               m_world.Step(DefaultStep, velocityIterations, positionIterations);
                timeStep := timeStep - DefaultStep;
             end;
             m_RemainTime := timeStep;
             m_world.DrawDebugData;
          end
          else
-            m_world.Step(timeStep, 8, 3, True);
+            m_world.Step(timeStep, velocityIterations, positionIterations, True);
 
          Inc(m_stepCount);
       end;

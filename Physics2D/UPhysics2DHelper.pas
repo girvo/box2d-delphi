@@ -66,8 +66,8 @@ function BuildStaticBoundBox(width, height, centerX, centerY: TPointFloat;
    world: Tb2World; curve_tension: Single = 0.0): Tb2Body;
 
 // If bd is a dynamic body, @shape_density shouldn't be zero.
-function BuildEdgeShapeCurve(pts: PPointF; cnt: Int32; bd: Tb2Body;
-   precision: Single = 0.5; shape_density: Single = 0.0; curve_tension: Single = 0.5): Tb2Body;
+procedure BuildEdgeShapeCurve(pts: PPointF; cnt: Int32; bd: Tb2Body;
+   precision: Single = 0.5; shape_density: Single = 0.0; curve_tension: Single = 0.5);
 
 { Build rope about a given curve.
   @body1 and @body2 are bodies linked to ends of the rope.
@@ -370,8 +370,8 @@ begin
    GDI_Bezier(pt, len_pt, outPoints, outCount);
 end;
 
-function BuildEdgeShapeCurve(pts: PPointF; cnt: Int32; bd: Tb2Body;
-   precision: Single = 0.5; shape_density: Single = 0.0; curve_tension: Single = 0.5): Tb2Body;
+procedure BuildEdgeShapeCurve(pts: PPointF; cnt: Int32; bd: Tb2Body;
+   precision: Single = 0.5; shape_density: Single = 0.0; curve_tension: Single = 0.5);
 var
    i: Integer;
    x1, y1, x2, y2: Single;
@@ -379,7 +379,6 @@ var
    pt2Count: Integer;
    shape: Tb2PolygonShape;
 begin
-   Result := nil;
    if cnt <= 1 then
       Exit;
 
@@ -479,8 +478,8 @@ begin
       if l > max_segment then
       begin
          partition := Floor(l / max_segment) + 1;
-         dx := (x2 - x1) /  partition;
-         dy := (y2 - y1) /  partition;
+         dx := (x2 - x1) / partition;
+         dy := (y2 - y1) / partition;
          for j := 1 to partition do
             Sub(x1, y1, x1 + dx, y1 + dy);
       end

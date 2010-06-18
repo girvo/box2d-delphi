@@ -65,7 +65,7 @@ var
 begin
    //B2_NOT_USED(settings);
 
-   b2CollidePolygons(manifold, m_polygonA, m_polygonB, m_transformA, m_transformB, False);
+   b2CollidePolygons(nil, manifold, m_polygonA, m_polygonB, m_transformA, m_transformB, False);
    {$IFDEF OP_OVERLOAD}
    worldManifold.Initialize(manifold, m_transformA, m_transformB, m_polygonA.m_radius, m_polygonB.m_radius);
    {$ELSE}

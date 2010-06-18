@@ -93,6 +93,7 @@
 			<DCCReference Include="..\..\Physics2D\UPhysics2DPolygonTool.pas"/>
 			<DCCReference Include="..\..\Physics2D\UPhysics2DTypes.pas"/>
 			<DCCReference Include="Tests\UTiles.pas"/>
+			<DCCReference Include="Tests\UEdgeTest.pas"/>
 			<None Include="..\..\OpenGL Canvas\OpenGLCanvas.inc"/>
 			<None Include="..\..\Physics2D\Physics2D.inc"/>
 			<None Include="..\..\Physics2D\delete.bat"/>
