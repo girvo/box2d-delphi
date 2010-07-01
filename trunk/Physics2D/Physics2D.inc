@@ -21,7 +21,7 @@
 
 {.$DEFINE DEBUG_SIMULATE_D2007}
 {.$DEFINE DEBUG_SIMULATE_D2005}
-{$DEFINE DEBUG_SIMULATE_D7}
+{.$DEFINE DEBUG_SIMULATE_D7}
 
 // Operator overloading and inline availability
 // BDS 2010 (BDS 7.0)
