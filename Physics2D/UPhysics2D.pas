@@ -1260,6 +1260,7 @@ type
       bodyType: Tb2BodyType; /// Note: if a dynamic body would have zero mass, the mass is set to one.
       userData: Pointer; /// Use this to store application specific body data.
 
+      ignoreColliding: Boolean;
       /// The world position of the body. Avoid creating bodies at the origin
       /// since this can lead to many overlapping shapes.
       position: TVector2;
@@ -1517,6 +1518,9 @@ type
 
       /// Get the active state of the body.
       function IsActive: Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+
+      procedure SetIgnoreColliding(flag: Boolean); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function IsCollidingIgnored: Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
       /// Set this body to have fixed rotation. This causes the mass
       /// to be reset.
@@ -2419,6 +2423,7 @@ const
    e_body_fixedRotationFlag	= $10;
    e_body_activeFlag	= $20;
    e_body_toiFlag = $40;
+   e_body_ignoreCollideFlag = $80;
 
    // Tb2ContactFeature
    e_contact_feature_vertex = 0;
@@ -8955,6 +8960,7 @@ end;
 constructor Tb2BodyDef.Create;
 begin
    userData := nil;
+   ignoreColliding := False;
    position := b2Vec2_Zero;
    angle := 0.0;
    linearVelocity := b2Vec2_Zero;
@@ -8994,6 +9000,8 @@ begin
       m_flags := m_flags or e_body_awakeFlag;
    if bd.active then
       m_flags := m_flags or e_body_activeFlag;
+   if bd.ignoreColliding then
+      m_flags := m_flags or e_body_ignoreCollideFlag;
 
    m_world := world;
 
@@ -9256,6 +9264,12 @@ function Tb2Body.ShouldCollide(other: Tb2Body): Boolean;
 var
    jn: Pb2JointEdge;
 begin
+   if IsCollidingIgnored then
+   begin
+      Result := False;
+      Exit;
+   end;
+
    // At least one body should be dynamic.
    if (m_type <> b2_dynamicBody) and (other.m_type <> b2_dynamicBody) then
    begin
@@ -9713,6 +9727,19 @@ end;
 function Tb2Body.IsActive: Boolean;
 begin
    Result := (m_flags and e_body_activeFlag) = e_body_activeFlag;
+end;
+
+procedure Tb2Body.SetIgnoreColliding(flag: Boolean);
+begin
+   if flag then
+      m_flags := m_flags or e_body_ignoreCollideFlag
+   else
+      m_flags := m_flags and (not e_body_ignoreCollideFlag);
+end;
+
+function Tb2Body.IsCollidingIgnored: Boolean;
+begin
+   Result := (m_flags and e_body_ignoreCollideFlag) = e_body_ignoreCollideFlag;
 end;
 
 procedure Tb2Body.SetFixedRotation(flag: Boolean);

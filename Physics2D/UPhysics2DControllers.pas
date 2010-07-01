@@ -525,7 +525,7 @@ begin
                {$ELSE}
                AddBy(appliedforce, Multiply(windforce, Tb2CircleShape(shape.GetShape).m_radius * 2))
                {$ENDIF}
-            else
+            else if shape.GetType = e_polygonShape then
                {$IFDEF OP_OVERLOAD}
                appliedforce.AddBy(ComputePolygonShapeEffectiveForce(windforce,
                   Tb2PolygonShape(shape.GetShape), GetTransform^));

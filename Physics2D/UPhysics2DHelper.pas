@@ -84,6 +84,10 @@ procedure BuildRope(const p1, p2: TPointF; world: Tb2World; bodies: TList = nil;
    body1: Tb2Body = nil; body2: Tb2Body = nil; max_segment: Single = 5;
    shape_density: Single = 1.0; shape_friction: Single = 0.0); overload;
 
+var
+   LastGeneratedPoints: TPointsF;
+   LastGeneratedPointCount: Integer;
+
 implementation
 var
    BezierPrecision: Single;
@@ -328,14 +332,13 @@ begin
    end;
 end;
 
-procedure GenCurvePoints(const points: TPointsF; count: Int32;
-   var outPoints: TPointsF; var outCount: Int32; tension: Single = 0.5);
+procedure GenCurvePoints(const points: TPointsF; count: Int32; tension: Single = 0.5);
 var
    i, len_pt: Int32;
    x1, x2, y1, y2: Single;
    pt: TPointsF;
 begin
-   outCount := 0;
+   LastGeneratedPointCount := 0;
    if count <= 1 then
       Exit;
 
@@ -367,7 +370,7 @@ begin
    pt[len_pt - 2].Y := y1;
    pt[len_pt - 1] := points[count - 1];
 
-   GDI_Bezier(pt, len_pt, outPoints, outCount);
+   GDI_Bezier(pt, len_pt, LastGeneratedPoints, LastGeneratedPointCount);
 end;
 
 procedure BuildEdgeShapeCurve(pts: PPointF; cnt: Int32; bd: Tb2Body;
@@ -375,23 +378,21 @@ procedure BuildEdgeShapeCurve(pts: PPointF; cnt: Int32; bd: Tb2Body;
 var
    i: Integer;
    x1, y1, x2, y2: Single;
-   pt2: TPointsF;
-   pt2Count: Integer;
    shape: Tb2PolygonShape;
 begin
    if cnt <= 1 then
       Exit;
 
    BezierPrecision := precision;
-   GenCurvePoints(TPointsF(pts), cnt, pt2, pt2Count, curve_tension);
+   GenCurvePoints(TPointsF(pts), cnt, curve_tension);
 
-   x1 := pt2[0].x;
-   y1 := pt2[0].y;
+   x1 := LastGeneratedPoints[0].x;
+   y1 := LastGeneratedPoints[0].y;
    shape := Tb2PolygonShape.Create;
-   for i := 1 to pt2Count - 1 do
+   for i := 1 to LastGeneratedPointCount - 1 do
    begin
-      x2 := pt2[i].x;
-      y2 := pt2[i].y;
+      x2 := LastGeneratedPoints[i].x;
+      y2 := LastGeneratedPoints[i].y;
 
       shape.SetAsEdge(MakeVector(x1, y1), MakeVector(x2, y2));
       bd.CreateFixture(shape, shape_density, False);
@@ -440,15 +441,13 @@ var
 var
    i, j, partition: Integer;
    x1, y1, x2, y2, l, dx, dy: Single;
-   pt2: TPointsF;
-   pt2Count: Integer;
 begin
    if (not Assigned(world)) or (cnt <= 1) then
       Exit;
 
    BezierPrecision := precision;
-   GenCurvePoints(TPointsF(pts), cnt, pt2, pt2Count, curve_tension);
-   if pt2Count < 2 then
+   GenCurvePoints(TPointsF(pts), cnt, curve_tension);
+   if LastGeneratedPointCount < 2 then
       Exit;
 
    shape := Tb2PolygonShape.Create;
@@ -464,13 +463,13 @@ begin
    bd := Tb2BodyDef.Create;
    bd.bodyType := b2_dynamicBody;
 
-   x1 := pt2[0].x;
-   y1 := pt2[0].y;
+   x1 := LastGeneratedPoints[0].x;
+   y1 := LastGeneratedPoints[0].y;
    prevBody := body1;
-   for i := 1 to pt2Count - 1 do
+   for i := 1 to LastGeneratedPointCount - 1 do
    begin
-      x2 := pt2[i].x;
-      y2 := pt2[i].y;
+      x2 := LastGeneratedPoints[i].x;
+      y2 := LastGeneratedPoints[i].y;
 
       { Though this segment can be treated as a line in view, but it needs further
         partition to make the rope more realistic. }
