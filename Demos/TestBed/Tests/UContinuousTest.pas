@@ -56,7 +56,7 @@ begin
       m_body.CreateFixture(shape, 1.0);
 
       m_angularVelocity := RandomFloat(-50, 50);
-      m_angularVelocity := 33.468121;
+      m_angularVelocity := -30.669577;
       m_body.SetLinearVelocity(MakeVector(0.0, -100.0));
       m_body.SetAngularVelocity(m_angularVelocity);
    end;
@@ -85,7 +85,7 @@ begin
    end;
 
    if m_stepCount mod 60 = 0 then
-      Launch;
+      //Launch;
 end;
 
 procedure TContinuousTest.Launch;
