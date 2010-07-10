@@ -368,9 +368,9 @@ type
       { Sequentially solve TOIs for each body. We bring each body to the time
         of contact and perform some position correction. Time is not conserved.}
       procedure SolveTOI; overload;
-
       // Advance a dynamic body to its first time of contact and adjust the position to ensure clearance.
       procedure SolveTOI(body: Tb2Body); overload;
+      procedure SolveTOI(const step: Tb2TimeStep); overload;
 
       procedure DrawShape(fixture: Tb2Fixture; const xf: Tb2Transform; const color: RGBA);
       procedure DrawJoint(joint: Tb2Joint);
@@ -519,7 +519,9 @@ type
       manifoldType: Tb2ManifoldType;
 
       bodyA, bodyB: Tb2Body;
-      radius, friction: Float;
+      radiusA, radiusB: Float;
+      restitution: Float;
+      friction: Float;
       pointCount: Int32;
    end;
 
@@ -541,6 +543,7 @@ type
 
       m_manifold: Tb2Manifold;
       m_toiCount: Int32;
+      m_toi: Float;
 
       m_evaluateProc: Tb2ContactEvaluateProc; // For different contacts
 
@@ -658,11 +661,14 @@ type
       destructor Destroy; override;
 
       procedure Initialize(contacts: TList; count: Int32; impulseRatio: Float);
+
+      procedure InitializeVelocityConstraints;
       procedure WarmStart;
       procedure SolveVelocityConstraints;
       procedure StoreImpulses;
 
       function SolvePositionConstraints(baumgarte: Float): Boolean;
+      function SolvePositionConstraintsTOI(baumgarte: Float; toiBodyA, toiBodyB: Tb2Body): Boolean;
    end;
 
    // Delegate of b2World.
@@ -720,13 +726,13 @@ type
       m_contactCount: Int32;
 
       m_bodyCapacity, m_contactCapacity, m_jointCapacity: Int32;
-      m_positionIterationCount: Int32;
 
       constructor Create;
       destructor Destroy; override;
 
       procedure Clear;
       procedure Solve(const step: Tb2TimeStep; const gravity: TVector2; allowSleep: Boolean);
+      procedure SolveTOI(const subStep: Tb2TimeStep; bodyA, bodyB: Tb2Body);
 
       procedure Add(body: Tb2Body); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       procedure Add(contact: Pb2Contact); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
@@ -1339,7 +1345,7 @@ type
 	    // This is used to prevent connected bodies from colliding.
 	    // It may lie, depending on the collideConnected flag.
 	    function ShouldCollide(other: Tb2Body): Boolean;
-      procedure Advance(t: Float);
+      procedure Advance(alpha: Float);
    protected
       m_xf: Tb2Transform; // the body origin transform
       m_sweep: Tb2Sweep; // the swept motion for CCD
@@ -2414,6 +2420,7 @@ const
    e_contact_enabledFlag = $4; // This contact can be disabled (by user)
    e_contact_filterFlag	= $8; // This contact needs filtering because a fixture filter was changed.
 	 e_contact_bulletHitFlag = $10; // This bullet contact had a TOI event
+   e_contact_toiFlag = $20; // This contact has a valid TOI in m_toi
 
    // Tb2Body.m_flags
    e_body_islandFlag = $1;
@@ -5190,7 +5197,7 @@ begin
    // Update all the valid contacts on this body and build a contact island.
    count := 0;
    ce := body.m_contactList;
-   while Assigned(ce) and (count < b2_maxTOIContactsPerIsland) do
+   while Assigned(ce) and (count < b2_maxTOIContacts) do
    begin
       other := ce^.other;
       // Only perform correction with static bodies, so the
@@ -5267,6 +5274,327 @@ begin
 
    if toiOther.m_type <> b2_staticBody then
       toiContact^.m_flags := toiContact^.m_flags or e_contact_bulletHitFlag;
+end;
+
+procedure Tb2World.SolveTOI(const step: Tb2TimeStep);
+var
+   i: Integer;
+   count: Int32;
+   b, bA, bB, body, other: Tb2Body;
+   awakeA, awakeB, collideA, collideB: Boolean;
+   c, minContact, contact: Pb2Contact;
+   minAlpha, alpha, alpha0, beta: Float;
+   input: Tb2TOIInput;
+   output: Tb2TOIOutput;
+   backup1, backup2: Tb2Sweep;
+   bodies: array[0..1] of Tb2Body;
+   ce: Pb2ContactEdge;
+   subStep: Tb2TimeStep;
+begin
+   world_solve_island.Reset(2 * b2_maxTOIContacts, b2_maxTOIContacts,
+      0, m_contactManager.m_contactListener);
+
+   b := m_bodyList;
+   while Assigned(b) do
+   begin
+      b.m_flags := b.m_flags and (not e_body_islandFlag);
+      b.m_sweep.alpha0 := 0.0;
+      b := b.m_next;
+   end;
+
+   c := m_contactManager.m_contactList;
+   while Assigned(c) do
+   begin
+      // Invalidate TOI
+      c.m_flags := c.m_flags and (not (e_contact_toiFlag or e_contact_islandFlag));
+      c := c.m_next;
+   end;
+
+   // Find TOI events and solve them.
+   while True do
+   begin
+      // Find the first TOI.
+      minContact := nil;
+      minAlpha := 1.0;
+
+      c := m_contactManager.m_contactList;
+      while Assigned(c) do
+      begin
+         // Is this contact disabled?
+         {$IFDEF OP_OVERLOAD}
+         if not c.IsEnabled then
+         {$ELSE}
+         if not IsEnabled(c^) then
+         {$ENDIF}
+         begin
+            c := c.m_next;
+            Continue;
+         end;
+
+         alpha := 1.0;
+         if (c.m_flags and e_contact_toiFlag) <> 0  then
+            alpha := c.m_toi // This contact has a valid cached TOI.
+         else
+         begin
+            // Is there a sensor?
+            if c.m_fixtureA.IsSensor or c.m_fixtureB.IsSensor then
+            begin
+               c := c.m_next;
+               Continue;
+            end;
+
+            bA := c.m_fixtureA.m_body;
+            bB := c.m_fixtureB.m_body;
+
+            //b2BodyType typeA := bA.GetType();
+            //b2BodyType typeB := bB.GetType();
+            //b2Assert(typeA == b2_dynamicBody || typeB == b2_dynamicBody);
+
+            awakeA := bA.IsAwake and (bA.m_type <> b2_staticBody);
+            awakeB := bB.IsAwake and (bB.m_type <> b2_staticBody);
+            // Is at least one body awake?
+            if (not awakeA) and (not awakeB) then
+            begin
+               c := c.m_next;
+               Continue;
+            end;
+
+            collideA := bA.IsBullet or (bA.m_type <> b2_dynamicBody);
+            collideB := bB.IsBullet or (bB.m_type <> b2_dynamicBody);
+            // Are these two non-bullet dynamic bodies?
+            if (not collideA) and (not collideB) then
+            begin
+               c := c.m_next;
+               Continue;
+            end;
+
+            // Compute the TOI for this contact.
+            // Put the sweeps onto the same time interval.
+            alpha0 := bA.m_sweep.alpha0;
+
+            if bA.m_sweep.alpha0 < bB.m_sweep.alpha0 then
+            begin
+               alpha0 := bB.m_sweep.alpha0;
+               {$IFDEF OP_OVERLOAD}
+               bA.m_sweep.Advance(alpha0);
+               {$ELSE}
+               Advance(bA.m_sweep, alpha0);
+               {$ENDIF}
+            end
+            else if bB.m_sweep.alpha0 < bA.m_sweep.alpha0 then
+            begin
+               alpha0 := bA.m_sweep.alpha0;
+               {$IFDEF OP_OVERLOAD}
+               bB.m_sweep.Advance(alpha0);
+               {$ELSE}
+               Advance(bB.m_sweep, alpha0);
+               {$ENDIF}
+            end;
+
+            //b2Assert(alpha0 < 1.0f);
+            // Compute the time of impact in interval [0, minTOI]
+            {$IFDEF OP_OVERLOAD}
+            input.proxyA.SetShape(c.m_fixtureA.m_shape, c.m_indexA);
+            input.proxyB.SetShape(c.m_fixtureB.m_shape, c.m_indexB);
+            {$ELSE}
+            SetShape(input.proxyA, c.m_fixtureA.m_shape, c.m_indexA);
+            SetShape(input.proxyB, c.m_fixtureB.m_shape, c.m_indexB);
+            {$ENDIF}
+            input.sweepA := bA.m_sweep;
+            input.sweepB := bB.m_sweep;
+            input.tMax := 1.0;
+
+            b2TimeOfImpact(output, input);
+
+            // Beta is the fraction of the remaining portion of the .
+            beta := output.t;
+
+            if output.state = e_toi_touching then
+               alpha := b2Min(alpha0 + (1.0 - alpha0) * beta, 1.0)
+            else
+               alpha := 1.0;
+
+            c.m_toi := alpha;
+            c.m_flags := c.m_flags or e_contact_toiFlag;
+         end;
+
+         if alpha < minAlpha then
+         begin
+            // This is the minimum TOI found so far.
+            minContact := c;
+            minAlpha := alpha;
+         end;
+
+         c := c.m_next;
+      end;
+
+      if (not Assigned(minContact)) or ( 1.0 - 10.0 * FLT_EPSILON < minAlpha) then
+      begin
+         // No more TOI events. Done!
+         Break;
+      end;
+
+      // Advance the bodies to the TOI.
+      bA := minContact.m_fixtureA.m_body;
+      bB := minContact.m_fixtureB.m_body;
+
+      backup1 := bA.m_sweep;
+      backup2 := bB.m_sweep;
+
+      bA.Advance(minAlpha);
+      bB.Advance(minAlpha);
+      bA.SetAwake(True);
+      bB.SetAwake(True);
+
+      // The TOI contact likely has some new contact points.
+      {$IFDEF OP_OVERLOAD}
+      minContact.Update(m_contactManager.m_contactListener);
+      {$ELSE}
+      Update(minContact^, m_contactManager.m_contactListener);
+      {$ENDIF}
+      minContact.m_flags := minContact.m_flags and (not e_contact_toiFlag);
+
+      // Is the contact solid?
+      {$IFDEF OP_OVERLOAD}
+      if (not minContact.IsEnabled) or (not minContact.IsTouching) then
+      {$ELSE}
+      if (not IsEnabled(minContact^)) or (not IsTouching(minContact^)) then
+      {$ENDIF}
+      begin
+         // Restore the sweeps.
+         bA.m_sweep := backup1;
+         bB.m_sweep := backup2;
+         bA.SynchronizeTransform;
+         bB.SynchronizeTransform;
+         Continue;
+      end;
+
+      // Build the island
+      world_solve_island.Clear;
+      world_solve_island.Add(bA);
+      world_solve_island.Add(bB);
+      world_solve_island.Add(minContact);
+
+      bA.m_flags := bA.m_flags or e_body_islandFlag;
+      bB.m_flags := bB.m_flags or e_body_islandFlag;
+      minContact.m_flags := minContact.m_flags or e_contact_islandFlag;
+
+      // Get contacts on bodyA and bodyB.
+      count := 0;
+      bodies[0] := bA;
+      bodies[1] := bB;
+      for i := 0 to 1 do
+      begin
+         body := bodies[i];
+         if body.m_type = b2_dynamicBody then
+         begin
+            ce := bA.m_contactList;
+            while Assigned(ce) and (count < b2_maxTOIContacts) do
+            begin
+               contact := ce.contact;
+
+               // Has this contact already been added to the island?
+               if (contact.m_flags and e_contact_islandFlag) <> 0 then
+               begin
+                  ce := ce.next;
+                  Continue;
+               end;
+
+               // Only add static, kinematic, or bullet bodies.
+               other := ce.other;
+               if (other.m_type = b2_dynamicBody) and (not body.IsBullet) and (not other.IsBullet) then
+               begin
+                  ce := ce.next;
+                  Continue;
+               end;
+
+               // Skip sensors.
+               if contact.m_fixtureA.m_isSensor or contact.m_fixtureB.m_isSensor then
+               begin
+                  ce := ce.next;
+                  Continue;
+               end;
+
+               // Update the contact points
+               {$IFDEF OP_OVERLOAD}
+               contact.Update(m_contactManager.m_contactListener);
+               {$ELSE}
+               Update(contact^, m_contactManager.m_contactListener);
+               {$ENDIF}
+
+               // Was the contact disabled by the user?
+               {$IFDEF OP_OVERLOAD}
+               if not contact.IsEnabled then
+               {$ELSE}
+               if not IsEnabled(contact^) then
+               {$ENDIF}
+               begin
+                  ce := ce.next;
+                  Continue;
+               end;
+
+               // Are there contact points?
+               {$IFDEF OP_OVERLOAD}
+               if not contact.IsTouching then
+               {$ELSE}
+               if not IsTouching(contact^) then
+               {$ENDIF}
+               begin
+                  ce := ce.next;
+                  Continue;
+               end;
+
+               // Add the contact to the island
+               contact.m_flags := contact.m_flags or e_contact_islandFlag;
+               world_solve_island.Add(contact);
+
+               // Has the other body already been added to the island?
+               if (other.m_flags and e_body_islandFlag) <> 0 then
+               begin
+                  ce := ce.next;
+                  Continue;
+               end;
+
+               // Add the other body to the island.
+               other.m_flags := other.m_flags or e_body_islandFlag;
+
+               if other.m_type <> b2_staticBody then
+               begin
+                  other.SetAwake(True);
+                  other.Advance(minAlpha);
+               end;
+
+               world_solve_island.Add(other);
+               ce := ce.next;
+            end;
+         end;
+      end;
+
+      subStep.dt := (1.0 - minAlpha) * step.dt;
+      subStep.inv_dt := 1.0 / subStep.dt;
+      subStep.dtRatio := 1.0;
+      subStep.positionIterations := 20;
+      subStep.velocityIterations := step.velocityIterations;
+      subStep.warmStarting := false;
+      world_solve_island.SolveTOI(subStep, bA, bB);
+
+      // Reset island flags and synchronize broad-phase proxies.
+      for i := 0 to world_solve_island.m_bodyCount - 1 do
+         with Tb2Body(world_solve_island.m_bodies[i]) do
+         begin
+            m_flags := m_flags and (not e_body_islandFlag);
+            SynchronizeFixtures;
+         end;
+
+      // Reset island flags and invalidate cached TOI values.
+      for i := 0 to world_solve_island.m_contactCount - 1 do
+         with Pb2Contact(world_solve_island.m_contacts[i])^ do
+            m_flags := m_flags and (not (e_contact_toiFlag or e_contact_islandFlag));
+
+      // Commit fixture proxy movements to the broad-phase so that new contacts are created.
+      // Also, some contacts can be destroyed.
+      m_contactManager.FindNewContacts;
+   end;
 end;
 
 procedure Tb2World.ClearForces;
@@ -5922,7 +6250,7 @@ begin
       Solve(step);
       // Handle TOI events.
       if m_continuousPhysics then
-         SolveTOI;
+         SolveTOI(step);
 
       m_inv_dt0 := step.inv_dt;
    end;
@@ -6156,158 +6484,186 @@ begin
 end;
 
 procedure Tb2ContactSolver.Initialize(contacts: TList; count: Int32; impulseRatio: Float);
-const
-   k_maxConditionNumber = 100.0;
 var
    i, j: Integer;
-   contact: Pb2Contact;
-   bodyA, bodyB: Tb2Body;
-   friction, restitution: Float;
-   vA, vB, tangent: TVector2;
-   wA, wB, radiusA, radiusB, rA, rB, kNormal, kTangent, vRel: Float;
-   worldManifold: Tb2WorldManifold;
    cc: Pb2ContactConstraint;
    cp: Pb2ManifoldPoint;
-   ccp, ccp1, ccp2: Pb2ContactConstraintPoint;
-   invMass, invIA, invIB, k11, k12, k22, rn1A, rn1B, rn2A, rn2B: Float;
 begin
    m_constraintCount := count;
    if Assigned(m_constraints) then
       FreeMemory(m_constraints);
    m_constraints := Pb2ContactConstraint(GetMemory(m_constraintCount * SizeOf(Tb2ContactConstraint)));
 
+   // Initialize position independent portions of the constraints.
    for i := 0 to m_constraintCount - 1 do
-   begin
-      contact := Pb2Contact(contacts[i]);
-      with contact^ do
+      with Pb2Contact(contacts[i])^ do
       begin
-         bodyA := m_fixtureA.m_body;
-         bodyB := m_fixtureB.m_body;
-
-         friction := b2MixFriction(m_fixtureA.m_friction, m_fixtureB.m_friction);
-         restitution := b2MixRestitution(m_fixtureA.m_restitution, m_fixtureB.m_restitution);
-
-         vA := bodyA.m_linearVelocity;
-         vB := bodyB.m_linearVelocity;
-         wA := bodyA.m_angularVelocity;
-         wB := bodyB.m_angularVelocity;
-
-         radiusA := m_fixtureA.m_shape.m_radius;
-         radiusB := m_fixtureB.m_shape.m_radius;
-
          //b2Assert(manifold.pointCount > 0);
-         {$IFDEF OP_OVERLOAD}
-         worldManifold.Initialize(m_manifold, bodyA.m_xf, bodyB.m_xf, radiusA, radiusB);
-         {$ELSE}
-         UPhysics2D.Initialize(worldManifold, m_manifold, bodyA.m_xf, bodyB.m_xf, radiusA, radiusB);
-         {$ENDIF}
-
          cc := m_constraints;
          Inc(cc, i);
-         cc^.bodyA := bodyA;
-         cc^.bodyB := bodyB;
-         cc^.manifold := @m_manifold;
-         cc^.friction := friction;
-
          with cc^ do
          begin
-            normal := worldManifold.normal;
+            friction := b2MixFriction(m_fixtureA.m_friction, m_fixtureB.m_friction);
+            restitution := b2MixRestitution(m_fixtureA.m_restitution, m_fixtureB.m_restitution);
+            manifold := @m_manifold;
+            bodyA := m_fixtureA.m_body;
+            bodyB := m_fixtureB.m_body;
+            normal := b2Vec2_Zero;
+            radiusA := m_fixtureA.m_shape.m_radius;
+            radiusB := m_fixtureB.m_shape.m_radius;
             pointCount := m_manifold.pointCount;
             localNormal := m_manifold.localNormal;
             localPoint := m_manifold.localPoint;
-            radius := radiusA + radiusB;
             manifoldType := m_manifold.manifoldType;
          end;
 
          for j := 0 to cc^.pointCount - 1 do
          begin
             cp := @m_manifold.points[j];
-            ccp := @cc.points[j];
-
-            with ccp^ do
+            with cc.points[j] do
             begin
                normalImpulse := impulseRatio * cp^.normalImpulse;
                tangentImpulse := impulseRatio * cp^.tangentImpulse;
                localPoint := cp^.localPoint;
-
-               {$IFDEF OP_OVERLOAD}
-               rA := worldManifold.points[j] - bodyA.m_sweep.c;
-               rB := worldManifold.points[j] - bodyB.m_sweep.c;
-               {$ELSE}
-               rA := Subtract(worldManifold.points[j], bodyA.m_sweep.c);
-               rB := Subtract(worldManifold.points[j], bodyB.m_sweep.c);
-               {$ENDIF}
             end;
-
-            rA := Sqr(b2Cross(ccp^.rA, cc^.normal));
-            rB := Sqr(b2Cross(ccp^.rB, cc^.normal));
-            kNormal := bodyA.m_invMass + bodyB.m_invMass + bodyA.m_invI * rA + bodyB.m_invI * rB;
-
-            //b2Assert(kNormal > b2_epsilon);
-            ccp^.normalMass := 1.0 / kNormal;
-
-            tangent := b2Cross(cc.normal, 1.0);
-
-            rA := Sqr(b2Cross(ccp^.rA, tangent));
-            rB := Sqr(b2Cross(ccp^.rB, tangent));
-            kTangent := bodyA.m_invMass + bodyB.m_invMass + bodyA.m_invI * rA + bodyB.m_invI * rB;
-
-            //b2Assert(kTangent > b2_epsilon);
-            ccp^.tangentMass := 1.0 /  kTangent;
-
-            // Setup a velocity bias for restitution.
-            ccp^.velocityBias := 0.0;
-            {$IFDEF OP_OVERLOAD}
-            vRel := b2Dot(cc.normal, vB + b2Cross(wB, ccp^.rB) - vA - b2Cross(wA, ccp^.rA));
-            {$ELSE}
-            vRel := b2Dot(cc.normal, Subtract(Add(vB, b2Cross(wB, ccp^.rB)), Add(vA, b2Cross(wA, ccp^.rA))));
-            {$ENDIF}
-            if vRel < -b2_velocityThreshold then
-               ccp^.velocityBias := -restitution * vRel;
          end;
 
-         // If we have two points, then prepare the block solver.
-         if cc^.pointCount = 2 then
+         {$IFDEF OP_OVERLOAD}
+         cc^.K.SetZero;
+         cc^.normalMass.SetZero;
+         {$ELSE}
+         SetZero(cc^.K);
+         SetZero(cc^.normalMass);
+         {$ENDIF}
+      end;
+end;
+
+// Initialize position dependent portions of the velocity constraints.
+procedure Tb2ContactSolver.InitializeVelocityConstraints;
+const
+   k_maxConditionNumber = 100.0;
+var
+   i, j: Integer;
+   cc: Pb2ContactConstraint;
+   bodyA, bodyB: Tb2Body;
+   manifold: Pb2Manifold;
+   vA, vB, tangent: TVector2;
+   wA, wB, radiusA, radiusB, rA, rB, kNormal, kTangent, vRel: Float;
+   worldManifold: Tb2WorldManifold;
+   cp: Pb2ManifoldPoint;
+   ccp: Pb2ContactConstraintPoint;
+   invMass, invIA, invIB, k11, k12, k22, rn1A, rn1B, rn2A, rn2B: Float;
+begin
+   for i := 0 to m_constraintCount - 1 do
+   begin
+      cc := m_constraints;
+      Inc(cc, i);
+
+      bodyA := cc.bodyA;
+      bodyB := cc.bodyB;
+      manifold := cc.manifold;
+
+      vA := bodyA.m_linearVelocity;
+      vB := bodyB.m_linearVelocity;
+      wA := bodyA.m_angularVelocity;
+      wB := bodyB.m_angularVelocity;
+
+      //b2Assert(manifold->pointCount > 0);
+      {$IFDEF OP_OVERLOAD}
+      worldManifold.Initialize(manifold^, bodyA.m_xf, bodyB.m_xf, cc.radiusA, cc.radiusB);
+      {$ELSE}
+      UPhysics2D.Initialize(worldManifold, manifold^, bodyA.m_xf, bodyB.m_xf, cc.radiusA, cc.radiusB);
+      {$ENDIF}
+
+      cc.normal := worldManifold.normal;
+
+      for j := 0 to cc^.pointCount - 1 do
+      begin
+         cp := @manifold^.points[j];
+         ccp := @cc.points[j];
+
+         with ccp^ do
          begin
-            ccp1 := @cc.points[0];
-            ccp2 := @cc.points[1];
+            {$IFDEF OP_OVERLOAD}
+            rA := worldManifold.points[j] - bodyA.m_sweep.c;
+            rB := worldManifold.points[j] - bodyB.m_sweep.c;
+            {$ELSE}
+            rA := Subtract(worldManifold.points[j], bodyA.m_sweep.c);
+            rB := Subtract(worldManifold.points[j], bodyB.m_sweep.c);
+            {$ENDIF}
+         end;
 
-            invMass := bodyA.m_invMass + bodyB.m_invMass;
-            invIA := bodyA.m_invI;
-            invIB := bodyB.m_invI;
+         rA := Sqr(b2Cross(ccp^.rA, cc^.normal));
+         rB := Sqr(b2Cross(ccp^.rB, cc^.normal));
+         kNormal := bodyA.m_invMass + bodyB.m_invMass + bodyA.m_invI * rA + bodyB.m_invI * rB;
 
-            rn1A := b2Cross(ccp1^.rA, cc^.normal);
-            rn1B := b2Cross(ccp1^.rB, cc^.normal);
-            rn2A := b2Cross(ccp2^.rA, cc^.normal);
-            rn2B := b2Cross(ccp2^.rB, cc^.normal);
+         //b2Assert(kNormal > b2_epsilon);
+         ccp^.normalMass := 1.0 / kNormal;
 
-            k11 := invMass + invIA * rn1A * rn1A + invIB * rn1B * rn1B;
-            k22 := invMass + invIA * rn2A * rn2A + invIB * rn2B * rn2B;
-            k12 := invMass + invIA * rn1A * rn2A + invIB * rn1B * rn2B;
+         tangent := b2Cross(cc.normal, 1.0);
 
-            // Ensure a reasonable condition number.
-            if k11 * k11 < k_maxConditionNumber * (k11 * k22 - k12 * k12) then
+         rA := Sqr(b2Cross(ccp^.rA, tangent));
+         rB := Sqr(b2Cross(ccp^.rB, tangent));
+         kTangent := bodyA.m_invMass + bodyB.m_invMass + bodyA.m_invI * rA + bodyB.m_invI * rB;
+
+         //b2Assert(kTangent > b2_epsilon);
+         ccp^.tangentMass := 1.0 /  kTangent;
+
+         // Setup a velocity bias for restitution.
+         ccp^.velocityBias := 0.0;
+         {$IFDEF OP_OVERLOAD}
+         vRel := b2Dot(cc.normal, vB + b2Cross(wB, ccp^.rB) - vA - b2Cross(wA, ccp^.rA));
+         {$ELSE}
+         vRel := b2Dot(cc.normal, Subtract(Add(vB, b2Cross(wB, ccp^.rB)), Add(vA, b2Cross(wA, ccp^.rA))));
+         {$ENDIF}
+         if vRel < -b2_velocityThreshold then
+            ccp^.velocityBias := -cc.restitution * vRel;
+      end;
+
+      // If we have two points, then prepare the block solver.
+      if cc^.pointCount = 2 then
+      begin
+         invMass := bodyA.m_invMass + bodyB.m_invMass;
+         invIA := bodyA.m_invI;
+         invIB := bodyB.m_invI;
+
+         with cc.points[0] do
+         begin
+            rn1A := b2Cross(rA, cc^.normal);
+            rn1B := b2Cross(rB, cc^.normal);
+         end;
+         with cc.points[1] do
+         begin
+            rn2A := b2Cross(rA, cc^.normal);
+            rn2B := b2Cross(rB, cc^.normal);
+         end;
+
+         k11 := invMass + invIA * rn1A * rn1A + invIB * rn1B * rn1B;
+         k22 := invMass + invIA * rn2A * rn2A + invIB * rn2B * rn2B;
+         k12 := invMass + invIA * rn1A * rn2A + invIB * rn1B * rn2B;
+
+         // Ensure a reasonable condition number.
+         if k11 * k11 < k_maxConditionNumber * (k11 * k22 - k12 * k12) then
+         begin
+            with cc^ do
             begin
-               with cc^ do
-               begin
-                  // K is safe to invert.
-                  {$IFDEF OP_OVERLOAD}
-                  K.col1.SetValue(k11, k12);
-                  K.col2.SetValue(k12, k22);
-                  normalMass := K.GetInverse;
-                  {$ELSE}
-                  SetValue(K.col1, k11, k12);
-                  SetValue(K.col2, k12, k22);
-                  normalMass := GetInverse(K);
-                  {$ENDIF}
-               end;
-            end
-            else
-            begin
-               // The constraints are redundant, just use one.
-               // TODO_ERIN use deepest?
-               cc^.pointCount := 1;
+               // K is safe to invert.
+               {$IFDEF OP_OVERLOAD}
+               K.col1.SetValue(k11, k12);
+               K.col2.SetValue(k12, k22);
+               normalMass := K.GetInverse;
+               {$ELSE}
+               SetValue(K.col1, k11, k12);
+               SetValue(K.col2, k12, k22);
+               normalMass := GetInverse(K);
+               {$ENDIF}
             end;
+         end
+         else
+         begin
+            // The constraints are redundant, just use one.
+            // TODO_ERIN use deepest?
+            cc^.pointCount := 1;
          end;
       end;
    end;
@@ -6747,9 +7103,9 @@ begin
             end;
             point := b2MiddlePoint(pointA, pointB);
             {$IFDEF OP_OVERLOAD}
-            separation := b2Dot(pointB - pointA, normal) - cc.radius;
+            separation := b2Dot(pointB - pointA, normal) - cc.radiusA - cc.radiusB;
             {$ELSE}
-            separation := b2Dot(Subtract(pointB, pointA), normal) - cc.radius;
+            separation := b2Dot(Subtract(pointB, pointA), normal) - cc.radiusA - cc.radiusB;
             {$ENDIF}
          end;
       e_manifold_faceA:
@@ -6758,9 +7114,9 @@ begin
             planePoint := cc.bodyA.GetWorldPoint(cc.localPoint);
             point := cc.bodyB.GetWorldPoint(cc.points[index].localPoint);
             {$IFDEF OP_OVERLOAD}
-            separation := b2Dot(point - planePoint, normal) - cc.radius;
+            separation := b2Dot(point - planePoint, normal) - cc.radiusA - cc.radiusB;
             {$ELSE}
-            separation := b2Dot(Subtract(point, planePoint), normal) - cc.radius;
+            separation := b2Dot(Subtract(point, planePoint), normal) - cc.radiusA - cc.radiusB;
             {$ENDIF}
          end;
       e_manifold_faceB:
@@ -6770,10 +7126,10 @@ begin
 
             point := cc.bodyA.GetWorldPoint(cc.points[index].localPoint);
             {$IFDEF OP_OVERLOAD}
-            separation := b2Dot(point - planePoint, normal) - cc.radius;
+            separation := b2Dot(point - planePoint, normal) - cc.radiusA - cc.radiusB;
             normal := -normal; // Ensure normal points from A to B
             {$ELSE}
-            separation := b2Dot(Subtract(point, planePoint), normal) - cc.radius;
+            separation := b2Dot(Subtract(point, planePoint), normal) - cc.radiusA - cc.radiusB;
             normal := Negative(normal); // Ensure normal points from A to B
             {$ENDIF}
          end;
@@ -6861,6 +7217,112 @@ begin
 
             bodyA.SynchronizeTransform;
             bodyB.SynchronizeTransform;
+         end;
+      end;
+   end;
+
+   // We can't expect minSpeparation >= -b2_linearSlop because we don't
+   // push the separation above -b2_linearSlop.
+   Result := minSeparation >= -1.5 * b2_linearSlop;
+end;
+
+// Sequential position solver for position constraints.
+function Tb2ContactSolver.SolvePositionConstraintsTOI(baumgarte: Float; toiBodyA, toiBodyB: Tb2Body): Boolean;
+var
+   minSeparation: Float;
+   i, j: Integer;
+   c: Pb2ContactConstraint;
+   massA, massB, invMassA, invIA, invMassB, invIB, separation, _C, _K,
+      rnA, rnB, K, impulse: Float;
+   normal, point, rA, rB, P: TVector2;
+begin
+   minSeparation := 0.0;
+   for i := 0 to m_constraintCount - 1 do
+   begin
+      c := m_constraints;
+      Inc(c, i);
+      with c^ do
+      begin
+         massA := 0.0;
+         if bodyA = toiBodyA then
+            massA := bodyA.m_mass;
+
+         massB := 0.0;
+         if bodyB = toiBodyB then
+            massB := bodyB.m_mass;
+
+         with bodyA do
+         begin
+            invMassA := m_mass * m_invMass;
+            invIA := m_mass * m_invI;
+         end;
+
+         with bodyB do
+         begin
+            invMassB := m_mass * m_invMass;
+            invIB := m_mass * m_invI;
+         end;
+
+         // Solve normal constraints
+         for j := 0 to c.pointCount - 1 do
+         begin
+            contactsolver_positionsolver.Initialize(c^, j);
+            normal := contactsolver_positionsolver.normal;
+            point := contactsolver_positionsolver.point;
+            separation := contactsolver_positionsolver.separation;
+
+            {$IFDEF OP_OVERLOAD}
+            rA := point - bodyA.m_sweep.c;
+            rB := point - bodyB.m_sweep.c;
+            {$ELSE}
+            rA := Subtract(point, bodyA.m_sweep.c);
+            rB := Subtract(point, bodyB.m_sweep.c);
+            {$ENDIF}
+
+            // Track max constraint error.
+            minSeparation := b2Min(minSeparation, separation);
+
+            // Prevent large corrections and allow slop.
+            _C := b2Clamp(baumgarte * (separation + b2_linearSlop), -b2_maxLinearCorrection, 0.0);
+
+            // Compute the effective mass.
+            rnA := b2Cross(rA, normal);
+            rnB := b2Cross(rB, normal);
+            _K := invMassA + invMassB + invIA * rnA * rnA + invIB * rnB * rnB;
+
+            // Compute normal impulse
+            if _K > 0.0 then
+               impulse := - _C / _K
+            else
+               impulse := 0.0;
+
+            {$IFDEF OP_OVERLOAD}
+            P := impulse * normal;
+            {$ELSE}
+            P := Multiply(normal, impulse);
+            {$ENDIF}
+
+            with bodyA do
+            begin
+               {$IFDEF OP_OVERLOAD}
+               m_sweep.c.SubtractBy(invMassA * P);
+               {$ELSE}
+               SubtractBy(m_sweep.c, Multiply(P, invMassA));
+               {$ENDIF}
+               m_sweep.a := m_sweep.a - invIA * b2Cross(rA, P);
+               SynchronizeTransform;
+            end;
+
+            with bodyB do
+            begin
+               {$IFDEF OP_OVERLOAD}
+               m_sweep.c.AddBy(invMassB * P);
+               {$ELSE}
+               AddBy(m_sweep.c, Multiply(P, invMassB));
+               {$ENDIF}
+               m_sweep.a := m_sweep.a + invIB * b2Cross(rB, P);
+               SynchronizeTransform;
+            end;
          end;
       end;
    end;
@@ -7279,7 +7741,6 @@ begin
    m_bodies.Count := bodyCapacity;
    m_contacts.Count := contactCapacity;
    m_joints.Count := jointCapacity;
-   m_positionIterationCount := 0;
 
    SetLength(m_velocities, m_bodyCapacity);
    SetLength(m_positions, m_bodyCapacity);
@@ -7352,6 +7813,7 @@ begin
          end;
 
    island_solve_contact_solver.Initialize(m_contacts, m_contactCount, step.dtRatio);
+   island_solve_contact_solver.InitializeVelocityConstraints;
    island_solve_contact_solver.WarmStart;
 
    for i := 0 to m_jointCount - 1 do
@@ -7462,6 +7924,93 @@ begin
          for i := 0 to m_bodyCount - 1 do
             Tb2Body(m_bodies[i]).SetAwake(False);
    end;
+end;
+
+procedure Tb2Island.SolveTOI(const subStep: Tb2TimeStep; bodyA, bodyB: Tb2Body);
+const
+   k_toiBaumgarte = 0.75;
+var
+   i: Integer;
+   b: Tb2Body;
+   translation: TVector2;
+   rotation: Float;
+begin
+   island_solve_contact_solver.Initialize(m_contacts, m_contactCount, subStep.dtRatio);
+
+   // Solve position constraints.
+   for i := 0 to subStep.positionIterations - 1 do
+      if island_solve_contact_solver.SolvePositionConstraintsTOI(k_toiBaumgarte, bodyA, bodyB) then
+         Break;
+
+   // Advance bodies to new safe spot
+   for i := 0 to m_bodyCount - 1 do
+      with Tb2Body(m_bodies[i]).m_sweep do
+      begin
+         a0 := a;
+         c0 := c;
+      end;
+
+   // No warm starting is needed for TOI events because warm
+   // starting impulses were applied in the discrete solver.
+   island_solve_contact_solver.InitializeVelocityConstraints;
+
+   // Solve velocity constraints.
+   for i := 0 to subStep.velocityIterations - 1 do
+      island_solve_contact_solver.SolveVelocityConstraints;
+
+   // Don't store the TOI contact forces for warm starting
+   // because they can be quite large.
+
+   // Integrate positions.
+   for i := 0 to m_bodyCount - 1 do
+   begin
+      b := Tb2Body(m_bodies[i]);
+      with b do
+      begin
+         if m_type = b2_staticBody then
+            Continue;
+
+         // Check for large velocities.
+         {$IFDEF OP_OVERLOAD}
+         translation := subStep.dt * m_linearVelocity;
+         {$ELSE}
+         translation := Multiply(m_linearVelocity, subStep.dt);
+         {$ENDIF}
+         if b2Dot(translation, translation) > b2_maxTranslationSquared then
+         begin
+            {$IFDEF OP_OVERLOAD}
+            translation.Normalize;
+            m_linearVelocity := (b2_maxTranslation * subStep.inv_dt) * translation;
+            {$ELSE}
+            Normalize(translation);
+            m_linearVelocity := Multiply(translation, b2_maxTranslation * subStep.inv_dt);
+            {$ENDIF}
+         end;
+
+         rotation := subStep.dt * m_angularVelocity;
+         if rotation * rotation > b2_maxRotationSquared then
+            if rotation < 0.0 then
+               m_angularVelocity := -subStep.inv_dt * b2_maxRotation
+            else
+               m_angularVelocity := subStep.inv_dt * b2_maxRotation;
+
+         // Integrate
+
+         {$IFDEF OP_OVERLOAD}
+         m_sweep.c.AddBy(subStep.dt * m_linearVelocity);
+         {$ELSE}
+         AddBy(m_sweep.c, Multiply(m_linearVelocity, subStep.dt));
+         {$ENDIF}
+         m_sweep.a := m_sweep.a + subStep.dt * m_angularVelocity;
+
+         // Compute new transform
+         SynchronizeTransform;
+
+         // Note: shapes are synchronized later.
+      end;
+   end;
+
+   Report(island_solve_contact_solver.m_constraints);
 end;
 
 procedure Tb2Island.Add(body: Tb2Body);
@@ -7876,9 +8425,8 @@ end;
 
 procedure Tb2DynamicTree.InsertLeaf(leaf: Int32);
 var
-   leafAABB, aabb1, aabb2: Tb2AABB;
-   leafCenter: TVector2;
-   norm1, norm2: Float;
+   leafAABB, parentAABB, aabb: Tb2AABB;
+   siblingArea, parentArea, cost1, cost2, cost3, inheritanceCost: Float;
    sibling, _child1, _child2, oldParent, newParent: Int32;
 begin
    Inc(m_insertionCount);
@@ -7892,11 +8440,6 @@ begin
 
    // Find the best sibling for this node
    leafAABB := m_nodes[leaf].aabb;
-   {$IFDEF OP_OVERLOAD}
-   leafCenter := leafAABB.GetCenter;
-   {$ELSE}
-   leafCenter := GetCenter(leafAABB);
-   {$ENDIF}
    sibling := m_root;
    {$IFDEF OP_OVERLOAD}
    while not m_nodes[sibling].IsLeaf do
@@ -7916,22 +8459,82 @@ begin
 
          _child1 := child1;
          _child2 := child2;
+
+         {$IFDEF OP_OVERLOAD}
+         siblingArea := aabb.GetPerimeter;
+         parentAABB.Combine(aabb, leafAABB);
+         {$ELSE}
+         siblingArea := GetPerimeter(aabb);
+         Combine(parentAABB, aabb, leafAABB);
+         {$ENDIF}
       end;
 
-      // Surface area heuristic
       {$IFDEF OP_OVERLOAD}
-      aabb1.Combine(leafAABB, m_nodes[_child1].aabb);
-      aabb2.Combine(leafAABB, m_nodes[_child2].aabb);
-      norm1 := (m_nodes[_child1].leafCount + 1) * aabb1.GetPerimeter;
-      norm2 := (m_nodes[_child2].leafCount + 1) * aabb2.GetPerimeter;
+      parentArea := parentAABB.GetPerimeter;
       {$ELSE}
-      Combine(aabb1, leafAABB, m_nodes[_child1].aabb);
-      Combine(aabb2, leafAABB, m_nodes[_child2].aabb);
-      norm1 := (m_nodes[_child1].leafCount + 1) * GetPerimeter(aabb1);
-      norm2 := (m_nodes[_child2].leafCount + 1) * GetPerimeter(aabb2);
+      parentArea := GetPerimeter(parentAABB);
+      {$ENDIF}
+      cost1 := 2.0 * parentArea;
+
+      inheritanceCost := 2.0 * (parentArea - siblingArea);
+
+      {$IFDEF OP_OVERLOAD}
+      if m_nodes[_child1].IsLeaf then
+      begin
+         aabb.Combine(leafAABB, m_nodes[_child1].aabb);
+         cost2 := aabb.GetPerimeter + inheritanceCost;
+      end
+      else
+      begin
+         aabb.Combine(leafAABB, m_nodes[_child1].aabb);
+         cost2 := aabb.GetPerimeter - m_nodes[_child1].aabb.GetPerimeter + inheritanceCost;
+      end;
+      if m_nodes[_child2].IsLeaf then
+      begin
+         aabb.Combine(leafAABB, m_nodes[_child2].aabb);
+         cost3 := aabb.GetPerimeter + inheritanceCost;
+      end
+      else
+      begin
+         aabb.Combine(leafAABB, m_nodes[_child2].aabb);
+         cost3 := aabb.GetPerimeter - m_nodes[_child2].aabb.GetPerimeter + inheritanceCost;
+      end;
+      {$ELSE}
+      if IsLeaf(m_nodes[_child1]) then
+      begin
+         Combine(aabb, leafAABB, m_nodes[_child1].aabb);
+         cost2 := GetPerimeter(aabb) + inheritanceCost;
+      end
+      else
+      begin
+         Combine(aabb, leafAABB, m_nodes[_child1].aabb);
+         cost2 := GetPerimeter(aabb) - GetPerimeter(m_nodes[_child1].aabb) + inheritanceCost;
+      end;
+      if IsLeaf(m_nodes[_child2]) then
+      begin
+         Combine(aabb, leafAABB, m_nodes[_child2].aabb);
+         cost3 := GetPerimeter(aabb) + inheritanceCost;
+      end
+      else
+      begin
+         Combine(aabb, leafAABB, m_nodes[_child2].aabb);
+         cost3 := GetPerimeter(aabb) - GetPerimeter(m_nodes[_child2].aabb) + inheritanceCost;
+      end;
       {$ENDIF}
 
-      if norm1 < norm2 then
+      // Descend according to the minimum cost.
+      if (cost1 < cost2) and (cost1 < cost3) then
+         Break;
+
+      // Expand the node's AABB to account for the new leaf.
+      {$IFDEF OP_OVERLOAD}
+      m_nodes[sibling].aabb.Combine(leafAABB);
+      {$ELSE}
+      Combine(m_nodes[sibling].aabb, leafAABB);
+      {$ENDIF}
+
+      // Descend
+      if cost2 < cost3 then
          sibling := _child1
       else
          sibling := _child2;
@@ -9292,13 +9895,13 @@ begin
    Result := True;
 end;
 
-procedure Tb2Body.Advance(t: Float);
+procedure Tb2Body.Advance(alpha: Float);
 begin
    // Advance to the new safe time.
    {$IFDEF OP_OVERLOAD}
-   m_sweep.Advance(t);
+   m_sweep.Advance(alpha);
    {$ELSE}
-   UPhysics2DTypes.Advance(m_sweep, t);
+   UPhysics2DTypes.Advance(m_sweep, alpha);
    {$ENDIF}
    m_sweep.c := m_sweep.c0;
    m_sweep.a := m_sweep.a0;
@@ -15985,7 +16588,7 @@ initialization
    world_solve_stack := TList.Create;
    world_toisolver := Tb2TOISolver.Create;
    world_solvetoi_contacts := TList.Create;
-   world_solvetoi_contacts.Count := b2_maxTOIContactsPerIsland;
+   world_solvetoi_contacts.Count := b2_maxTOIContacts;
    contactsolver_positionsolver := Tb2PositionSolverManifold.Create;
    toisolver_manifold := Tb2TOISolverManifold.Create;
    distance_simplex := Tb2Simplex.Create;

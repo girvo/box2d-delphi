@@ -275,16 +275,19 @@ type
       localCenter: TVector2; // local center of mass position
       c0, c: TVector2; // center world positions
       a0, a: Float; // world angles
-      //t0: Float; // time interval = [t0,1], where t0 is in [0,1] // Removed from v2.1.0
+
+      /// Fraction of the current time step in the range [0,1]
+      /// c0 and a0 are the positions at alpha0.
+      alpha0: Float;
 
       {$IFDEF OP_OVERLOAD}
-     	/// Get the interpolated transform at a specific time.
-    	/// @param t the normalized time in [0,1].
-    	procedure GetTransform(var xf: Tb2Transform; alpha: Float); /// Renamed to GetTransform from v2.1.0
+      /// Get the interpolated transform at a specific time.
+      /// @param beta is a factor in [0,1], where 0 indicates alpha0.
+    	procedure GetTransform(var xf: Tb2Transform; beta: Float); /// Renamed to GetTransform from v2.1.0
 
-	    /// Advance the sweep forward, yielding a new initial state.
-    	/// @param t the new initial time.
-      procedure Advance(t: Float);
+      /// Advance the sweep forward, yielding a new initial state.
+      /// @param alpha the new initial time.
+      procedure Advance(alpha: Float);
 
 	    /// Normalize the angles. Normalize an angle in radians to be between -pi and pi
 	    procedure Normalize;
@@ -332,8 +335,8 @@ const
    /// Making it larger may create artifacts for vertex collision.
    b2_polygonRadius = (2.0 * b2_linearSlop); // Added from v2.1.0
 
-   /// Maximum number of contacts to be handled to solve a TOI island.
-   b2_maxTOIContactsPerIsland = 32;
+   /// Maximum number of contacts to be handled to solve a TOI impact.
+   b2_maxTOIContacts = 32;
 
    /// A velocity threshold for elastic collisions. Any collision with a relative linear
    /// velocity below this threshold will be treated as inelastic.
@@ -476,8 +479,8 @@ procedure SetValue(var xf: Tb2Transform; const p: TVector2; angle: Float); overl
 function GetAngle(const xf: Tb2Transform): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 // For Tb2Sweep
-procedure GetTransform(const Sweep: Tb2Sweep; var xf: Tb2Transform; alpha: Float);
-procedure Advance(var Sweep: Tb2Sweep; t: Float);
+procedure GetTransform(const Sweep: Tb2Sweep; var xf: Tb2Transform; beta: Float);
+procedure Advance(var Sweep: Tb2Sweep; alpha: Float);
 procedure Normalize(var Sweep: Tb2Sweep); overload;
 
 {$ENDIF}
@@ -1277,14 +1280,14 @@ end;
 
 // For Tb2Sweep
 
-procedure GetTransform(const Sweep: Tb2Sweep; var xf: Tb2Transform; alpha: Float);
+procedure GetTransform(const Sweep: Tb2Sweep; var xf: Tb2Transform; beta: Float);
 var
    angle: Float;
 begin
    with Sweep do
    begin
-      xf.position := Add(Multiply(c0, 1.0 - alpha), Multiply(c, alpha));
-      angle := (1.0 - alpha) * a0 + alpha * a;
+      xf.position := Add(Multiply(c0, 1.0 - beta), Multiply(c, beta));
+      angle := (1.0 - beta) * a0 + beta * a;
       SetValue(xf.R, angle);
 
       // Shift to origin
@@ -1292,12 +1295,17 @@ begin
    end;
 end;
 
-procedure Advance(var Sweep: Tb2Sweep; t: Float);
+procedure Advance(var Sweep: Tb2Sweep; alpha: Float);
+var
+   beta: Float;
 begin
    with Sweep do
    begin
-	    c0 := Add(Multiply(c0, 1.0 - t), Multiply(c, t));
-	    a0 := (1.0 - t) * a0 + t * a;
+      //b2Assert(alpha0 < 1.0f);
+      beta := (alpha - alpha0) / (1.0 - alpha0);
+      c0 := Add(Multiply(c0, 1.0 - beta), Multiply(c, beta));
+      a0 := (1.0 - beta) * a0 + beta * a;
+      alpha0 := alpha;
    end;
 end;
 
@@ -1996,22 +2004,27 @@ end;
 
 { Tb2Sweep }
 {$IFDEF OP_OVERLOAD}
-procedure Tb2Sweep.GetTransform(var xf: Tb2Transform; alpha: Float);
+procedure Tb2Sweep.GetTransform(var xf: Tb2Transform; beta: Float);
 var
    angle: Float;
 begin
-   xf.position := (1.0 - alpha) * c0 + alpha * c;
-   angle := (1.0 - alpha) * a0 + alpha * a;
+   xf.position := (1.0 - beta) * c0 + beta * c;
+   angle := (1.0 - beta) * a0 + beta * a;
    xf.R.SetValue(angle);
 
    // Shift to origin
    xf.position.SubtractBy(b2Mul(xf.R, localCenter));
 end;
 
-procedure Tb2Sweep.Advance(t: Float);
+procedure Tb2Sweep.Advance(alpha: Float);
+var
+   beta: Float;
 begin
-	 c0 := (1.0 - t) * c0 + t * c;
-	 a0 := (1.0 - t) * a0 + t * a;
+   //b2Assert(alpha0 < 1.0f);
+   beta := (alpha - alpha0) / (1.0 - alpha0);
+   c0 := (1.0 - beta) * c0 + beta * c;
+   a0 := (1.0 - beta) * a0 + beta * a;
+   alpha0 := alpha;
 end;
 
 procedure Tb2Sweep.Normalize;
