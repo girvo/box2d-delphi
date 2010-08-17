@@ -54,7 +54,8 @@ uses
   UPhysics2DPolygonTool in '..\..\Physics2D\UPhysics2DPolygonTool.pas',
   UPhysics2DTypes in '..\..\Physics2D\UPhysics2DTypes.pas',
   UTiles in 'Tests\UTiles.pas',
-  UEdgeTest in 'Tests\UEdgeTest.pas';
+  UEdgeTest in 'Tests\UEdgeTest.pas',
+  UBulletTest in 'Tests\UBulletTest.pas';
 
 {$R *.res}
 

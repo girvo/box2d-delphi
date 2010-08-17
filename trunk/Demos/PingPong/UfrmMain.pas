@@ -337,7 +337,6 @@ end;
 
 procedure TfrmMain.FormCreate(Sender: TObject);
 begin
-   ReportMemoryLeaksOnShutdown := True;
    MapFileName := '';
    Blocks := TList.Create;
    // 创建计时器
