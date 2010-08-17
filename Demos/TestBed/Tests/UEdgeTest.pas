@@ -77,23 +77,23 @@ begin
       ground.CreateFixture(shape, 0.0);
    end;
 
+//   begin
+//      bd := Tb2BodyDef.Create;
+//      bd.bodyType := b2_dynamicBody;
+//      SetValue(bd.position, -0.5, 0.6);
+//      bd.allowSleep := False;
+//      body := m_world.CreateBody(bd);
+//
+//      cshape := Tb2CircleShape.Create;
+//      cshape.m_radius := 0.5;
+//
+//      body.CreateFixture(cshape, 1.0);
+//   end;
+
    begin
       bd := Tb2BodyDef.Create;
       bd.bodyType := b2_dynamicBody;
-      SetValue(bd.position, -0.5, 0.5);
-      bd.allowSleep := False;
-      body := m_world.CreateBody(bd);
-
-      cshape := Tb2CircleShape.Create;
-      cshape.m_radius := 0.5;
-
-      body.CreateFixture(cshape, 1.0);
-   end;
-
-   begin
-      bd := Tb2BodyDef.Create;
-      bd.bodyType := b2_dynamicBody;
-      SetValue (bd.position, 0.5, 0.5);
+      SetValue (bd.position, 0.5, 0.6);
       bd.allowSleep := False;
       body := m_world.CreateBody(bd);
 

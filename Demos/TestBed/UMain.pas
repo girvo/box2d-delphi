@@ -41,6 +41,7 @@ type
     rdoRealTime: TRadioButton;
     rdoFixedStep: TRadioButton;
     chkAntialiasing: TCheckBox;
+    chkSubStepping: TCheckBox;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure chklstVisibilityClickCheck(Sender: TObject);
@@ -112,7 +113,7 @@ type
   TSettings = record
      drawShapes, drawJoints, drawAABBs, drawPairs, drawContactPoints, drawContactNormals,
      drawContactForces, drawFrictionForces, drawCOMs, drawStats, drawKeyInfo,
-     enableWarmStarting, enableContinuous,
+     enableWarmStarting, enableContinuous, enableSubStepping,
      pause, singleStep, realTime, customedStep: Boolean;
   end;
 
@@ -285,7 +286,6 @@ end;
 procedure TfrmMain.chkAntialiasingClick(Sender: TObject);
 begin
    GLCanvas.Antialiasing := chkAntialiasing.Checked;
-   Caption := FloatToStr(GLCanvas.TranslateX) + '  ' + FloatToStr(GLCanvas.TranslateY);
 end;
 
 procedure TfrmMain.chklstVisibilityClickCheck(Sender: TObject);
@@ -295,7 +295,7 @@ var
    flag: Tb2DebugDrawBitsSet;
    i: Integer;
 begin
-   for i := 0 to High(TSettingArray) - 6 do
+   for i := 0 to High(TSettingArray) - 7 do
       TSettingArray(Settings)[i] := chklstVisibility.Checked[i];
 
    flag := [];
@@ -504,10 +504,12 @@ begin
    begin
       enableWarmStarting := chkWarmStarting.Checked;
       enableContinuous := chkTimeOfImpact.Checked;
+      enableSubStepping := chkSubStepping.Checked;
       if Assigned(Test) then
       begin
          Test.m_world.WarmStarting := enableWarmStarting;
          Test.m_world.ContinuousPhysics := enableContinuous;
+         Test.m_world.SubStepping := enableSubStepping;
       end;
    end;
 end;

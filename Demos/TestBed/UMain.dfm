@@ -37,7 +37,7 @@ object frmMain: TfrmMain
     end
     object Label2: TLabel
       Left = 8
-      Top = 87
+      Top = 100
       Width = 37
       Height = 13
       Caption = 'Visibility'
@@ -81,7 +81,7 @@ object frmMain: TfrmMain
     end
     object chklstVisibility: TCheckListBox
       Left = 8
-      Top = 105
+      Top = 118
       Width = 148
       Height = 158
       OnClickCheck = chklstVisibilityClickCheck
@@ -103,7 +103,7 @@ object frmMain: TfrmMain
     end
     object btnPause: TButton
       Left = 7
-      Top = 405
+      Top = 418
       Width = 75
       Height = 25
       Caption = 'Pause'
@@ -112,7 +112,7 @@ object frmMain: TfrmMain
     end
     object btnSingleStep: TButton
       Left = 82
-      Top = 405
+      Top = 418
       Width = 75
       Height = 25
       Caption = 'Single Step'
@@ -121,7 +121,7 @@ object frmMain: TfrmMain
     end
     object GroupBox1: TGroupBox
       Left = 8
-      Top = 270
+      Top = 283
       Width = 148
       Height = 70
       Caption = 'Gravity'
@@ -168,7 +168,7 @@ object frmMain: TfrmMain
     end
     object btnReset: TButton
       Left = 7
-      Top = 430
+      Top = 443
       Width = 75
       Height = 25
       Caption = 'Reset'
@@ -177,7 +177,7 @@ object frmMain: TfrmMain
     end
     object GroupBox2: TGroupBox
       Left = 8
-      Top = 342
+      Top = 355
       Width = 148
       Height = 57
       Caption = 'Mode'
@@ -205,7 +205,7 @@ object frmMain: TfrmMain
     end
     object chkAntialiasing: TCheckBox
       Left = 8
-      Top = 461
+      Top = 474
       Width = 97
       Height = 17
       Caption = 'Antialiasing'
@@ -213,6 +213,15 @@ object frmMain: TfrmMain
       State = cbChecked
       TabOrder = 9
       OnClick = chkAntialiasingClick
+    end
+    object chkSubStepping: TCheckBox
+      Left = 8
+      Top = 81
+      Width = 105
+      Height = 17
+      Caption = 'Sub-Stepping'
+      TabOrder = 10
+      OnClick = SimulationOptionsChanged
     end
   end
 end

@@ -360,17 +360,17 @@ type
       m_debugDraw: Tb2DebugDraw;
 
       m_inv_dt0: Float;  // This is used to compute the time step ratio to support a variable time step.
-      m_warmStarting: Boolean; // This is for debugging the solver.
-      m_continuousPhysics: Boolean; // This is for debugging the solver.
+      m_warmStarting: Boolean;
+      m_continuousPhysics: Boolean; // For debugging the solver
+
+	    m_subStepping: Boolean;
+	    m_stepComplete: Boolean;
 
       procedure Solve(const step: Tb2TimeStep);
 
       { Sequentially solve TOIs for each body. We bring each body to the time
         of contact and perform some position correction. Time is not conserved.}
-      procedure SolveTOI; overload;
-      // Advance a dynamic body to its first time of contact and adjust the position to ensure clearance.
-      procedure SolveTOI(body: Tb2Body); overload;
-      procedure SolveTOI(const step: Tb2TimeStep); overload;
+      procedure SolveTOI(const step: Tb2TimeStep);
 
       procedure DrawShape(fixture: Tb2Fixture; const xf: Tb2Transform; const color: RGBA);
       procedure DrawJoint(joint: Tb2Joint);
@@ -480,6 +480,8 @@ type
 
       property WarmStarting: Boolean read m_warmStarting write m_warmStarting;
       property ContinuousPhysics: Boolean read m_continuousPhysics write m_continuousPhysics;
+
+      property SubStepping: Boolean read m_subStepping write m_subStepping;
 
       {$IFDEF COMPUTE_PHYSICSTIME}
       property PhysicsTime: Double read m_physicsTime;
@@ -2392,8 +2394,7 @@ function MakeColor(r, g, b: Single; a: Single = 1.0): RGBA;
 var
    b2_gjkCalls, b2_gjkIters, b2_gjkMaxIters: Int32;
    b2_toiCalls, b2_toiIters, b2_toiMaxIters,
-   b2_toiRootIters, b2_toiMaxRootIters,
-   b2_toiMaxOptIters: Int32;
+   b2_toiRootIters, b2_toiMaxRootIters: Int32;
 
 const
    b2_nullNode = -1;
@@ -4708,6 +4709,9 @@ begin
    m_warmStarting := True;
    m_continuousPhysics := True;
 
+ 	 m_subStepping := False;
+	 m_stepComplete := True;
+
    m_allowSleep := doSleep;
    m_gravity := gravity;
 
@@ -4964,318 +4968,6 @@ begin
 	 m_contactManager.FindNewContacts;
 end;
 
-procedure Tb2World.SolveTOI;
-var
-   body: Tb2Body;
-   c: Pb2Contact;
-begin
-   // Prepare all contacts.
-   c := m_contactManager.m_contactList;
-   while Assigned(c) do
-      with c^ do
-      begin
-         // Enable the contact
-         m_flags := m_flags or e_contact_enabledFlag;
-         // Set the number of TOI events for this contact to zero.
-         m_toiCount := 0;
-         c := m_next
-      end;
-
-   // Initialize the TOI flag.
-   body := m_bodyList;
-   while Assigned(body) do
-      with body do
-      begin
-         // Kinematic, and static bodies will not be affected by the TOI event.
-         // If a body was not in an island then it did not move.
-         if (body.m_flags and e_body_islandFlag = 0) or
-            (body.m_type in [b2_kinematicBody, b2_staticBody]) then
-            m_flags := m_flags or e_body_toiFlag
-         else
-            m_flags := m_flags and (not e_body_toiFlag);
-         body := m_next;
-      end;
-
-   // Collide non-bullets.
-   body := m_bodyList;
-   while Assigned(body) do
-      with body do
-      begin
-         if body.m_flags and e_body_toiFlag <> 0 then
-         begin
-            body := m_next;
-            Continue;
-         end;
-
-         if body.IsBullet then
-         begin
-            body := m_next;
-            Continue;
-         end;
-
-         SolveTOI(body);
-         m_flags := m_flags or e_body_toiFlag;
-         body := m_next;
-      end;
-
-   // Collide bullets.
-   body := m_bodyList;
-   while Assigned(body) do
-      with body do
-      begin
-         if body.m_flags and e_body_toiFlag <> 0 then
-         begin
-            body := m_next;
-            Continue;
-         end;
-
-         if not body.IsBullet then
-         begin
-            body := m_next;
-            Continue;
-         end;
-
-         SolveTOI(body);
-         m_flags := m_flags or e_body_toiFlag;
-         body := m_next;
-      end;
-end;
-
-var
-   world_toisolver: Tb2TOISolver;
-   world_solvetoi_contacts: TList;
-procedure Tb2World.SolveTOI(body: Tb2Body);
-const
-   k_toiBaumgarte = 0.75;
-var
-   toiContact, contact: Pb2Contact;
-   toiOther: Tb2Body;
-   toi: Float;
-   found, bullet: Boolean;
-   count, iter, indexA, indexB: Int32;
-   ce: Pb2ContactEdge;
-   other: Tb2Body;
-   fixtureA, fixtureB: Tb2Fixture;
-   input: Tb2TOIInput;
-   output: Tb2TOIOutput;
-   backup: Tb2Sweep;
-begin
-   // Find the minimum contact.
-   toiContact := nil;
-   toi := 1.0;
-   iter := 0;
-
-   bullet := body.IsBullet;
-
-   // Iterate until all contacts agree on the minimum TOI. We have
-   // to iterate because the TOI algorithm may skip some intermediate
-   // collisions when objects rotate through each other.
-   repeat
-      count := 0;
-      found := False;
-      ce := body.m_contactList;
-      while Assigned(ce) do
-      begin
-         if ce^.contact = toiContact then
-         begin
-            ce := ce^.next;
-            Continue;
-         end;
-
-         other := ce^.other;
-
-         // Only bullets perform TOI with dynamic bodies.
-         if bullet then
-         begin
-            // Bullets only perform TOI with bodies that have their TOI resolved.
-            if (other.m_flags and e_body_toiFlag) = 0 then
-            begin
-               ce := ce^.next;
-               Continue;
-            end;
-
-            // No repeated hits on non-static bodies
-            if (other.m_type <> b2_staticBody) and ((ce^.contact^.m_flags and e_contact_bulletHitFlag) <> 0) then
-            begin
-               ce := ce^.next;
-               Continue;
-            end;
-         end
-         else if (other.m_type = b2_dynamicBody) then
-         begin
-            ce := ce^.next;
-            Continue;
-         end;
-
-         // Check for a disabled contact.
-         contact := ce^.contact;
-         {$IFDEF OP_OVERLOAD}
-         if not contact^.IsEnabled then
-         {$ELSE}
-         if not IsEnabled(contact^) then
-         {$ENDIF}
-         begin
-            ce := ce^.next;
-            Continue;
-         end;
-
-         // Prevent infinite looping.
-         if contact^.m_toiCount > 10 then
-         begin
-            ce := ce^.next;
-            Continue;
-         end;
-
-         with contact^ do
-         begin
-            fixtureA := m_fixtureA;
-            fixtureB := m_fixtureB;
-			      indexA := m_indexA;
-			      indexB := m_indexB;
-         end;
-
-         // Cull sensors.
-         if fixtureA.IsSensor or fixtureB.IsSensor then
-         begin
-            ce := ce^.next;
-            Continue;
-         end;
-
-         // Compute the time of impact in interval [0, minTOI]
-         with input do
-         begin
-            {$IFDEF OP_OVERLOAD}
-            proxyA.SetShape(fixtureA.m_shape, indexA);
-            proxyB.SetShape(fixtureB.m_shape, indexB);
-            {$ELSE}
-            SetShape(proxyA, fixtureA.m_shape, indexA);
-            SetShape(proxyB, fixtureB.m_shape, indexB);
-            {$ENDIF}
-            sweepA := fixtureA.m_body.m_sweep;
-            sweepB := fixtureB.m_body.m_sweep;
-            tMax := toi;
-         end;
-
-         b2TimeOfImpact(output, input);
-         if (output.state = e_toi_touching) and (output.t < toi) then
-         begin
-            toiContact := contact;
-            toi := output.t;
-            toiOther := other;
-            found := True;
-         end;
-
-         Inc(count);
-         ce := ce^.next;
-      end;
-      Inc(iter);
-   until (not Found) or (count = 0) or (iter >= 50);
-
-   if toiContact = nil then
-   begin
-      body.Advance(toi);
-      Exit;
-   end;
-
-   backup := body.m_sweep;
-   body.Advance(toi);
-   {$IFDEF OP_OVERLOAD}
-   toiContact^.Update(m_contactManager.m_contactListener);
-   if not toiContact^.IsEnabled then
-   {$ELSE}
-   Update(toiContact^, m_contactManager.m_contactListener);
-   if not IsEnabled(toiContact^) then
-   {$ENDIF}
-   begin
-      // Contact disabled. Backup and recurse.
-      body.m_sweep := backup;
-      SolveTOI(body);
-   end;
-
-   Inc(toiContact^.m_toiCount);
-
-   // Update all the valid contacts on this body and build a contact island.
-   count := 0;
-   ce := body.m_contactList;
-   while Assigned(ce) and (count < b2_maxTOIContacts) do
-   begin
-      other := ce^.other;
-      // Only perform correction with static bodies, so the
-      // body won't get pushed out of the world.
-      if other.m_type = b2_dynamicBody then
-      begin
-         ce := ce^.next;
-         Continue;
-      end;
-
-      // Check for a disabled contact.
-      contact := ce^.contact;
-      {$IFDEF OP_OVERLOAD}
-      if not contact^.IsEnabled then
-      {$ELSE}
-      if not IsEnabled(contact^) then
-      {$ENDIF}
-      begin
-         ce := ce^.next;
-         Continue;
-      end;
-
-      fixtureA := contact^.m_fixtureA;
-      fixtureB := contact^.m_fixtureB;
-
-      // Cull sensors.
-      if fixtureA.IsSensor or fixtureB.IsSensor then
-      begin
-         ce := ce^.next;
-         Continue;
-      end;
-
-	   	// The contact likely has some new contact points. The listener
-	  	// gives the user a chance to disable the contact.
-      if contact <> toiContact then
-         {$IFDEF OP_OVERLOAD}
-         contact^.Update(m_contactManager.m_contactListener);
-         {$ELSE}
-         Update(contact^, m_contactManager.m_contactListener);
-         {$ENDIF}
-
-      // Did the user disable the contact?
-      {$IFDEF OP_OVERLOAD}
-      if not contact^.IsEnabled then
-      {$ELSE}
-      if not IsEnabled(contact^) then
-      {$ENDIF}
-      begin
-         // Skip this contact.
-         ce := ce^.next;
-         Continue;
-      end;
-
-      {$IFDEF OP_OVERLOAD}
-      if not contact^.IsTouching then
-      {$ELSE}
-      if not IsTouching(contact^) then
-      {$ENDIF}
-      begin
-         ce := ce^.next;
-         Continue;
-      end;
-
-      world_solvetoi_contacts[count] := contact;
-      Inc(count);
-      ce := ce^.next;
-   end;
-
-   // Reduce the TOI body's overlap with the contact island.
-   world_toisolver.Initialize(world_solvetoi_contacts, count, body);
-   for iter := 0 to 19 do
-      if world_toisolver.Solve(k_toiBaumgarte) then
-         Break;
-
-   if toiOther.m_type <> b2_staticBody then
-      toiContact^.m_flags := toiContact^.m_flags or e_contact_bulletHitFlag;
-end;
-
 procedure Tb2World.SolveTOI(const step: Tb2TimeStep);
 var
    i: Integer;
@@ -5286,7 +4978,7 @@ var
    minAlpha, alpha, alpha0, beta: Float;
    input: Tb2TOIInput;
    output: Tb2TOIOutput;
-   backup1, backup2: Tb2Sweep;
+   backup, backup1, backup2: Tb2Sweep;
    bodies: array[0..1] of Tb2Body;
    ce: Pb2ContactEdge;
    subStep: Tb2TimeStep;
@@ -5294,20 +4986,23 @@ begin
    world_solve_island.Reset(2 * b2_maxTOIContacts, b2_maxTOIContacts,
       0, m_contactManager.m_contactListener);
 
-   b := m_bodyList;
-   while Assigned(b) do
+   if m_stepComplete then
    begin
-      b.m_flags := b.m_flags and (not e_body_islandFlag);
-      b.m_sweep.alpha0 := 0.0;
-      b := b.m_next;
-   end;
+      b := m_bodyList;
+      while Assigned(b) do
+      begin
+         b.m_flags := b.m_flags and (not e_body_islandFlag);
+         b.m_sweep.alpha0 := 0.0;
+         b := b.m_next;
+      end;
 
-   c := m_contactManager.m_contactList;
-   while Assigned(c) do
-   begin
-      // Invalidate TOI
-      c.m_flags := c.m_flags and (not (e_contact_toiFlag or e_contact_islandFlag));
-      c := c.m_next;
+      c := m_contactManager.m_contactList;
+      while Assigned(c) do
+      begin
+         // Invalidate TOI
+         c.m_flags := c.m_flags and (not (e_contact_toiFlag or e_contact_islandFlag));
+         c := c.m_next;
+      end;
    end;
 
    // Find TOI events and solve them.
@@ -5431,6 +5126,7 @@ begin
       if (not Assigned(minContact)) or ( 1.0 - 10.0 * FLT_EPSILON < minAlpha) then
       begin
          // No more TOI events. Done!
+         m_stepComplete := True;
          Break;
       end;
 
@@ -5443,8 +5139,6 @@ begin
 
       bA.Advance(minAlpha);
       bB.Advance(minAlpha);
-      bA.SetAwake(True);
-      bB.SetAwake(True);
 
       // The TOI contact likely has some new contact points.
       {$IFDEF OP_OVERLOAD}
@@ -5462,12 +5156,20 @@ begin
       {$ENDIF}
       begin
          // Restore the sweeps.
+         {$IFDEF OP_OVERLOAD}
+         minContact.SetEnabled(False);
+         {$ELSE}
+         SetEnabled(minContact^, False);
+         {$ENDIF}
          bA.m_sweep := backup1;
          bB.m_sweep := backup2;
          bA.SynchronizeTransform;
          bB.SynchronizeTransform;
          Continue;
       end;
+
+      bA.SetAwake(True);
+      bB.SetAwake(True);
 
       // Build the island
       world_solve_island.Clear;
@@ -5488,7 +5190,7 @@ begin
          body := bodies[i];
          if body.m_type = b2_dynamicBody then
          begin
-            ce := bA.m_contactList;
+            ce := body.m_contactList;
             while Assigned(ce) and (count < b2_maxTOIContacts) do
             begin
                contact := ce.contact;
@@ -5515,6 +5217,11 @@ begin
                   Continue;
                end;
 
+               // Tentatively advance the body to the TOI.
+               backup := other.m_sweep;
+               if other.m_flags >= e_body_islandFlag then
+                  other.Advance(minAlpha);
+
                // Update the contact points
                {$IFDEF OP_OVERLOAD}
                contact.Update(m_contactManager.m_contactListener);
@@ -5529,6 +5236,8 @@ begin
                if not IsEnabled(contact^) then
                {$ENDIF}
                begin
+                  other.m_sweep := backup;
+                  other.SynchronizeTransform;
                   ce := ce.next;
                   Continue;
                end;
@@ -5540,6 +5249,8 @@ begin
                if not IsTouching(contact^) then
                {$ENDIF}
                begin
+                  other.m_sweep := backup;
+                  other.SynchronizeTransform;
                   ce := ce.next;
                   Continue;
                end;
@@ -5559,10 +5270,7 @@ begin
                other.m_flags := other.m_flags or e_body_islandFlag;
 
                if other.m_type <> b2_staticBody then
-               begin
                   other.SetAwake(True);
-                  other.Advance(minAlpha);
-               end;
 
                world_solve_island.Add(other);
                ce := ce.next;
@@ -5583,17 +5291,28 @@ begin
          with Tb2Body(world_solve_island.m_bodies[i]) do
          begin
             m_flags := m_flags and (not e_body_islandFlag);
+            if m_type <> b2_dynamicBody then
+               Continue;
             SynchronizeFixtures;
-         end;
 
-      // Reset island flags and invalidate cached TOI values.
-      for i := 0 to world_solve_island.m_contactCount - 1 do
-         with Pb2Contact(world_solve_island.m_contacts[i])^ do
-            m_flags := m_flags and (not (e_contact_toiFlag or e_contact_islandFlag));
+            // Invalidate all contact TOIs on this displaced body.
+            ce := m_contactList;
+            while Assigned(ce) do
+            begin
+               ce.contact.m_flags := ce.contact.m_flags and (not (e_contact_toiFlag or e_contact_islandFlag));
+               ce := ce.next;
+            end;
+         end;
 
       // Commit fixture proxy movements to the broad-phase so that new contacts are created.
       // Also, some contacts can be destroyed.
       m_contactManager.FindNewContacts;
+
+      if m_subStepping then
+      begin
+         m_stepComplete := False;
+         Break;
+      end;
    end;
 end;
 
@@ -6247,7 +5966,9 @@ begin
    // Integrate velocities, solve velocity constraints, and integrate positions.
    if timeStep > 0.0 then
    begin
-      Solve(step);
+      if m_stepComplete then
+         Solve(step);
+
       // Handle TOI events.
       if m_continuousPhysics then
          SolveTOI(step);
@@ -7244,11 +6965,11 @@ begin
       with c^ do
       begin
          massA := 0.0;
-         if bodyA = toiBodyA then
+         if (bodyA = toiBodyA) or (bodyA = toiBodyB) or bodyA.IsBullet then
             massA := bodyA.m_mass;
 
          massB := 0.0;
-         if bodyB = toiBodyB then
+         if (bodyB = toiBodyA) or (bodyB = toiBodyB) or bodyB.IsBullet then
             massB := bodyB.m_mass;
 
          with bodyA do
@@ -7939,10 +7660,14 @@ begin
 
    // Solve position constraints.
    for i := 0 to subStep.positionIterations - 1 do
+   begin
       if island_solve_contact_solver.SolvePositionConstraintsTOI(k_toiBaumgarte, bodyA, bodyB) then
          Break;
+      //if i = subStep.positionIterations - 1 then
+   end;
 
    // Advance bodies to new safe spot
+   // Leap of faith to new safe state.
    for i := 0 to m_bodyCount - 1 do
       with Tb2Body(m_bodies[i]).m_sweep do
       begin
@@ -16586,9 +16311,6 @@ initialization
    world_raycast_wrapper := Tb2WorldRayCastWrapper.Create;
    world_solve_island := Tb2Island.Create;
    world_solve_stack := TList.Create;
-   world_toisolver := Tb2TOISolver.Create;
-   world_solvetoi_contacts := TList.Create;
-   world_solvetoi_contacts.Count := b2_maxTOIContacts;
    contactsolver_positionsolver := Tb2PositionSolverManifold.Create;
    toisolver_manifold := Tb2TOISolverManifold.Create;
    distance_simplex := Tb2Simplex.Create;
@@ -16611,8 +16333,6 @@ finalization
    world_raycast_wrapper.Free;
    world_solve_island.Free;
    world_solve_stack.Free;
-   world_toisolver.Free;
-   world_solvetoi_contacts.Free;
    contactsolver_positionsolver.Free;
    toisolver_manifold.Free;
    distance_simplex.Free;

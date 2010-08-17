@@ -56,7 +56,7 @@ begin
       m_body.CreateFixture(shape, 1.0);
 
       m_angularVelocity := RandomFloat(-50, 50);
-      m_angularVelocity := -30.669577;
+      //m_angularVelocity = 46.661274f;
       m_body.SetLinearVelocity(MakeVector(0.0, -100.0));
       m_body.SetAngularVelocity(m_angularVelocity);
    end;
@@ -80,8 +80,6 @@ begin
 
       DrawText(Format('ave toi root iters = %3.1f, max toi root iters = %d',
         [b2_toiRootIters / b2_toiCalls, b2_toiMaxRootIters]));
-
-      DrawText(Format('max toi opt iters = %d', [b2_toiMaxOptIters]));
    end;
 
    if m_stepCount mod 60 = 0 then
