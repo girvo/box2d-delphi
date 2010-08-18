@@ -55,7 +55,8 @@ uses
   UPhysics2DTypes in '..\..\Physics2D\UPhysics2DTypes.pas',
   UTiles in 'Tests\UTiles.pas',
   UEdgeTest in 'Tests\UEdgeTest.pas',
-  UBulletTest in 'Tests\UBulletTest.pas';
+  UBulletTest in 'Tests\UBulletTest.pas',
+  UPinBall in 'Tests\UPinBall.pas';
 
 {$R *.res}
 

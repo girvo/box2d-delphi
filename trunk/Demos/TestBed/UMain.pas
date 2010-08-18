@@ -60,6 +60,7 @@ type
     procedure rdoRealTimeClick(Sender: TObject);
     procedure rdoFixedStepClick(Sender: TObject);
     procedure chkAntialiasingClick(Sender: TObject);
+    procedure FormKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
   private
     { Private declarations }
 	   lastp: TGLPointF;
@@ -145,6 +146,7 @@ type
      procedure NextLine;
      procedure Step(var settings: TSettings; timeStep: Float); virtual;
      procedure Keyboard(key: Byte); virtual;
+     procedure KeyboardUp(key: Byte); virtual;
      procedure MouseDown(const p: TVector2); virtual;
      procedure ShiftMouseDown(const p: TVector2);
      procedure MouseUp(const p: TVector2); virtual;
@@ -395,6 +397,13 @@ begin
       if Assigned(Test) then
          Test.Keyboard(Key);
    end;
+end;
+
+procedure TfrmMain.FormKeyUp(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+   if Assigned(Test) then
+      Test.KeyboardUp(Key);
 end;
 
 procedure TfrmMain.FormMouseWheelDown(Sender: TObject; Shift: TShiftState;
@@ -867,6 +876,10 @@ begin
 end;
 
 procedure TTester.Keyboard(key: Byte);
+begin
+end;
+
+procedure TTester.KeyboardUp(key: Byte);
 begin
 end;
 

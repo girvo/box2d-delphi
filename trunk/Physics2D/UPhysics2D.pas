@@ -753,21 +753,6 @@ type
       bodyA, bodyB: Tb2Body;
    end;
 
-   Tb2TOISolver = class
-   public
-      m_constraints: Pb2TOIConstraint;
-      m_count: Int32;
-      m_toiBody: Tb2Body;
-
-      destructor Destroy; override;
-
-	    procedure Initialize(contacts: TList; count: Int32; toiBody: Tb2Body);
-    	procedure Clear;
-
-	    // Perform one solver iteration. Returns true if converged.
-    	function Solve(baumgarte: Float): Boolean;
-   end;
-
    ////////////////////////////////////////////////////
    Pb2Pair = ^Tb2Pair;
    Tb2Pair = record
@@ -7784,222 +7769,6 @@ begin
 
       m_listener.PostSolve(c^, impulse);
    end;
-end;
-
-{ Tb2TOISolver }
-
-destructor Tb2TOISolver.Destroy;
-begin
-   Clear;
-end;
-
-procedure Tb2TOISolver.Initialize(contacts: TList; count: Int32; toiBody: Tb2Body);
-var
-   i, j: Integer;
-   constraint: Pb2TOIConstraint;
-begin
-   Clear;
-   m_count := count;
-   m_toiBody := toiBody;
-
-   m_constraints := Pb2TOIConstraint(GetMemory(m_count * SizeOf(Tb2TOIConstraint)));
-   for i := 0 to m_count - 1 do
-   begin
-      with Pb2Contact(contacts[i])^ do
-      begin
-         //b2Assert(manifold.pointCount > 0);
-         constraint := m_constraints;
-         Inc(constraint, i);
-
-         with constraint^ do
-         begin
-            bodyA := m_fixtureA.m_body;
-            bodyB := m_fixtureB.m_body;
-            localNormal := m_manifold.localNormal;
-            localPoint := m_manifold.localPoint;
-            manifoldType := m_manifold.manifoldType;
-            pointCount := m_manifold.pointCount;
-            radius := m_fixtureA.m_shape.m_radius + m_fixtureB.m_shape.m_radius;
-
-            for j := 0 to pointCount - 1 do
-               localPoints[j] := m_manifold.points[j].localPoint;
-         end;
-      end;
-   end;
-end;
-
-procedure Tb2TOISolver.Clear;
-begin
-   FreeMemory(m_constraints);
-   m_constraints := nil;
-end;
-
-type
-   Tb2TOISolverManifold = class
-   public
-      normal, point: TVector2;
-      separation: Float;
-
-      procedure Initialize(const cc: Tb2TOIConstraint; index: Int32);
-   end;
-
-procedure Tb2TOISolverManifold.Initialize(const cc: Tb2TOIConstraint; index: Int32);
-var
-   pointA, pointB, planePoint: TVector2;
-begin
-   //b2Assert(cc.pointCount > 0);
-
-   with cc do
-      case manifoldType of
-         e_manifold_circles:
-            begin
-               pointA := bodyA.GetWorldPoint(localPoint);
-               pointB := bodyB.GetWorldPoint(localPoints[0]);
-               if b2DistanceSquared(pointA, pointB) > FLT_EPSILON * FLT_EPSILON then
-               begin
-                  {$IFDEF OP_OVERLOAD}
-                  normal := pointB - pointA;
-                  normal.Normalize;
-                  {$ELSE}
-                  normal := Subtract(pointB, pointA);
-                  Normalize(normal);
-                  {$ENDIF}
-               end
-               else
-               begin
-                  normal.x := 1.0;
-                  normal.y := 0.0;
-               end;
-
-               point := b2MiddlePoint(pointA, pointB);
-               {$IFDEF OP_OVERLOAD}
-               separation := b2Dot(pointB - pointA, normal) - radius;
-               {$ELSE}
-               separation := b2Dot(Subtract(pointB, pointA), normal) - radius;
-               {$ENDIF}
-            end;
-         e_manifold_faceA:
-            begin
-               normal := bodyA.GetWorldVector(localNormal);
-               planePoint := bodyA.GetWorldPoint(localPoint);
-
-               point := bodyB.GetWorldPoint(localPoints[index]);
-               {$IFDEF OP_OVERLOAD}
-               separation := b2Dot(point - planePoint, normal) - radius;
-               {$ELSE}
-               separation := b2Dot(Subtract(point, planePoint), normal) - radius;
-               {$ENDIF}
-            end;
-         e_manifold_faceB:
-            begin
-               normal := bodyB.GetWorldVector(localNormal);
-               planePoint := bodyB.GetWorldPoint(localPoint);
-               point := bodyA.GetWorldPoint(localPoints[index]);
-
-               {$IFDEF OP_OVERLOAD}
-               separation := b2Dot(point - planePoint, normal) - radius;
-               normal := -normal; // Ensure normal points from A to B
-               {$ELSE}
-               separation := b2Dot(Subtract(point, planePoint), normal) - radius;
-               normal := Negative(normal); // Ensure normal points from A to B
-               {$ENDIF}
-            end;
-      end;
-end;
-
-var
-   toisolver_manifold: Tb2TOISolverManifold;
-// Perform one solver iteration. Returns True if converged.
-function Tb2TOISolver.Solve(baumgarte: Float): Boolean;
-var
-   i, j: Integer;
-   minSeparation: Float;
-   c: Pb2TOIConstraint;
-   invMassA, invMassB, invIA, invIB, massA, massB: Float;
-   _normal, _point, P, rA, rB: TVector2;
-   _separation, impulse, _c, rnA, rnB, K: Float;
-begin
-   minSeparation := 0.0;
-
-   for i := 0 to m_count - 1 do
-   begin
-      c := m_constraints;
-      Inc(c, i);
-
-      with c^ do
-      begin
-         massA := bodyA.m_mass;
-         massB := bodyB.m_mass;
-
-         // Only the TOI body should move.
-         if bodyA = m_toiBody then
-            massB := 0.0
-         else
-            massA := 0.0;
-
-         invMassA := massA * bodyA.m_invMass;
-         invIA := massA * bodyA.m_invI;
-         invMassB := massB * bodyB.m_invMass;
-         invIB := massB * bodyB.m_invI;
-
-         // Solve normal constraints
-         for j := 0 to c.pointCount - 1 do
-         begin
-            with toisolver_manifold do
-            begin
-               Initialize(c^, j);
-               _normal := normal;
-               _point := point;
-               _separation := separation;
-            end;
-
-            {$IFDEF OP_OVERLOAD}
-            rA := _point - bodyA.m_sweep.c;
-            rB := _point - bodyB.m_sweep.c;
-            {$ELSE}
-            rA := Subtract(_point, bodyA.m_sweep.c);
-            rB := Subtract(_point, bodyB.m_sweep.c);
-            {$ENDIF}
-
-            // Track max constraint error.
-            minSeparation := b2Min(minSeparation, _separation);
-
-            // Prevent large corrections and allow slop.
-            _c := b2Clamp(baumgarte * (_separation + b2_linearSlop), -b2_maxLinearCorrection, 0.0);
-
-            // Compute the effective mass.
-            rnA := b2Cross(rA, _normal);
-            rnB := b2Cross(rB, _normal);
-            K := invMassA + invMassB + invIA * rnA * rnA + invIB * rnB * rnB;
-
-            // Compute normal impulse
-            if K > 0.0 then
-               impulse := - _c / K
-            else
-               impulse := 0.0;
-
-            {$IFDEF OP_OVERLOAD}
-            P := impulse * _normal;
-            bodyA.m_sweep.c.SubtractBy(invMassA * P);
-            bodyB.m_sweep.c.AddBy(invMassB * P);
-            {$ELSE}
-            P := Multiply(_normal, impulse);
-            SubtractBy(bodyA.m_sweep.c, Multiply(P, invMassA));
-            AddBy(bodyB.m_sweep.c, Multiply(P, invMassB));
-            {$ENDIF}
-
-            bodyA.m_sweep.a := bodyA.m_sweep.a - invIA * b2Cross(rA, P);
-            bodyB.m_sweep.a := bodyB.m_sweep.a + invIB * b2Cross(rB, P);
-
-            bodyA.SynchronizeTransform;
-            bodyB.SynchronizeTransform;
-         end;
-      end;
-   end;
-
-   // We can't expect minSpeparation >= -b2_linearSlop because we don't
-   // push the separation above -b2_linearSlop.
-   Result := minSeparation >= -1.5 * b2_linearSlop;
 end;
 
 { Tb2GrowableStack }
@@ -16312,7 +16081,6 @@ initialization
    world_solve_island := Tb2Island.Create;
    world_solve_stack := TList.Create;
    contactsolver_positionsolver := Tb2PositionSolverManifold.Create;
-   toisolver_manifold := Tb2TOISolverManifold.Create;
    distance_simplex := Tb2Simplex.Create;
    toi_separation_fcn := Tb2SeparationFunction.Create;
    island_solve_contact_solver := Tb2ContactSolver.Create;
@@ -16334,7 +16102,6 @@ finalization
    world_solve_island.Free;
    world_solve_stack.Free;
    contactsolver_positionsolver.Free;
-   toisolver_manifold.Free;
    distance_simplex.Free;
    toi_separation_fcn.Free;
    island_solve_contact_solver.Free;
