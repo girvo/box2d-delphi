@@ -86,6 +86,7 @@ begin
    cache.count := 0;
    UPhysics2D.b2Distance(output, cache, input);
 
+   DrawText('Use A/D/S/W/Q/E to move and rotate.');
    DrawText(Format('distance := %f', [output.distance]));
    DrawText(Format('iterations := %d', [output.iterations]));
 
