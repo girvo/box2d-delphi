@@ -658,11 +658,12 @@ type
    Tb2ContactSolver = class
    public
       m_constraints: Pb2ContactConstraint;
-      m_constraintCount: Int32;
+      m_count: Int32;
 
       destructor Destroy; override;
 
-      procedure Initialize(contacts: TList; count: Int32; impulseRatio: Float);
+      procedure Initialize(contacts: TList; count: Int32; impulseRatio: Float;
+         warmStarting: Boolean);
 
       procedure InitializeVelocityConstraints;
       procedure WarmStart;
@@ -670,7 +671,7 @@ type
       procedure StoreImpulses;
 
       function SolvePositionConstraints(baumgarte: Float): Boolean;
-      function SolvePositionConstraintsTOI(baumgarte: Float; toiBodyA, toiBodyB: Tb2Body): Boolean;
+      function SolveTOIPositionConstraints(baumgarte: Float; toiBodyA, toiBodyB: Tb2Body): Boolean;
    end;
 
    // Delegate of b2World.
@@ -4956,7 +4957,6 @@ end;
 procedure Tb2World.SolveTOI(const step: Tb2TimeStep);
 var
    i: Integer;
-   count: Int32;
    b, bA, bB, body, other: Tb2Body;
    awakeA, awakeB, collideA, collideB: Boolean;
    c, minContact, contact: Pb2Contact;
@@ -5167,7 +5167,6 @@ begin
       minContact.m_flags := minContact.m_flags or e_contact_islandFlag;
 
       // Get contacts on bodyA and bodyB.
-      count := 0;
       bodies[0] := bA;
       bodies[1] := bB;
       for i := 0 to 1 do
@@ -5176,7 +5175,7 @@ begin
          if body.m_type = b2_dynamicBody then
          begin
             ce := body.m_contactList;
-            while Assigned(ce) and (count < b2_maxTOIContacts) do
+            while Assigned(ce) and (world_solve_island.m_bodyCount < b2_maxTOIContacts) do
             begin
                contact := ce.contact;
 
@@ -5204,7 +5203,7 @@ begin
 
                // Tentatively advance the body to the TOI.
                backup := other.m_sweep;
-               if other.m_flags >= e_body_islandFlag then
+               if (other.m_flags and e_body_islandFlag) = 0 then
                   other.Advance(minAlpha);
 
                // Update the contact points
@@ -6189,19 +6188,20 @@ begin
       FreeMemory(m_constraints);
 end;
 
-procedure Tb2ContactSolver.Initialize(contacts: TList; count: Int32; impulseRatio: Float);
+procedure Tb2ContactSolver.Initialize(contacts: TList; count: Int32; impulseRatio: Float;
+   warmStarting: Boolean);
 var
    i, j: Integer;
    cc: Pb2ContactConstraint;
    cp: Pb2ManifoldPoint;
 begin
-   m_constraintCount := count;
+   m_count := count;
    if Assigned(m_constraints) then
       FreeMemory(m_constraints);
-   m_constraints := Pb2ContactConstraint(GetMemory(m_constraintCount * SizeOf(Tb2ContactConstraint)));
+   m_constraints := Pb2ContactConstraint(GetMemory(m_count * SizeOf(Tb2ContactConstraint)));
 
    // Initialize position independent portions of the constraints.
-   for i := 0 to m_constraintCount - 1 do
+   for i := 0 to m_count - 1 do
       with Pb2Contact(contacts[i])^ do
       begin
          //b2Assert(manifold.pointCount > 0);
@@ -6226,10 +6226,14 @@ begin
          for j := 0 to cc^.pointCount - 1 do
          begin
             cp := @m_manifold.points[j];
+            FillChar(cc.points[j], SizeOf(Tb2ContactConstraintPoint), 0);
             with cc.points[j] do
             begin
-               normalImpulse := impulseRatio * cp^.normalImpulse;
-               tangentImpulse := impulseRatio * cp^.tangentImpulse;
+               if warmStarting then
+               begin
+                  normalImpulse := impulseRatio * cp^.normalImpulse;
+                  tangentImpulse := impulseRatio * cp^.tangentImpulse;
+               end;
                localPoint := cp^.localPoint;
             end;
          end;
@@ -6260,7 +6264,7 @@ var
    ccp: Pb2ContactConstraintPoint;
    invMass, invIA, invIB, k11, k12, k22, rn1A, rn1B, rn2A, rn2B: Float;
 begin
-   for i := 0 to m_constraintCount - 1 do
+   for i := 0 to m_count - 1 do
    begin
       cc := m_constraints;
       Inc(cc, i);
@@ -6383,7 +6387,7 @@ var
    P, tangent: TVector2;
 begin
    // Warm start.
-   for i := 0 to m_constraintCount - 1 do
+   for i := 0 to m_count - 1 do
    begin
       c := m_constraints;
       Inc(c, i);
@@ -6425,7 +6429,7 @@ var
    vA, vB, dv: TVector2;
    normal, tangent, P, a, b, x, d, P1, P2, dv1, dv2: TVector2;
 begin
-   for i := 0 to m_constraintCount - 1 do
+   for i := 0 to m_count - 1 do
    begin
       c := m_constraints;
       Inc(c, i);
@@ -6756,7 +6760,7 @@ var
    m: Pb2Manifold;
    c: Pb2ContactConstraint;
 begin
-   for i := 0 to m_constraintCount - 1 do
+   for i := 0 to m_count - 1 do
    begin
       c := m_constraints;
       Inc(c, i);
@@ -6855,7 +6859,7 @@ var
    rA, rB: TVector2;
 begin
    minSeparation := 0.0;
-   for i := 0 to m_constraintCount - 1 do
+   for i := 0 to m_count - 1 do
    begin
       c := m_constraints;
       Inc(c, i);
@@ -6933,7 +6937,7 @@ begin
 end;
 
 // Sequential position solver for position constraints.
-function Tb2ContactSolver.SolvePositionConstraintsTOI(baumgarte: Float; toiBodyA, toiBodyB: Tb2Body): Boolean;
+function Tb2ContactSolver.SolveTOIPositionConstraints(baumgarte: Float; toiBodyA, toiBodyB: Tb2Body): Boolean;
 var
    minSeparation: Float;
    i, j: Integer;
@@ -6943,18 +6947,18 @@ var
    normal, point, rA, rB, P: TVector2;
 begin
    minSeparation := 0.0;
-   for i := 0 to m_constraintCount - 1 do
+   for i := 0 to m_count - 1 do
    begin
       c := m_constraints;
       Inc(c, i);
       with c^ do
       begin
          massA := 0.0;
-         if (bodyA = toiBodyA) or (bodyA = toiBodyB) or bodyA.IsBullet then
+         if (bodyA = toiBodyA) or (bodyA = toiBodyB) then
             massA := bodyA.m_mass;
 
          massB := 0.0;
-         if (bodyB = toiBodyA) or (bodyB = toiBodyB) or bodyB.IsBullet then
+         if (bodyB = toiBodyA) or (bodyB = toiBodyB) then
             massB := bodyB.m_mass;
 
          with bodyA do
@@ -7518,15 +7522,17 @@ begin
             m_contacts[j] := pswap;
          end;
 
-   island_solve_contact_solver.Initialize(m_contacts, m_contactCount, step.dtRatio);
+   // Initialize velocity constraints.
+   island_solve_contact_solver.Initialize(m_contacts, m_contactCount, step.dtRatio, step.warmStarting);
    island_solve_contact_solver.InitializeVelocityConstraints;
-   island_solve_contact_solver.WarmStart;
+   if step.warmStarting then
+      island_solve_contact_solver.WarmStart;
 
    for i := 0 to m_jointCount - 1 do
       Tb2Joint(m_joints[i]).InitVelocityConstraints(step);
 
    // Solve velocity constraints.
-   if (island_solve_contact_solver.m_constraintCount > 0) or (m_jointCount > 0) then
+   if (island_solve_contact_solver.m_count > 0) or (m_jointCount > 0) then
       for i := 0 to step.velocityIterations - 1 do
       begin
          for j := 0 to m_jointCount - 1 do
@@ -7641,12 +7647,13 @@ var
    translation: TVector2;
    rotation: Float;
 begin
-   island_solve_contact_solver.Initialize(m_contacts, m_contactCount, subStep.dtRatio);
+   island_solve_contact_solver.Initialize(m_contacts, m_contactCount,
+      subStep.dtRatio, subStep.warmStarting);
 
    // Solve position constraints.
    for i := 0 to subStep.positionIterations - 1 do
    begin
-      if island_solve_contact_solver.SolvePositionConstraintsTOI(k_toiBaumgarte, bodyA, bodyB) then
+      if island_solve_contact_solver.SolveTOIPositionConstraints(k_toiBaumgarte, bodyA, bodyB) then
          Break;
       //if i = subStep.positionIterations - 1 then
    end;
