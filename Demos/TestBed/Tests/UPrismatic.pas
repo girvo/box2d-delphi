@@ -88,7 +88,7 @@ procedure TPrismatic.Step(var settings: TSettings; timeStep: Float);
 begin
    inherited;
    DrawText('Keys: (l) limits, (m) motors, (s) speed');
-   DrawText(Format('Motor Force := %4.0f', [m_joint.GetMotorForce]));
+   DrawText(Format('Motor Force := %4.0f', [m_joint.GetMotorForce(DefaultStep)]));
 end;
 
 initialization

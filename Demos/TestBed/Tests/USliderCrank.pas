@@ -89,6 +89,7 @@ begin
 
          bd := Tb2BodyDef.Create;
          bd.bodyType := b2_dynamicBody;
+         bd.fixedRotation := True;
          SetValue(bd.position, 0.0, 17.0);
          body := m_world.CreateBody(bd);
          body.CreateFixture(shape, 2.0);
@@ -124,7 +125,7 @@ procedure TSliderCrank.Step(var settings: TSettings; timeStep: Float);
 begin
    inherited;
    DrawText('Keys: (f) toggle friction, (m) toggle motor');
-   DrawText(Format('Motor Torque = %5.0f', [m_joint1.GetMotorTorque]));
+   DrawText(Format('Motor Torque = %5.0f', [m_joint1.GetMotorTorque(DefaultStep)]));
 end;
 
 procedure TSliderCrank.Keyboard(key: Byte);

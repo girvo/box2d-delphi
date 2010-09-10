@@ -335,6 +335,9 @@ const
    /// Making it larger may create artifacts for vertex collision.
    b2_polygonRadius = (2.0 * b2_linearSlop); // Added from v2.1.0
 
+   /// Maximum number of sub-steps per contact in continuous physics simulation.
+   b2_maxSubSteps = 8;
+
    /// Maximum number of contacts to be handled to solve a TOI impact.
    b2_maxTOIContacts = 32;
 

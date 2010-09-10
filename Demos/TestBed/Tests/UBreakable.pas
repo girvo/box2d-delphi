@@ -92,8 +92,7 @@ begin
    body2 := m_world.CreateBody(bd);
    m_piece2 := body2.CreateFixture(m_shape2, 1.0, False);
 
-   // Compute consistent velocities for new bodies based on
-   // cached velocity.
+   // Compute consistent velocities for new bodies based on cached velocity.
    {$IFDEF OP_OVERLOAD}
    velocity1 := m_velocity + b2Cross(m_angularVelocity, body1.GetWorldCenter - center);
    velocity2 := m_velocity + b2Cross(m_angularVelocity, body2.GetWorldCenter - center);

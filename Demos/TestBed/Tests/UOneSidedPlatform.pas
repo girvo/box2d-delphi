@@ -82,7 +82,7 @@ begin
       if (m_fixtureA <> m_platform) and (m_fixtureA <> m_character) then
          Exit;
 
-      if (m_fixtureB <> m_character) and (m_fixtureB <> m_character) then
+      if (m_fixtureB <> m_platform) and (m_fixtureB <> m_character) then
          Exit;
 
       if m_character.GetBody.GetPosition.y < m_top + m_radius - 3.0 * b2_linearSlop then
