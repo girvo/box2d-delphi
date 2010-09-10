@@ -27,11 +27,12 @@ var
    bd: Tb2BodyDef;
    ground, body: Tb2Body;
    shape: Tb2PolygonShape;
+   lshape: Tb2LoopShape;
    fd: Tb2FixtureDef;
    d, angle, delta: Float;
    cshape: Tb2CircleShape;
-   lshape: Tb2LoopShape;
    vertices: array[0..5] of TVector2;
+   vs: array[0..9] of TVector2;
 begin
    inherited;
    // Ground body
@@ -72,9 +73,7 @@ begin
       ground.CreateFixture(shape, 0.0);
    end;
 
-   // Square made from edges notice how the edges are shrunk to account
-   // for the polygon radius. This makes it so the square character does
-   // not get snagged. However, ray casts can now go through the cracks.
+   // Square made from an edge loop.
    begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
@@ -86,23 +85,33 @@ begin
 			lshape := Tb2LoopShape.Create;
       lshape.SetVertices(@vertices[0], 4);
 			ground.CreateFixture(lshape, 0.0);
-
-			//b2PolygonShape shape;
-			//float32 d = 2.0f * b2_polygonRadius;
-			//shape.SetAsEdge(b2Vec2(-1.0f + d, 3.0f), b2Vec2(1.0f - d, 3.0f));
-			//ground->CreateFixture(&shape, 0.0f);
-			//shape.SetAsEdge(b2Vec2(1.0f, 3.0f + d), b2Vec2(1.0f, 5.0f - d));
-			//ground->CreateFixture(&shape, 0.0f);
-			//shape.SetAsEdge(b2Vec2(1.0f - d, 5.0f), b2Vec2(-1.0f + d, 5.0f));
-			//ground->CreateFixture(&shape, 0.0f);
-			//shape.SetAsEdge(b2Vec2(-1.0f, 5.0f - d), b2Vec2(-1.0f, 3.0f + d));
-			//ground->CreateFixture(&shape, 0.0f);
    end;
 
-   // Square character
+   // Edge loop
+   begin
+			bd := Tb2BodyDef.Create;
+			SetValue(bd.position, -10.0, 4.0);
+			ground := m_world.CreateBody(bd);
+
+			SetValue(vs[0], 0.0, 0.0);
+			SetValue(vs[1], 6.0, 0.0);
+			SetValue(vs[2], 6.0, 2.0);
+			SetValue(vs[3], 4.0, 1.0);
+			SetValue(vs[4], 2.0, 2.0);
+			SetValue(vs[5], 0.0, 2.0);
+			SetValue(vs[6], -2.0, 2.0);
+			SetValue(vs[7], -4.0, 3.0);
+			SetValue(vs[8], -6.0, 2.0);
+			SetValue(vs[9], -6.0, 0.0);
+			lshape := Tb2LoopShape.Create;
+      lshape.SetVertices(@vs[0], 10);
+			ground.CreateFixture(lshape, 0.0);
+   end;
+
+   // Square character 1
    begin
       bd := Tb2BodyDef.Create;
-      SetValue(bd.position, -3.0, 5.0);
+      SetValue(bd.position, -3.0, 8.0);
       bd.bodyType := b2_dynamicBody;
       bd.fixedRotation := True;
       bd.allowSleep := False;
@@ -117,11 +126,29 @@ begin
       body.CreateFixture(fd);
    end;
 
-   Exit; //
+	 // Square character 2
+   begin
+			bd := Tb2BodyDef.Create;
+			SetValue(bd.position, -5.0, 5.0);
+			bd.bodyType := b2_dynamicBody;
+			bd.fixedRotation := True;
+			bd.allowSleep := False;
+
+			body := m_world.CreateBody(bd);
+
+			shape := Tb2PolygonShape.Create;
+			shape.SetAsBox(0.25, 0.25);
+
+			fd := Tb2FixtureDef.Create;
+			fd.shape := shape;
+			fd.density := 20.0;
+			body.CreateFixture(fd);
+   end;
+
    // Hexagon character
    begin
       bd := Tb2BodyDef.Create;
-      SetValue(bd.position, -5.0, 5.0);
+      SetValue(bd.position, -5.0, 8.0);
       bd.bodyType := b2_dynamicBody;
       bd.fixedRotation := True;
       bd.allowSleep := False;
@@ -169,6 +196,8 @@ procedure TCharacterCollision.Step(var settings: TSettings; timeStep: Float);
 begin
    inherited;
    DrawText('This demo tests various character collision shapes.');
+   DrawText('Limitation: square and hexagon can snag on aligned boxes.');
+   DrawText('Feature: loops have smooth collision inside and out.');
 end;
 
 initialization

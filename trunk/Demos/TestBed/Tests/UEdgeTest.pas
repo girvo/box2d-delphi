@@ -19,11 +19,11 @@ implementation
 constructor TEdgeTest.Create;
 const
    v1: TVector2 = (X: -10.0; Y: 0.0);
-   v2: TVector2 = (X: -7.0; Y: -1.0);
+   v2: TVector2 = (X: -7.0; Y: -2.0);
    v3: TVector2 = (X: -4.0; Y: 0.0);
    v4: TVector2 = (X: -0.0; Y: 0.0);
    v5: TVector2 = (X: 4.0; Y: 0.0);
-   v6: TVector2 = (X: 7.0; Y: 1.0);
+   v6: TVector2 = (X: 7.0; Y: 2.0);
    v7: TVector2 = (X: 10.0; Y: 0.0);
 var
    bd: Tb2BodyDef;
@@ -77,23 +77,23 @@ begin
       ground.CreateFixture(shape, 0.0);
    end;
 
-//   begin
-//      bd := Tb2BodyDef.Create;
-//      bd.bodyType := b2_dynamicBody;
-//      SetValue(bd.position, -0.5, 0.6);
-//      bd.allowSleep := False;
-//      body := m_world.CreateBody(bd);
-//
-//      cshape := Tb2CircleShape.Create;
-//      cshape.m_radius := 0.5;
-//
-//      body.CreateFixture(cshape, 1.0);
-//   end;
+   begin
+      bd := Tb2BodyDef.Create;
+      bd.bodyType := b2_dynamicBody;
+      SetValue(bd.position, -0.5, 0.6);
+      bd.allowSleep := False;
+      body := m_world.CreateBody(bd);
+
+      cshape := Tb2CircleShape.Create;
+      cshape.m_radius := 0.5;
+
+      body.CreateFixture(cshape, 1.0);
+   end;
 
    begin
       bd := Tb2BodyDef.Create;
       bd.bodyType := b2_dynamicBody;
-      SetValue (bd.position, 0.5, 0.6);
+      SetValue (bd.position, 1.0, 0.6);
       bd.allowSleep := False;
       body := m_world.CreateBody(bd);
 

@@ -424,9 +424,12 @@ type
       procedure Step(timeStep: Float; velocityIterations,
          positionIterations: Int32; Draw: Boolean = False);
 
-      /// Call this after you are done with time steps to clear the forces. You normally
-      /// call this after each call to Step, unless you are performing sub-steps. By default,
-      /// forces will be automatically cleared, so you don't need to call this function.
+      /// Manually clear the force buffer on all bodies. By default, forces are cleared automatically
+      /// after each call to Step. The default behavior is modified by calling SetAutoClearForces.
+      /// The purpose of this function is to support sub-stepping. Sub-stepping is often used to maintain
+      /// a fixed sized time step under a variable frame-rate.
+      /// When you perform sub-stepping you will disable auto clearing of forces and instead call
+      /// ClearForces after all sub-steps are complete in one pass of your game loop.
       /// @see SetAutoClearForces
       procedure ClearForces;
 
@@ -1720,7 +1723,10 @@ type
       function GetAnchorA: TVector2; override;
       function GetAnchorB: TVector2; override;
 
+      /// Get the reaction force given the inverse time step. Unit is N.
       function GetReactionForce(inv_dt: Float): TVector2; override;
+    	/// Get the reaction torque given the inverse time step.
+    	/// Unit is N*m. This is always zero for a distance joint.
       function GetReactionTorque(inv_dt: Float): Float; override;
 
       /// Manipulating the length can lead to non-physical behavior when the frequency is zero.
@@ -1796,16 +1802,20 @@ type
       function GetReactionForce(inv_dt: Float): TVector2; override;
       function GetReactionTorque(inv_dt: Float): Float; override;
 
-      function GetJointTranslation: Float; /// Get the current joint translation, usually in meters.
+      /// Get the current joint translation, usually in meters.
+      function GetJointTranslation: Float;
+      /// Get the current joint translation speed, usually in meters per second.
+      function GetJointSpeed: Float;
+      /// Get the current motor force given the inverse time step, usually in N.
+      function GetMotorForce(inv_dt: Float): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+
 	    procedure EnableLimit(flag: Boolean); /// Enable/disable the joint limit.
 	    procedure EnableMotor(flag: Boolean); /// Enable/disable the joint motor.
-      function GetJointSpeed: Float; /// Get the current joint translation speed, usually in meters per second.
       procedure SetLimits(lower, upper: Float); /// Set the joint limits, usually in meters.
       procedure SetMotorSpeed(speed: Float); /// Set the motor speed, usually in meters per second.
 	    procedure SetMaxMotorForce(force: Float); /// Set the maximum motor force, usually in N.
 
       property GetMotorSpeed: Float read m_motorSpeed; // usually in meters per second.
-      property GetMotorForce: Float read m_motorImpulse; // usually in N.
       property IsLimitEnabled: Boolean read m_enableLimit;
       property GetLowerLimit: Float read m_lowerTranslation;
       property GetUpperLimit: Float read m_upperTranslation;
@@ -2001,13 +2011,18 @@ type
       function GetAnchorA: TVector2; override;
       function GetAnchorB: TVector2; override;
 
+      /// Get the reaction force given the inverse time step. Unit is N.
       function GetReactionForce(inv_dt: Float): TVector2; override;
-      function GetReactionTorque(inv_dt: Float): Float; override;
 
+      /// Get the reaction torque due to the joint limit given the inverse time step. Unit is N*m.
+      function GetReactionTorque(inv_dt: Float): Float; override;
       function GetJointAngle: Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
       /// Get the current joint angle speed in radians per second.
       function GetJointSpeed: Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+
+ 	    /// Get the current motor torque given the inverse time step. Unit is N*m.
+      function GetMotorTorque(inv_dt: Float): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 	    procedure EnableLimit(flag: Boolean); /// Enable/disable the joint limit.
 	    procedure SetLimits(lower, upper: Float); /// Set the joint limits in radians.
@@ -2021,7 +2036,6 @@ type
       property GetLowerLimit: Float read m_lowerAngle;
       property GetUpperLimit: Float read m_upperAngle;
       property GetMotorSpeed: Float read m_motorSpeed;
-      property GetMotorTorque: Float read m_motorImpulse;
       property GetMaxMotorTorque: Float read m_maxMotorTorque;
    end;
 
@@ -2203,6 +2217,9 @@ type
       /// Get the current joint translation speed, usually in meters per second.
       function GetJointSpeed: Float;
 
+      /// Get the current motor force given the inverse time step, usually in N.
+      function GetMotorForce(inv_dt: Float): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+
       procedure EnableLimit(flag: Boolean); /// Enable/disable the joint limit.
       procedure SetLimits(lower, upper: Float); /// Set the joint limits, usually in meters.
 
@@ -2216,7 +2233,6 @@ type
       property IsMotorEnabled: Boolean read m_enableMotor; /// Is the joint motor enabled?
       property GetMotorSpeed: Float read m_motorSpeed; /// Get the motor speed, usually in meters per second.
       property GetMaxMotorForce: Float read m_maxMotorForce;
-      property GetMotorForce: Float read m_motorImpulse; /// Get the current motor force, usually in N.
    end;
 
    /// Weld joint definition. You need to specify local anchor points
@@ -4985,6 +5001,8 @@ begin
       while Assigned(c) do
       begin
          // Invalidate TOI
+		     c.m_toiCount := 0;
+		     c.m_toi := 1.0;
          c.m_flags := c.m_flags and (not (e_contact_toiFlag or e_contact_islandFlag));
          c := c.m_next;
       end;
@@ -5006,6 +5024,13 @@ begin
          {$ELSE}
          if not IsEnabled(c^) then
          {$ENDIF}
+         begin
+            c := c.m_next;
+            Continue;
+         end;
+
+         // Prevent excessive sub-stepping.
+         if c.m_toiCount > b2_maxSubSteps then
          begin
             c := c.m_next;
             Continue;
@@ -5132,6 +5157,7 @@ begin
       Update(minContact^, m_contactManager.m_contactListener);
       {$ENDIF}
       minContact.m_flags := minContact.m_flags and (not e_contact_toiFlag);
+      Inc(minContact.m_toiCount);
 
       // Is the contact solid?
       {$IFDEF OP_OVERLOAD}
@@ -5658,6 +5684,7 @@ begin
          je := je^.next;
          m_destructionListener.SayGoodbye(je0^.joint);
          DestroyJoint(je0^.joint);
+         body.m_jointList := je;
       end;
    end
    else
@@ -5667,6 +5694,7 @@ begin
          je0 := je;
          je := je^.next;
          DestroyJoint(je0^.joint);
+         body.m_jointList := je;
       end;
    end;
    body.m_jointList := nil;
@@ -5704,6 +5732,8 @@ begin
 
       f0.DestroyProxies(m_contactManager.m_broadPhase);
       f0.Free;
+	   	body.m_fixtureList := f;
+	   	Dec(body.m_fixtureCount);
    end;
    body.m_fixtureList := nil;
    body.m_fixtureCount := 0;
@@ -8746,8 +8776,6 @@ begin
 end;
 
 destructor Tb2Fixture.Destroy;
-var
-   childCount: Int32;
 begin
    // The proxies must be destroyed before calling this.
 	 //b2Assert(m_proxyCount == 0);
@@ -9226,7 +9254,7 @@ end;
 
 procedure Tb2Body.DestroyFixture(fixture: Tb2Fixture; DoFree: Boolean = True);
 var
-   node: Tb2Fixture;
+   node: ^Tb2Fixture;
    found: Boolean;
    edge: Pb2ContactEdge;
    c: Pb2Contact;
@@ -9239,16 +9267,17 @@ begin
 
    // Remove the fixture from this body's singly linked list.
    //b2Assert(m_fixtureCount > 0);
-   node := m_fixtureList;
+   node := @m_fixtureList;
    found := False;
-   while Assigned(node) do
+   while Assigned(node^) do
    begin
-      if node = fixture then
+      if node^ = fixture then
       begin
+         node^ := fixture.m_next;
          found := True;
          Break;
       end;
-      node := node.m_next;
+      node := @(node^.m_next);
    end;
 
    // You tried to remove a shape that is not attached to this body.
@@ -9274,9 +9303,7 @@ begin
    begin
       //b2Assert(fixture->m_proxyId != b2BroadPhase::e_nullProxy);
       fixture.DestroyProxies(m_world.m_contactManager.m_broadPhase);
-   end
-   else
-      ;//b2Assert(fixture->m_proxyId == b2BroadPhase::e_nullProxy);
+   end;
 
    if DoFree then
       fixture.Destroy2; // Call a destructor without side effects.
@@ -9788,6 +9815,7 @@ var
    f: Tb2Fixture;
    ce, ce0: Pb2ContactEdge;
 begin
+   //b2Assert(m_world->IsLocked() == false);
    if flag = IsActive then
       Exit;
 
@@ -10255,6 +10283,7 @@ begin
 end;
 
 const
+   e_ep_unknown = 0;
    e_ep_edgeA = 1;
    e_ep_edgeB = 2;
 
@@ -10265,75 +10294,47 @@ type
       separation: Float;
    end;
 
-function b2EPEdgeSeparation(const v1, v2, n: TVector2; polygonB: Tb2PolygonShape; radius: Float): Tb2EPAxis;
-const
-	 k_relativeTol = 0.98;
-	 k_absoluteTol = 0.001;
-var
-   i: Integer;
-   s, s1, s2: Float;
-begin
-   // EdgeA separation
-   Result.AxisType := e_ep_edgeA;
-   Result.index := 0;
-   {$IFDEF OP_OVERLOAD}
-   Result.separation := b2Dot(n, polygonB.m_vertices[0] - v1);
-   {$ELSE}
-   Result.separation := b2Dot(n, Subtract(polygonB.m_vertices[0], v1));
-   {$ENDIF}
-   for i := 0 to polygonB.m_vertexCount - 1 do
-   begin
-      {$IFDEF OP_OVERLOAD}
-      s := b2Dot(n, polygonB.m_vertices[i] - v1);
-      {$ELSE}
-      s := b2Dot(n, Subtract(polygonB.m_vertices[i], v1));
-      {$ENDIF}
-      if s < Result.separation then
-         Result.separation := s;
+   Tb2FatEdge = record
+      v0, v1, v2, v3: TVector2;
+      normal: TVector2;
+      hasVertex0, hasVertex3: Boolean;
    end;
-end;
 
-function b2EPPolygonSeparation(const v1, v2, n: TVector2; polygonB: Tb2PolygonShape; radius: Float): Tb2EPAxis;
-var
-   i: Integer;
-   s, s1, s2: Float;
-begin
-   Result.AxisType := e_ep_edgeB;
-   Result.index := 0;
-   Result.separation := -FLT_MAX;
-   for i := 0 to polygonB.m_vertexCount - 1 do
-   begin
-      {$IFDEF OP_OVERLOAD}
-      s1 := b2Dot(polygonB.m_normals[i], v1 - polygonB.m_vertices[i]);
-      s2 := b2Dot(polygonB.m_normals[i], v2 - polygonB.m_vertices[i]);
-      {$ELSE}
-      s1 := b2Dot(polygonB.m_normals[i], Subtract(v1, polygonB.m_vertices[i]));
-      s2 := b2Dot(polygonB.m_normals[i], Subtract(v2, polygonB.m_vertices[i]));
-      {$ENDIF}
-      s := b2Min(s1, s2);
-      if s > Result.separation then
-      begin
-         Result.index := i;
-         Result.separation := s;
-
-         if s > radius then
-            Exit;
-      end;
-   end;
-end;
-
-type
    /// Used for computing contact manifolds.
-   PClipVertex = ^TClipVertex;
-   TClipVertex = record
+   Pb2ClipVertex = ^Tb2ClipVertex;
+   Tb2ClipVertex = record
       v: TVector2;
       id: Tb2ContactID;
    end;
 
-   PClipVertices = ^TClipVertices;
-   TClipVertices = array[0..1] of TClipVertex;
+   Pb2ClipVertices = ^Tb2ClipVertices;
+   Tb2ClipVertices = array[0..1] of Tb2ClipVertex;
 
-procedure b2FindIncidentEdge(var c: TClipVertices; poly1, poly2: Tb2PolygonShape;
+   // This class collides and edge and a polygon, taking into account edge adjacency.
+   Tb2EPCollider = class
+   public
+      m_edgeA: Tb2FatEdge;
+      m_polygonA: Tb2PolygonShape;
+      m_polygonB: Tb2PolygonShape;
+      m_xf: Tb2Transform;
+      m_normal0, m_normal2,
+      m_limit11, m_limit12,
+      m_limit21, m_limit22: TVector2;
+      m_radius: Float;
+
+      constructor Create;
+      destructor Destroy; override;
+      procedure Initialize(edgeA: Tb2EdgeShape; polygonB: Tb2PolygonShape;
+         const xfA, xfB: Tb2Transform);
+      procedure Collide(var manifold: Tb2Manifold);
+      procedure ComputeAdjacency();
+      function ComputeEdgeSeparation: Tb2EPAxis;
+      function ComputePolygonSeparation: Tb2EPAxis;
+ 	    procedure FindIncidentEdge(var c: Tb2ClipVertices; poly1, poly2: Tb2PolygonShape;
+         edge1: Int32);
+   end;
+
+procedure b2FindIncidentEdge(var c: Tb2ClipVertices; poly1, poly2: Tb2PolygonShape;
    edge1: Int32); overload;
 var
    i: Integer;
@@ -10386,7 +10387,7 @@ begin
 end;
 
 /// Clipping for contact manifolds.
-function b2ClipSegmentToLine(var vOut: TClipVertices; const vIn: TClipVertices;
+function b2ClipSegmentToLine(var vOut: Tb2ClipVertices; const vIn: Tb2ClipVertices;
    const normal: TVector2; offset: Float; vertexIndexA: Int32): Int32;
 var
    distance0, distance1, interp: Float;
@@ -10432,7 +10433,72 @@ begin
    end;
 end;
 
-// Collide and edge and polygon. This uses the SAT and clipping to produce up to 2 contact points.
+{ Tb2EPCollider }
+
+constructor Tb2EPCollider.Create;
+begin
+   m_polygonA := Tb2PolygonShape.Create;
+   m_polygonB := Tb2PolygonShape.Create;
+end;
+
+destructor Tb2EPCollider.Destroy;
+begin
+   m_polygonA.Free;
+   m_polygonB.Free;
+   inherited;
+end;
+
+procedure Tb2EPCollider.Initialize(edgeA: Tb2EdgeShape;
+   polygonB: Tb2PolygonShape; const xfA, xfB: Tb2Transform);
+var
+   i: Integer;
+   e: TVector2;
+begin
+   m_xf := b2MulT(xfA, xfB);
+
+   // Create a polygon for edge shape A
+   m_polygonA.SetAsEdge(edgeA.m_vertex1, edgeA.m_vertex2);
+
+   // Build polygonB in frame A
+   m_polygonB.m_radius := polygonB.m_radius;
+   m_polygonB.m_vertexCount := polygonB.m_vertexCount;
+   m_polygonB.m_centroid := b2Mul(m_xf, polygonB.m_centroid);
+   for i := 0 to m_polygonB.m_vertexCount - 1 do
+   begin
+      m_polygonB.m_vertices[i] := b2Mul(m_xf, polygonB.m_vertices[i]);
+      m_polygonB.m_normals[i] := b2Mul(m_xf.R, polygonB.m_normals[i]);
+   end;
+
+   m_radius := m_polygonA.m_radius + m_polygonB.m_radius;
+
+   // Edge geometry
+   m_edgeA.v0 := edgeA.m_vertex0;
+   m_edgeA.v1 := edgeA.m_vertex1;
+   m_edgeA.v2 := edgeA.m_vertex2;
+   m_edgeA.v3 := edgeA.m_vertex3;
+   {$IFDEF OP_OVERLOAD}
+   e := m_edgeA.v2 - m_edgeA.v1;
+   {$ELSE}
+   e := Subtract(m_edgeA.v2, m_edgeA.v1);
+   {$ENDIF}
+
+   // Normal points outwards in CCW order.
+   SetValue(m_edgeA.normal, e.y, -e.x);
+   {$IFDEF OP_OVERLOAD}
+   m_edgeA.normal.Normalize;
+   {$ELSE}
+   Normalize(m_edgeA.normal);
+   {$ENDIF}
+   m_edgeA.hasVertex0 := edgeA.m_hasVertex0;
+   m_edgeA.hasVertex3 := edgeA.m_hasVertex3;
+
+   m_limit11 := b2Vec2_Zero;
+   m_limit12 := b2Vec2_Zero;
+   m_limit21 := b2Vec2_Zero;
+   m_limit22 := b2Vec2_Zero;
+end;
+
+// Collide an edge and polygon. This uses the SAT and clipping to produce up to 2 contact points.
 // Edge adjacency is handle to produce locally valid contact points and normals. This is intended
 // to allow the polygon to slide smoothly over an edge chain.
 //
@@ -10447,296 +10513,499 @@ end;
 // 8. Use the minimum separation of up to three edges. If the minimum separation
 //    is not the primary edge, return.
 // 9. If the minimum separation is the primary edge, compute the contact points and return.
-var
-   static_polygonshape1, static_polygonshape2: Tb2PolygonShape;
-procedure b2CollideEdgeAndPolygon(contact: Pb2Contact; var manifold: Tb2Manifold;
-   A, B: TObject; const xfA, xfB: Tb2Transform; ABfixture: Boolean);
-const
-   k_relativeTol = 0.98;
-   k_absoluteTol = 0.001;
+procedure Tb2EPCollider.Collide(var manifold: Tb2Manifold);
+// Use hysteresis for jitter reduction.
+const k_relativeTol = 0.98;
+const k_absoluteTol = 0.001;
 var
    i: Integer;
-   xf: Tb2Transform;
-   edgeA: Tb2EdgeShape;
-   polygonB_in, poly1, poly2: Tb2PolygonShape;
-   v1, v2, e, edgeNormal, v0, v3, e0, n0, e2, n2: TVector2;
-   isFrontSide: Boolean;
-   edgeAxis, axis, polygonAxis, primaryAxis: Tb2EPAxis;
-   types: array[0..1] of Tb2EdgeType;
-   s, totalRadius, frontOffset, sideOffset1, sideOffset2: Float;
-   incidentEdge, clipPoints1, clipPoints2: TClipVertices;
-   clipVertex: PClipVertex;
-   iv1, iv2, pointCount: Int32;
-   tangent: TVector2 absolute e;
-   planePoint: TVector2 absolute v0;
+   edgeAxis, polygonAxis, primaryAxis: Tb2EPAxis;
+   poly1, poly2: Tb2PolygonShape;
+   incidentEdge, clipPoints1, clipPoints2: Tb2ClipVertices;
+   edge1, count1, iv1, iv2, np, pointCount: Int32;
+   vertices1: Pb2PolyVertices;
+   v11, v12, tangent, normal, planePoint: TVector2;
+   frontOffset, sideOffset1, sideOffset2, separation: Float;
+   clipV: Pb2ClipVertex;
 begin
-   if ABfixture then
-   begin
-      edgeA := Tb2EdgeShape(Tb2Fixture(A).m_shape);
-      polygonB_in := Tb2PolygonShape(Tb2Fixture(B).m_shape);
-   end
-   else
-   begin
-      edgeA := Tb2EdgeShape(A);
-      polygonB_in := Tb2PolygonShape(B);
-   end;
-
    manifold.pointCount := 0;
-   xf := b2MulT(xfA, xfB);
+   ComputeAdjacency;
+   edgeAxis := ComputeEdgeSeparation;
 
-	 // Create a polygon for edge shape A
-	 static_polygonshape1.SetAsEdge(edgeA.m_vertex1, edgeA.m_vertex2);
-
-   // Build static_polygonshape2 in frame A
-   static_polygonshape2.m_radius := polygonB_in.m_radius;
-   static_polygonshape2.m_vertexCount := polygonB_in.m_vertexCount;
-   static_polygonshape2.m_centroid := b2Mul(xf, polygonB_in.m_centroid);
-   for i := 0 to static_polygonshape2.m_vertexCount - 1 do
-   begin
-      static_polygonshape2.m_vertices[i] := b2Mul(xf, polygonB_in.m_vertices[i]);
-      static_polygonshape2.m_normals[i] := b2Mul(xf.R, polygonB_in.m_normals[i]);
-   end;
-
-   totalRadius := static_polygonshape1.m_radius + static_polygonshape2.m_radius;
-   // Edge geometry
-   v1 := edgeA.m_vertex1;
-   v2 := edgeA.m_vertex2;
-   {$IFDEF OP_OVERLOAD}
-   e := v2 - v1;
-   {$ELSE}
-   e := Subtract(v2, v1);
-   {$ENDIF}
-   edgeNormal.x := e.y;
-   edgeNormal.y := -e.x;
-   {$IFDEF OP_OVERLOAD}
-   edgeNormal.Normalize;
-   {$ELSE}
-   Normalize(edgeNormal);
-   {$ENDIF}
-
-   // Determine side
-   {$IFDEF OP_OVERLOAD}
-   isFrontSide := b2Dot(edgeNormal, static_polygonshape2.m_centroid - v1) >= 0.0;
-   {$ELSE}
-   isFrontSide := b2Dot(edgeNormal, Subtract(static_polygonshape2.m_centroid, v1)) >= 0.0;
-   {$ENDIF}
-   if not isFrontSide then
-   begin
-      // flip normal for backside collision
-      {$IFDEF OP_OVERLOAD}
-      edgeNormal := -edgeNormal;
-      {$ELSE}
-      edgeNormal := Negative(edgeNormal);
-      {$ENDIF}
-   end;
-
-   // Compute primary separating axis
-   edgeAxis := b2EPEdgeSeparation(v1, v2, edgeNormal, static_polygonshape2, totalRadius);
-   if edgeAxis.separation > totalRadius then
-   begin
-      // Shapes are separated
-      Exit;
-   end;
-
-   // Classify adjacent edges
-   types[0] := b2_isolated;
-   types[1] := b2_isolated;
-   if edgeA.m_hasVertex0 then
-   begin
-      v0 := edgeA.m_vertex0;
-      {$IFDEF OP_OVERLOAD}
-      s := b2Dot(edgeNormal, v0 - v1);
-      {$ELSE}
-      s := b2Dot(edgeNormal, Subtract(v0, v1));
-      {$ENDIF}
-      if s > 0.1 * b2_linearSlop then
-         types[0] := b2_concave
-      else if s >= -0.1 * b2_linearSlop then
-         types[0] := b2_flat
-      else
-         types[0] := b2_convex;
-   end;
-
-   if edgeA.m_hasVertex3 then
-   begin
-      v3 := edgeA.m_vertex3;
-      {$IFDEF OP_OVERLOAD}
-      s := b2Dot(edgeNormal, v3 - v2);
-      {$ELSE}
-      s := b2Dot(edgeNormal, Subtract(v3, v2));
-      {$ENDIF}
-      if s > 0.1 * b2_linearSlop then
-         types[1] := b2_concave
-      else if s >= -0.1 * b2_linearSlop then
-         types[1] := b2_flat
-      else
-         types[1] := b2_convex;
-   end;
-
-   if types[0] = b2_convex then
-   begin
-     // Check separation on previous edge.
-     v0 := edgeA.m_vertex0;
-     {$IFDEF OP_OVERLOAD}
-     e0 := v1 - v0;
-     {$ELSE}
-     e0 := Subtract(v1, v0);
-     {$ENDIF}
-     n0.x := e0.y;
-     n0.y := -e0.x;
-     {$IFDEF OP_OVERLOAD}
-     n0.Normalize;
-     if not isFrontSide then
-        n0 := -n0;
-     {$ELSE}
-     Normalize(n0);
-     if not isFrontSide then
-        n0 := Negative(n0);
-     {$ENDIF}
-
-     axis := b2EPEdgeSeparation(v0, v1, n0, static_polygonshape2, totalRadius);
-     if axis.separation > edgeAxis.separation then
-        Exit;
-   end;
-
-   if types[1] = b2_convex then
-   begin
-      // Check separation on next edge.
-      v3 := edgeA.m_vertex3;
-      {$IFDEF OP_OVERLOAD}
-      e2 := v3 - v2;
-      {$ELSE}
-      e2 := Subtract(v3, v2);
-      {$ENDIF}
-      n2.x := e2.y;
-      n2.y := -e2.x;
-      {$IFDEF OP_OVERLOAD}
-      n2.Normalize;
-      if not isFrontSide then
-         n2 := -n2;
-      {$ELSE}
-      Normalize(n2);
-      if not isFrontSide then
-         n2 := Negative(n2);
-      {$ENDIF}
-
-      axis := b2EPEdgeSeparation(v2, v3, n2, static_polygonshape2, totalRadius);
-      if axis.separation > edgeAxis.separation then
-         Exit; // The polygon should collide with the next edge
-   end;
-
-   polygonAxis := b2EPPolygonSeparation(v1, v2, edgeNormal, static_polygonshape2, totalRadius);
-   if polygonAxis.separation > totalRadius then
+   // If no valid normal can be found than this edge should not collide.
+   // This can happen on the middle edge of a 3-edge zig-zag chain.
+   if edgeAxis.AxisType = e_ep_unknown then
       Exit;
 
-   if polygonAxis.separation > k_relativeTol * edgeAxis.separation + k_absoluteTol then
+   if edgeAxis.separation > m_radius then
+      Exit;
+
+   polygonAxis := ComputePolygonSeparation;
+   if (polygonAxis.AxisType <> e_ep_unknown) and (polygonAxis.separation > m_radius) then
+      Exit;
+
+   if polygonAxis.AxisType = e_ep_unknown then
+      primaryAxis := edgeAxis
+   else if (polygonAxis.separation > k_relativeTol * edgeAxis.separation + k_absoluteTol) then
       primaryAxis := polygonAxis
    else
       primaryAxis := edgeAxis;
 
-   if edgeAxis.AxisType = e_ep_edgeA then
+   if primaryAxis.AxisType = e_ep_edgeA then
    begin
-      poly1 := static_polygonshape1;
-      poly2 := static_polygonshape2;
-      if not isFrontSide then
-         edgeAxis.index := 1;
+      poly1 := m_polygonA;
+      poly2 := m_polygonB;
       manifold.manifoldType := e_manifold_faceA;
    end
    else
    begin
-      poly1 := static_polygonshape2;
-      poly2 := static_polygonshape1;
+      poly1 := m_polygonB;
+      poly2 := m_polygonA;
       manifold.manifoldType := e_manifold_faceB;
    end;
 
-   b2FindIncidentEdge(incidentEdge, poly1, poly2, edgeAxis.index);
+   edge1 := primaryAxis.index;
+   FindIncidentEdge(incidentEdge, poly1, poly2, primaryAxis.index);
+   count1 := poly1.m_vertexCount;
+   vertices1 := @poly1.m_vertices;
 
-   iv1 := edgeAxis.index;
-   if edgeAxis.index + 1 < poly1.m_vertexCount then
-      iv2 := edgeAxis.index + 1
+   iv1 := edge1;
+   if edge1 + 1 < count1 then
+      iv2 := edge1 + 1
    else
       iv2 := 0;
 
-   v1 := poly1.m_vertices[iv1];
-   v2 := poly1.m_vertices[iv2];
+   v11 := vertices1^[iv1];
+   v12 := vertices1^[iv2];
 
    {$IFDEF OP_OVERLOAD}
-   tangent := v2 - v1;
+   tangent := v12 - v11;
    tangent.Normalize;
    {$ELSE}
-   tangent := Subtract(v2, v1);
+   tangent := Subtract(v12, v11);
    Normalize(tangent);
    {$ENDIF}
 
-   // edgeNormal works as normal variable in C++
-   edgeNormal := b2Cross(tangent, 1.0);
-   planePoint := b2MiddlePoint(v1, v2);
+   normal := b2Cross(tangent, 1.0);
+   planePoint := b2MiddlePoint(v11, v12);
 
    // Face offset.
-   frontOffset := b2Dot(edgeNormal, v1);
+   frontOffset := b2Dot(normal, v11);
 
    // Side offsets, extended by polytope skin thickness.
-   sideOffset1 := -b2Dot(tangent, v1) + totalRadius;
-   sideOffset2 := b2Dot(tangent, v2) + totalRadius;
+   sideOffset1 := -b2Dot(tangent, v11) + m_radius;
+   sideOffset2 := b2Dot(tangent, v12) + m_radius;
 
    // Clip incident edge against extruded edge1 side edges.
    // Clip to box side 1
    {$IFDEF OP_OVERLOAD}
-   if b2ClipSegmentToLine(clipPoints1, incidentEdge, -tangent, sideOffset1, iv1) < b2_maxManifoldPoints then
+   np := b2ClipSegmentToLine(clipPoints1, incidentEdge, -tangent, sideOffset1, iv1);
    {$ELSE}
-   if b2ClipSegmentToLine(clipPoints1, incidentEdge, Negative(tangent), sideOffset1, iv1) < b2_maxManifoldPoints then
+   np := b2ClipSegmentToLine(clipPoints1, incidentEdge, Negative(tangent), sideOffset1, iv1);
    {$ENDIF}
+
+   if np < b2_maxManifoldPoints then
       Exit;
 
    // Clip to negative box side 1
-   if b2ClipSegmentToLine(clipPoints2, clipPoints1,  tangent, sideOffset2, iv2) < b2_maxManifoldPoints then
+   np := b2ClipSegmentToLine(clipPoints2, clipPoints1, tangent, sideOffset2, iv2);
+
+   if np < b2_maxManifoldPoints then
       Exit;
 
    // Now clipPoints2 contains the clipped points.
-   if edgeAxis.AxisType = e_ep_edgeA then
+   if primaryAxis.AxisType = e_ep_edgeA then
    begin
-      manifold.localNormal := edgeNormal;
+      manifold.localNormal := normal;
       manifold.localPoint := planePoint;
    end
    else
    begin
-      manifold.localNormal := b2MulT(xf.R, edgeNormal);
-      manifold.localPoint := b2MulT(xf, planePoint);
+      manifold.localNormal := b2MulT(m_xf.R, normal);
+      manifold.localPoint := b2MulT(m_xf, planePoint);
    end;
 
    pointCount := 0;
    for i := 0 to b2_maxManifoldPoints - 1 do
    begin
-      clipVertex := @clipPoints2[i];
-      if b2Dot(edgeNormal, clipVertex^.v) - frontOffset <= totalRadius then
+      clipV := @clipPoints2[i];
+      separation := b2Dot(normal, clipV^.v) - frontOffset;
+
+      if separation <= m_radius then
          with manifold.points[pointCount] do
          begin
-            if edgeAxis.AxisType = e_ep_edgeA then
+            if primaryAxis.AxisType = e_ep_edgeA then
             begin
-               localPoint := b2MulT(xf, clipVertex^.v);
-               id := clipVertex^.id;
+               localPoint := b2MulT(m_xf, clipV^.v);
+               id := clipV^.id;
             end
             else
             begin
-               localPoint := clipVertex^.v;
-               with id.cf, clipVertex^.id do
-               begin
-                  typeA := cf.typeB; // cf is clipVertex^.id.cf
-                  typeB := cf.typeA;
-                  indexA := cf.indexB;
-                  indexB := cf.indexA;
-               end;
+               localPoint := clipV^.v;
+               id.cf.typeA := clipV^.id.cf.typeB;
+               id.cf.typeB := clipV^.id.cf.typeA;
+               id.cf.indexA := clipV^.id.cf.indexB;
+               id.cf.indexB := clipV^.id.cf.indexA;
             end;
-
-            if (id.cf.typeA = e_contact_feature_vertex) and (types[id.cf.indexA] = b2_flat) then
-               Continue;
-
             Inc(pointCount);
          end;
    end;
 
    manifold.pointCount := pointCount;
 end;
+
+// Compute allowable normal ranges based on adjacency.
+// A normal n is allowable iff:
+// cross(n, n1) >= 0.0f && cross(n2, n) >= 0.0f
+// n points from A to B (edge to polygon)
+procedure Tb2EPCollider.ComputeAdjacency;
+var
+   v0, v1, v2, v3, centerB, e0, e1, e2, n0, n1, n2: TVector2;
+   convex, front0, front1, front2: Boolean;
+begin
+   v0 := m_edgeA.v0;
+   v1 := m_edgeA.v1;
+   v2 := m_edgeA.v2;
+   v3 := m_edgeA.v3;
+
+   // Determine allowable the normal regions based on adjacency.
+   // Note: it may be possible that no normal is admissable.
+   centerB := m_polygonB.m_centroid;
+   if m_edgeA.hasVertex0 then
+   begin
+      {$IFDEF OP_OVERLOAD}
+      e0 := v1 - v0;
+      e1 := v2 - v1;
+      {$ELSE}
+      e0 := Subtract(v1, v0);
+      e1 := Subtract(v2, v1);
+      {$ENDIF}
+      n0.x := e0.y;
+      n0.y := -e0.x;
+      n1.x := e1.y;
+      n1.y := -e1.x;
+      {$IFDEF OP_OVERLOAD}
+      n0.Normalize;
+      n1.Normalize;
+      {$ELSE}
+      Normalize(n0);
+      Normalize(n1);
+      {$ENDIF}
+
+      convex := b2Cross(n0, n1) >= 0.0;
+      {$IFDEF OP_OVERLOAD}
+      front0 := b2Dot(n0, centerB - v0) >= 0.0;
+      front1 := b2Dot(n1, centerB - v1) >= 0.0;
+      {$ELSE}
+      front0 := b2Dot(n0, Subtract(centerB, v0)) >= 0.0;
+      front1 := b2Dot(n1, Subtract(centerB, v1)) >= 0.0;
+      {$ENDIF}
+
+      if convex then
+      begin
+         if front0 or front1 then
+         begin
+            m_limit11 := n1;
+            m_limit12 := n0;
+         end
+         else
+         begin
+            {$IFDEF OP_OVERLOAD}
+            m_limit11 := -n1;
+            m_limit12 := -n0;
+            {$ELSE}
+            m_limit11 := Negative(n1);
+            m_limit12 := Negative(n0);
+            {$ENDIF}
+         end;
+      end
+      else
+      begin
+         if front0 and front1 then
+         begin
+            m_limit11 := n0;
+            m_limit12 := n1;
+         end
+         else
+         begin
+            {$IFDEF OP_OVERLOAD}
+            m_limit11 := -n0;
+            m_limit12 := -n1;
+            {$ELSE}
+            m_limit11 := Negative(n0);
+            m_limit12 := Negative(n1);
+            {$ENDIF}
+         end;
+      end
+   end
+   else
+   begin
+      m_limit11 := b2Vec2_Zero;
+      m_limit12 := b2Vec2_Zero;
+   end;
+
+   if m_edgeA.hasVertex3 then
+   begin
+      {$IFDEF OP_OVERLOAD}
+      e1 := v2 - v1;
+      e2 := v3 - v2;
+      {$ELSE}
+      e1 := Subtract(v2, v1);
+      e2 := Subtract(v3, v2);
+      {$ENDIF}
+      n1.x := e1.y;
+      n1.y := -e1.x;
+      n2.x := e2.y;
+      n2.y := -e2.x;
+      {$IFDEF OP_OVERLOAD}
+      n1.Normalize;
+      n2.Normalize;
+      {$ELSE}
+      Normalize(n1);
+      Normalize(n2);
+      {$ENDIF}
+
+      convex := b2Cross(n1, n2) >= 0.0;
+      {$IFDEF OP_OVERLOAD}
+      front1 := b2Dot(n1, centerB - v1) >= 0.0;
+      front2 := b2Dot(n2, centerB - v2) >= 0.0;
+      {$ELSE}
+      front1 := b2Dot(n1, Subtract(centerB, v1)) >= 0.0;
+      front2 := b2Dot(n2, Subtract(centerB, v2)) >= 0.0;
+      {$ENDIF}
+
+      if convex then
+      begin
+         if front1 or front2 then
+         begin
+            m_limit21 := n2;
+            m_limit22 := n1;
+         end
+         else
+         begin
+            {$IFDEF OP_OVERLOAD}
+            m_limit21 := -n2;
+            m_limit22 := -n1;
+            {$ELSE}
+            m_limit21 := Negative(n2);
+            m_limit22 := Negative(n1);
+            {$ENDIF}
+         end;
+      end
+      else
+      begin
+         if front1 and front2 then
+         begin
+            m_limit21 := n1;
+            m_limit22 := n2;
+         end
+         else
+         begin
+            {$IFDEF OP_OVERLOAD}
+            m_limit21 := -n1;
+            m_limit22 := -n2;
+            {$ELSE}
+            m_limit21 := Negative(n1);
+            m_limit22 := Negative(n2);
+            {$ENDIF}
+         end;
+      end;
+   end
+   else
+   begin
+      m_limit21 := b2Vec2_Zero;
+      m_limit22 := b2Vec2_Zero;
+   end;
+end;
+
+function Tb2EPCollider.ComputeEdgeSeparation: Tb2EPAxis;
+var
+   i, j: Integer;
+   bestAxis, axis: Tb2EPAxis;
+   normals: array[0..1] of TVector2;
+   n: TVector2;
+   valid1, valid2: Boolean;
+   s: Float;
+begin
+   // EdgeA separation
+   bestAxis.AxisType := e_ep_unknown;
+   bestAxis.index := -1;
+   bestAxis.separation := -FLT_MAX;
+   normals[0] := m_edgeA.normal;
+   {$IFDEF OP_OVERLOAD}
+   normals[1] := -m_edgeA.normal;
+   {$ELSE}
+   normals[1] := Negative(m_edgeA.normal);
+   {$ENDIF}
+
+   for i := 0 to 1 do
+   begin
+      n := normals[i];
+
+      // Adjacency
+      valid1 := (b2Cross(n, m_limit11) >= -b2_angularSlop) and (b2Cross(m_limit12, n) >= -b2_angularSlop);
+      valid2 := (b2Cross(n, m_limit21) >= -b2_angularSlop) and (b2Cross(m_limit22, n) >= -b2_angularSlop);
+
+      if (not valid1) or (not valid2) then
+         Continue;
+
+      axis.AxisType := e_ep_edgeA;
+      axis.index := i;
+      axis.separation := FLT_MAX;
+
+      for j := 0 to m_polygonB.m_vertexCount - 1 do
+      begin
+         {$IFDEF OP_OVERLOAD}
+         s := b2Dot(n, m_polygonB.m_vertices[j] - m_edgeA.v1);
+         {$ELSE}
+         s := b2Dot(n, Subtract(m_polygonB.m_vertices[j], m_edgeA.v1));
+         {$ENDIF}
+         if s < axis.separation then
+            axis.separation := s;
+      end;
+
+      if axis.separation > m_radius then
+      begin
+         Result := axis;
+         Exit;
+      end;
+
+      if axis.separation > bestAxis.separation then
+         bestAxis := axis;
+   end;
+
+   Result := bestAxis;
+end;
+
+function Tb2EPCollider.ComputePolygonSeparation: Tb2EPAxis;
+var
+   i: Integer;
+   axis: Tb2EPAxis;
+   n: TVector2;
+   valid1, valid2: Boolean;
+   s1, s2, s: Float;
+begin
+   axis.AxisType := e_ep_unknown;
+   axis.index := -1;
+   axis.separation := -FLT_MAX;
+   for i := 0 to m_polygonB.m_vertexCount - 1 do
+   begin
+      {$IFDEF OP_OVERLOAD}
+      n := -m_polygonB.m_normals[i];
+      {$ELSE}
+      n := Negative(m_polygonB.m_normals[i]);
+      {$ENDIF}
+
+      // Adjacency
+      valid1 := (b2Cross(n, m_limit11) >= -b2_angularSlop) and (b2Cross(m_limit12, n) >= -b2_angularSlop);
+      valid2 := (b2Cross(n, m_limit21) >= -b2_angularSlop) and (b2Cross(m_limit22, n) >= -b2_angularSlop);
+
+      if (not valid1) and (not valid2) then
+         Continue;
+
+      {$IFDEF OP_OVERLOAD}
+      s1 := b2Dot(n, m_polygonB.m_vertices[i] - m_edgeA.v1);
+      s2 := b2Dot(n, m_polygonB.m_vertices[i] - m_edgeA.v2);
+      {$ELSE}
+      s1 := b2Dot(n, Subtract(m_polygonB.m_vertices[i], m_edgeA.v1));
+      s2 := b2Dot(n, Subtract(m_polygonB.m_vertices[i], m_edgeA.v2));
+      {$ENDIF}
+      s := b2Min(s1, s2);
+
+      if s > m_radius then
+      begin
+         axis.AxisType := e_ep_edgeB;
+         axis.index := i;
+         axis.separation := s;
+      end;
+
+      if s > axis.separation then
+      begin
+         axis.AxisType := e_ep_edgeB;
+         axis.index := i;
+         axis.separation := s;
+      end;
+   end;
+
+   Result := axis;
+end;
+
+procedure Tb2EPCollider.FindIncidentEdge(var c: Tb2ClipVertices; poly1,
+   poly2: Tb2PolygonShape; edge1: Int32);
+var
+   i: Integer;
+   index, i1, i2: Int32;
+   normal1: TVector2;
+   normals1, normals2, vertices2: Pb2PolyVertices;
+   minDot, dot: Float;
+begin
+   normals1 := @poly1.m_normals;
+
+   vertices2 := @poly2.m_vertices;
+   normals2 := @poly2.m_normals;
+
+   //b2Assert(0 <= edge1 && edge1 < count1);
+
+   // Get the normal of the reference edge in poly2's frame.
+   normal1 := normals1^[edge1];
+
+   // Find the incident edge on poly2.
+   index := 0;
+   minDot := FLT_MAX;
+   for i := 0 to poly2.m_vertexCount - 1 do
+   begin
+      dot := b2Dot(normal1, normals2[i]);
+      if dot < minDot then
+      begin
+         minDot := dot;
+         index := i;
+      end;
+   end;
+
+   // Build the clip vertices for the incident edge.
+   i1 := index;
+   if i1 + 1 < poly2.m_vertexCount then
+      i2 :=  i1 + 1
+   else
+      i2 := 0;
+
+   c[0].v := vertices2[i1];
+   c[0].id.cf.indexA := edge1;
+   c[0].id.cf.indexB := i1;
+   c[0].id.cf.typeA := e_contact_feature_face;
+   c[0].id.cf.typeB := e_contact_feature_vertex;
+
+   c[1].v := vertices2[i2];
+   c[1].id.cf.indexA := edge1;
+   c[1].id.cf.indexB := i2;
+   c[1].id.cf.typeA := e_contact_feature_face;
+   c[1].id.cf.typeB := e_contact_feature_vertex;
+end;
+
+var
+  ep_collieder: Tb2EPCollider;
+procedure b2CollideEdgeAndPolygon(contact: Pb2Contact; var manifold: Tb2Manifold;
+   A, B: TObject; const xfA, xfB: Tb2Transform; ABfixture: Boolean);
+var
+   edgeA: Tb2EdgeShape;
+   polygonB: Tb2PolygonShape;
+begin
+   if ABfixture then
+   begin
+      edgeA := Tb2EdgeShape(Tb2Fixture(A).m_shape);
+      polygonB := Tb2PolygonShape(Tb2Fixture(B).m_shape);
+   end
+   else
+   begin
+      edgeA := Tb2EdgeShape(A);
+      polygonB := Tb2PolygonShape(B);
+   end;
+
+   ep_collieder.Initialize(edgeA, polygonB, xfA, xfB);
+   ep_collieder.Collide(manifold);
+end;
+
+///////////////////////////////////////////////////////////////////
 
 var
    static_edgeshape: Tb2EdgeShape;
@@ -10921,7 +11190,7 @@ begin
    Result := bestSeparation;
 end;
 
-procedure b2FindIncidentEdge(var c: TClipVertices; poly1, poly2: Tb2PolygonShape;
+procedure b2FindIncidentEdge(var c: Tb2ClipVertices; poly1, poly2: Tb2PolygonShape;
    const xf1, xf2: Tb2Transform; edge1: Int32); overload;
 var
    i: Integer;
@@ -10991,7 +11260,7 @@ var
    poly1, poly2: Tb2PolygonShape; // reference poly and incident poly
    xf1, xf2: Tb2Transform;
    k_relativeTol, k_absoluteTol: Float;
-   incidentEdge, clipPoints1, clipPoints2: TClipVertices;
+   incidentEdge, clipPoints1, clipPoints2: Tb2ClipVertices;
    v11, v12, localTangent, localNormal, planePoint, tangent, normal: TVector2;
    frontOffset, sideOffset1, sideOffset2: Float;
    np: Int32; // Clip incident edge against extruded edge1 side edges.
@@ -12696,6 +12965,8 @@ begin
       k12 := i1 * m_s1 + i2 * m_s2;
       k13 := i1 * m_s1 * m_a1 + i2 * m_s2 * m_a2;
       k22 := i1 + i2;
+      if k22 = 0 then
+         k22 := 1.0;
       k23 := i1 * m_a1 + i2 * m_a2;
       k33 := m1 + m2 + i1 * m_a1 * m_a1 + i2 * m_a2 * m_a2;
 
@@ -13016,6 +13287,8 @@ begin
       k12 := i1 * m_s1 + i2 * m_s2;
       k13 := i1 * m_s1 * m_a1 + i2 * m_s2 * m_a2;
       k22 := i1 + i2;
+      if k22 = 0 then
+         k22 := 1.0;
       k23 := i1 * m_a1 + i2 * m_a2;
       k33 := m1 + m2 + i1 * m_a1 * m_a1 + i2 * m_a2 * m_a2;
 
@@ -13044,6 +13317,8 @@ begin
       k11 := m1 + m2 + i1 * m_s1 * m_s1 + i2 * m_s2 * m_s2;
       k12 := i1 * m_s1 + i2 * m_s2;
       k22 := i1 + i2;
+      if k22 = 0 then
+         k22 := 1.0;
 
       {$IFDEF OP_OVERLOAD}
       m_K.col1.SetValue(k11, k12, 0.0);
@@ -13146,6 +13421,11 @@ begin
       b2Dot(axis, Subtract(Add(m_bodyB.m_linearVelocity, b2Cross(m_bodyB.m_angularVelocity, r2)),
       Add(m_bodyA.m_linearVelocity, b2Cross(w1, r1))));
    {$ENDIF}
+end;
+
+function Tb2PrismaticJoint.GetMotorForce(inv_dt: Float): Float;
+begin
+   Result := inv_dt * m_motorImpulse;
 end;
 
 procedure Tb2PrismaticJoint.SetLimits(lower, upper: Float);
@@ -14401,6 +14681,11 @@ begin
 	 Result := m_bodyB.m_angularVelocity - m_bodyA.m_angularVelocity;
 end;
 
+function Tb2RevoluteJoint.GetMotorTorque(inv_dt: Float): Float;
+begin
+   Result := inv_dt * m_motorImpulse;
+end;
+
 procedure Tb2RevoluteJoint.EnableLimit(flag: Boolean);
 begin
 	 m_bodyA.SetAwake(True);
@@ -15127,6 +15412,11 @@ begin
    Result := b2Dot(Subtract(m_bodyB.GetWorldPoint(m_localAnchor2),
       m_bodyA.GetWorldPoint(m_localAnchor1)), m_bodyA.GetWorldVector(m_localXAxis1));
    {$ENDIF}
+end;
+
+function Tb2LineJoint.GetMotorForce(inv_dt: Float): Float;
+begin
+   Result := inv_dt * m_motorImpulse;
 end;
 
 procedure Tb2LineJoint.InitVelocityConstraints(const step: Tb2TimeStep);
@@ -16092,8 +16382,7 @@ initialization
    toi_separation_fcn := Tb2SeparationFunction.Create;
    island_solve_contact_solver := Tb2ContactSolver.Create;
    static_edgeshape := Tb2EdgeShape.Create;
-   static_polygonshape1 := Tb2PolygonShape.Create;
-   static_polygonshape2 := Tb2PolygonShape.Create;
+   ep_collieder := Tb2EPCollider.Create;
 
    {$IFDEF COMPUTE_PHYSICSTIME}
    QueryPerformanceFrequency(vCounterFrequency);
@@ -16113,8 +16402,7 @@ finalization
    toi_separation_fcn.Free;
    island_solve_contact_solver.Free;
    static_edgeshape.Free;
-   static_polygonshape1.Free;
-   static_polygonshape2.Free;
+   ep_collieder.Free;
 
 end.
 

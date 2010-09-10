@@ -106,7 +106,7 @@ begin
    inherited;
    DrawText('Keys: (L) limits, (M) motors, (P) prismatic speed');
    DrawText(Format('Motor Torque = %4.0f, %4.0f : Motor Force = %4.0f',
-      [m_joint1.GetMotorTorque, m_joint2.GetMotorTorque, m_joint3.GetMotorForce]));
+      [m_joint1.GetMotorTorque(DefaultStep), m_joint2.GetMotorTorque(DefaultStep), m_joint3.GetMotorForce(DefaultStep)]));
 end;
 
 procedure TMotorsAndLimits.Keyboard(key: Byte);
