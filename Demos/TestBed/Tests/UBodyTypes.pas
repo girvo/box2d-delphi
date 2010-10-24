@@ -26,6 +26,7 @@ var
    ground, body: Tb2Body;
    bd: Tb2BodyDef;
    shape: Tb2PolygonShape;
+   edge: Tb2EdgeShape;
    fd: Tb2FixtureDef;
    rjd: Tb2RevoluteJointDef;
    pjd: Tb2PrismaticJointDef;
@@ -35,11 +36,11 @@ begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
 
-      shape := Tb2PolygonShape.Create;
-      shape.SetAsEdge(MakeVector(-20.0, 0.0), MakeVector(20.0, 0.0));
+      edge := Tb2EdgeShape.Create;
+      edge.SetVertices(MakeVector(-20.0, 0.0), MakeVector(20.0, 0.0));
 
       fd := Tb2FixtureDef.Create;
-      fd.shape := shape;
+      fd.shape := edge;
 
       ground.CreateFixture(fd);
    end;

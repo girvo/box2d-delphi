@@ -24,6 +24,7 @@ var
    i: Integer;
    ground, prevBody, body: Tb2Body;
    bd: Tb2BodyDef;
+   eshape: Tb2EdgeShape;
    shape: Tb2PolygonShape;
    cshape: Tb2CircleShape;
    fd: Tb2FixtureDef;
@@ -36,9 +37,9 @@ begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
 
-      shape := Tb2PolygonShape.Create;
-      shape.SetAsEdge(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
-      ground.CreateFixture(shape, 0.0);
+      eshape := Tb2EdgeShape.Create;
+      eshape.SetVertices(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
+      ground.CreateFixture(eshape, 0.0);
    end;
 
    begin

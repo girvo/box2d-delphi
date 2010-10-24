@@ -26,7 +26,8 @@ constructor TBulletTest.Create;
 var
    bd: Tb2BodyDef;
    body: Tb2Body;
-   shape, box: Tb2PolygonShape;
+   box: Tb2PolygonShape;
+   edge: Tb2EdgeShape;
 begin
    inherited;
    begin
@@ -34,12 +35,13 @@ begin
       SetValue(bd.position, 0.0, 0.0);
       body := m_world.CreateBody(bd);
 
-      shape := Tb2PolygonShape.Create;
-      shape.SetAsEdge(MakeVector(-10.0, 0.0), MakeVector(10.0, 0.0));
-      body.CreateFixture(shape, 0.0, False);
+      edge := Tb2EdgeShape.Create;
+      edge.SetVertices(MakeVector(-10.0, 0.0), MakeVector(10.0, 0.0));
+      body.CreateFixture(edge, 0.0);
 
-      shape.SetAsBox(0.2, 1.0, MakeVector(0.5, 1.0), 0.0);
-      body.CreateFixture(shape, 0.0);
+      box := Tb2PolygonShape.Create;
+      box.SetAsBox(0.2, 1.0, MakeVector(0.5, 1.0), 0.0);
+      body.CreateFixture(box, 0.0);
    end;
 
    begin

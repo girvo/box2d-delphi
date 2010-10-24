@@ -31,6 +31,7 @@ const
    xs: array[0..4] of Float = (0.0, -10.0, -5.0, 5.0, 10.0);
 var
    i, j: Integer;
+   edge: Tb2EdgeShape;
    shape: Tb2PolygonShape;
    bd: Tb2BodyDef;
    ground: Tb2Body;
@@ -43,12 +44,12 @@ begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
 
-      shape := Tb2PolygonShape.Create;
-      shape.SetAsEdge(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
-      ground.CreateFixture(shape, 0.0, False);
+      edge := Tb2EdgeShape.Create;
+      edge.SetVertices(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
+      ground.CreateFixture(edge, 0.0, False);
 
-      shape.SetAsEdge(MakeVector(20.0, 0.0), MakeVector(20.0, 20.0));
-      ground.CreateFixture(shape, 0.0);
+      edge.SetVertices(MakeVector(20.0, 0.0), MakeVector(20.0, 20.0));
+      ground.CreateFixture(edge, 0.0);
    end;
 
    for j := 0 to e_columnCount - 1 do

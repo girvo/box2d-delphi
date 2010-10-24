@@ -47,7 +47,7 @@ constructor TRopeInWind.Create;
 var
    i: Integer;
    bd: Tb2BodyDef;
-   shape: Tb2PolygonShape;
+   shape: Tb2EdgeShape;
 begin
    inherited;
    ropebodies := TList.Create;
@@ -60,10 +60,10 @@ begin
 
    begin
       bd := Tb2BodyDef.Create;
-      shape := Tb2PolygonShape.Create;
+      shape := Tb2EdgeShape.Create;
       for i := 0 to 2 do
       begin
-         shape.SetAsEdge(MakeVector(Ropes[i][0].x, Ropes[i][0].y - 0.1),
+         shape.SetVertices(MakeVector(Ropes[i][0].x, Ropes[i][0].y - 0.1),
             MakeVector(Ropes[i][0].x, Ropes[i][0].y + 0.1));
          grounds[i] := m_world.CreateBody(bd, False);
          grounds[i].CreateFixture(shape, 0.0, False);

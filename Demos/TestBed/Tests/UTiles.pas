@@ -94,6 +94,8 @@ begin
    leafCount := cm.m_broadPhase.GetProxyCount;
    minimumNodeCount := 2 * leafCount - 1;
    minimumHeight := Ceil(Ln(minimumNodeCount) / Ln(2.0));
+   DrawText('Test of dynamic tree performance in worse case scenario.');
+   DrawText('I know this is slow. I hope to address this in a future update.');
    DrawText(Format('dynamic tree height := %d, min := %d', [height, Trunc(minimumHeight)]));
    inherited;
 end;

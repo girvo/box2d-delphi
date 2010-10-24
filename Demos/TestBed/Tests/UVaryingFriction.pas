@@ -21,17 +21,19 @@ const
    friction: array[0..4] of Single = (0.75, 0.5, 0.35, 0.1, 0.0);
 var
    i: Integer;
+   ed: Tb2EdgeShape;
    sd: Tb2PolygonShape;
    bd: Tb2BodyDef;
    body: Tb2Body;
    fd: Tb2FixtureDef;
 begin
    inherited;
-   sd := Tb2PolygonShape.Create;
-   sd.SetAsEdge(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
+   ed := Tb2EdgeShape.Create;
+   ed.SetVertices(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
    bd := Tb2BodyDef.Create;
-   m_world.CreateBody(bd).CreateFixture(sd, 0.0, False);
+   m_world.CreateBody(bd).CreateFixture(ed, 0.0);
 
+   sd := Tb2PolygonShape.Create;
    sd.SetAsBox(13.0, 0.25);
    bd := Tb2BodyDef.Create;
    SetValue(bd.position, -4.0, 22.0);

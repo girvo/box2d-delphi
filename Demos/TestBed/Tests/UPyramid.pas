@@ -30,6 +30,7 @@ const
    deltaY: TVector2 = (X: 1.125; Y: 0.0);
 var
    i, j: Integer;
+   ed: Tb2EdgeShape;
    sd: Tb2PolygonShape;
    bd: Tb2BodyDef;
    ground: Tb2Body;
@@ -42,9 +43,9 @@ begin
 			bd := Tb2BodyDef.Create;
 			ground := m_world.CreateBody(bd);
 
-			sd := Tb2PolygonShape.Create;
-			sd.SetAsEdge(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
-			ground.CreateFixture(sd, 0.0);
+			ed := Tb2EdgeShape.Create;
+			ed.SetVertices(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
+			ground.CreateFixture(ed, 0.0);
    end;
 
    begin

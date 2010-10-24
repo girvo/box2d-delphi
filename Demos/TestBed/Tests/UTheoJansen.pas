@@ -31,6 +31,7 @@ const
    pivot: TVector2 = (X: 0.0; Y: 0.8);
 var
    i: Integer;
+   edge: Tb2EdgeShape;
    shape: Tb2PolygonShape;
    cshape: Tb2CircleShape;
    bd: Tb2BodyDef;
@@ -49,15 +50,15 @@ begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
 
-      shape := Tb2PolygonShape.Create;
-      shape.SetAsEdge(MakeVector(-50.0, 0.0), MakeVector(50.0, 0.0));
-      ground.CreateFixture(shape, 0, False, False);
+      edge := Tb2EdgeShape.Create;
+      edge.SetVertices(MakeVector(-50.0, 0.0), MakeVector(50.0, 0.0));
+      ground.CreateFixture(edge, 0, False, False);
 
-      shape.SetAsEdge(MakeVector(-50.0, 0.0), MakeVector(-50.0, 10.0));
-      ground.CreateFixture(shape, 0, False, False);
+      edge.SetVertices(MakeVector(-50.0, 0.0), MakeVector(-50.0, 10.0));
+      ground.CreateFixture(edge, 0, False, False);
 
-      shape.SetAsEdge(MakeVector(50.0, 0.0), MakeVector(50.0, 10.0));
-      ground.CreateFixture(shape, 0.0);
+      edge.SetVertices(MakeVector(50.0, 0.0), MakeVector(50.0, 10.0));
+      ground.CreateFixture(edge, 0.0);
    end;
 
    // Balls

@@ -378,7 +378,7 @@ procedure BuildEdgeShapeCurve(pts: PPointF; cnt: Int32; bd: Tb2Body;
 var
    i: Integer;
    x1, y1, x2, y2: Single;
-   shape: Tb2PolygonShape;
+   shape: Tb2EdgeShape;
 begin
    if cnt <= 1 then
       Exit;
@@ -388,13 +388,13 @@ begin
 
    x1 := LastGeneratedPoints[0].x;
    y1 := LastGeneratedPoints[0].y;
-   shape := Tb2PolygonShape.Create;
+   shape := Tb2EdgeShape.Create;
    for i := 1 to LastGeneratedPointCount - 1 do
    begin
       x2 := LastGeneratedPoints[i].x;
       y2 := LastGeneratedPoints[i].y;
 
-      shape.SetAsEdge(MakeVector(x1, y1), MakeVector(x2, y2));
+      shape.SetVertices(MakeVector(x1, y1), MakeVector(x2, y2));
       bd.CreateFixture(shape, shape_density, False);
 
       x1 := x2;
@@ -414,12 +414,12 @@ var
    fd: Tb2FixtureDef;
    body, prevBody: Tb2Body;
    anchor: TVector2;
-   shape: Tb2PolygonShape;
+   shape: Tb2EdgeShape;
 
    procedure Sub(var x1, y1: Single; const x2, y2: Single);
    begin
       SetValue(bd.position, (x1 + x2) / 2, (y1 + y2) / 2);
-      shape.SetAsEdge(MakeVector((x1 - x2) / 2, (y1 - y2) / 2), MakeVector((x2 - x1) / 2, (y2 - y1) / 2));
+      shape.SetVertices(MakeVector((x1 - x2) / 2, (y1 - y2) / 2), MakeVector((x2 - x1) / 2, (y2 - y1) / 2));
 
       body := world.CreateBody(bd, False);
       body.CreateFixture(fd, False, False);
@@ -450,7 +450,7 @@ begin
    if LastGeneratedPointCount < 2 then
       Exit;
 
-   shape := Tb2PolygonShape.Create;
+   shape := Tb2EdgeShape.Create;
    shape.m_edgeShapeMassed := True;
    fd := Tb2FixtureDef.Create;
    fd.shape := shape;

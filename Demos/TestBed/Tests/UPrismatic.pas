@@ -24,6 +24,7 @@ constructor TPrismatic.Create;
 var
    bd: Tb2BodyDef;
    ground, body: Tb2Body;
+   edge: Tb2EdgeShape;
    shape: Tb2PolygonShape;
    pjd: Tb2PrismaticJointDef;
    axis: TVector2;
@@ -33,9 +34,9 @@ begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
 
-      shape := Tb2PolygonShape.Create;
-      shape.SetAsEdge(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
-      ground.CreateFixture(shape, 0.0);
+      edge := Tb2EdgeShape.Create;
+      edge.SetVertices(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
+      ground.CreateFixture(edge, 0.0);
    end;
 
    begin

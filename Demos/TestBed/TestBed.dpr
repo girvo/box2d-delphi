@@ -56,7 +56,8 @@ uses
   UTiles in 'Tests\UTiles.pas',
   UEdgeTest in 'Tests\UEdgeTest.pas',
   UBulletTest in 'Tests\UBulletTest.pas',
-  UPinBall in 'Tests\UPinBall.pas';
+  UPinBall in 'Tests\UPinBall.pas',
+  URevolute in 'Tests\URevolute.pas';
 
 {$R *.res}
 

@@ -20,6 +20,7 @@ implementation
 constructor TLineJoint.Create;
 var
    ground, body: Tb2Body;
+   edge: Tb2EdgeShape;
    shape: Tb2PolygonShape;
    bd: Tb2BodyDef;
    jd: Tb2LineJointDef;
@@ -27,12 +28,12 @@ var
 begin
    inherited;
    begin
-      shape := Tb2PolygonShape.Create;
-      shape.SetAsEdge(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
+      edge := Tb2EdgeShape.Create;
+      edge.SetVertices(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
 
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
-      ground.CreateFixture(shape, 0.0);
+      ground.CreateFixture(edge, 0.0);
    end;
 
    begin

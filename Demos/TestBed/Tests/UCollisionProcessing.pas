@@ -25,6 +25,7 @@ const
    yHi = 35;
 var
    ground, body1, body2, body3, body4, body5, body6: Tb2Body;
+   edge: Tb2EdgeShape;
    shape: Tb2PolygonShape;
    sd, triangleShapeDef, boxShapeDef, circleShapeDef: Tb2FixtureDef;
    bd, triangleBodyDef, boxBodyDef, circleBodyDef: Tb2BodyDef;
@@ -35,11 +36,11 @@ begin
    inherited;
    // Ground body
    begin
-      shape := Tb2PolygonShape.Create;
-      shape.SetAsEdge(MakeVector(-50.0, 0.0), MakeVector(50.0, 0.0));
+      edge := Tb2EdgeShape.Create;
+      edge.SetVertices(MakeVector(-50.0, 0.0), MakeVector(50.0, 0.0));
 
       sd := Tb2FixtureDef.Create;
-      sd.shape := shape;
+      sd.shape := edge;
 
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);

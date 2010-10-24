@@ -45,8 +45,7 @@ begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
 
-      loop := Tb2LoopShape.Create;
-      loop.SetVertices(@vs[0], 5);
+      loop := Tb2LoopShape.Create(@vs[0], 5);
 
       fd := Tb2FixtureDef.Create;
       fd.shape := loop;

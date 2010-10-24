@@ -29,7 +29,7 @@ var
    i, j: Integer;
    bd: Tb2BodyDef;
    ground: Tb2Body;
-   shape: Tb2PolygonShape;
+   shape: Tb2EdgeShape;
    cshape: Tb2CircleShape;
    fd: Tb2FixtureDef;
 begin
@@ -38,22 +38,22 @@ begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
 
-      shape := Tb2PolygonShape.Create;
+      shape := Tb2EdgeShape.Create;
 
       // Floor
-      shape.SetAsEdge(MakeVector(-10.0, 0.0), MakeVector(10.0, 0.0));
+      shape.SetVertices(MakeVector(-10.0, 0.0), MakeVector(10.0, 0.0));
       ground.CreateFixture(shape, 0.0, False, False);
 
       // Left wall
-      shape.SetAsEdge(MakeVector(-10.0, 0.0), MakeVector(-10.0, 20.0));
+      shape.SetVertices(MakeVector(-10.0, 0.0), MakeVector(-10.0, 20.0));
       ground.CreateFixture(shape, 0.0, False, False);
 
       // Right wall
-      shape.SetAsEdge(MakeVector(10.0, 0.0), MakeVector(10.0, 20.0));
+      shape.SetVertices(MakeVector(10.0, 0.0), MakeVector(10.0, 20.0));
       ground.CreateFixture(shape, 0.0, False, False);
 
       // Roof
-      shape.SetAsEdge(MakeVector(-10.0, 20.0), MakeVector(10.0, 20.0));
+      shape.SetVertices(MakeVector(-10.0, 20.0), MakeVector(10.0, 20.0));
       ground.CreateFixture(shape, 0.0);
    end;
 
