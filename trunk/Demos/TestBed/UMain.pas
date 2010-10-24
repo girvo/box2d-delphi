@@ -321,7 +321,7 @@ procedure TfrmMain.FormCreate(Sender: TObject);
 var
    i: Integer;
 begin
-   ReportMemoryLeaksOnShutdown := True;
+   //ReportMemoryLeaksOnShutdown := True;
    Randomize;
    DrawPanel := TDrawPanel.Create(Self);
    DrawPanel.Parent := Self;
