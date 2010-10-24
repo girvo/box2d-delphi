@@ -109,7 +109,7 @@ var
    i: Integer;
    bd: Tb2BodyDef;
    ground: Tb2Body;
-   shape: Tb2PolygonShape;
+   shape: Tb2EdgeShape;
    vertices: array[0..7] of TVector2;
    w, b, s: Float;
 begin
@@ -119,8 +119,8 @@ begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
 
-      shape := Tb2PolygonShape.Create;
-      shape.SetAsEdge(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
+      shape := Tb2EdgeShape.Create;
+      shape.SetVertices(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
       ground.CreateFixture(shape, 0.0);
    end;
 

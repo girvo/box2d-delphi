@@ -23,6 +23,7 @@ constructor TPulleys.Create;
 var
    ground: Tb2Body;
    bd: Tb2BodyDef;
+   edge: Tb2EdgeShape;
    shape: Tb2PolygonShape;
    body1, body2: Tb2Body;
    pulleyDef: Tb2PulleyJointDef;
@@ -33,9 +34,9 @@ begin
 			bd := Tb2BodyDef.Create;
 			ground := m_world.CreateBody(bd);
 
-			shape := Tb2PolygonShape.Create;
-			shape.SetAsEdge(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
-			ground.CreateFixture(shape, 0.0);
+			edge := Tb2EdgeShape.Create;
+			edge.SetVertices(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
+			ground.CreateFixture(edge, 0.0);
    end;
 
    begin

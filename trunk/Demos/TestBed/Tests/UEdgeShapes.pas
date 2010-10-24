@@ -38,7 +38,7 @@ var
    bd: Tb2BodyDef;
    ground: Tb2Body;
    x1, y1, x2, y2, w, b, s: Float;
-   shape: Tb2PolygonShape;
+   shape: Tb2EdgeShape;
    vertices: array[0..7] of TVector2;
 begin
    inherited;
@@ -54,8 +54,8 @@ begin
          x2 := x1 + 0.5;
          y2 := 2.0 * Cos(x2 / 10.0 * Pi);
 
-         shape := Tb2PolygonShape.Create;
-         shape.SetAsEdge(MakeVector(x1, y1), MakeVector(x2, y2));
+         shape := Tb2EdgeShape.Create;
+         shape.SetVertices(MakeVector(x1, y1), MakeVector(x2, y2));
          ground.CreateFixture(shape, 0.0);
 
          x1 := x2;

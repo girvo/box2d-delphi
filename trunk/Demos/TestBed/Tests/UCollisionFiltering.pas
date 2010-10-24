@@ -37,6 +37,7 @@ const
 
 constructor TCollisionFiltering.Create;
 var
+   edge: Tb2EdgeShape;
    shape, polygon, p: Tb2PolygonShape;
    sd, boxShapeDef, circleShapeDef: Tb2FixtureDef;
    bd, triangleBodyDef, boxBodyDef, circleBodyDef: Tb2BodyDef;
@@ -49,11 +50,11 @@ begin
    inherited;
    // Ground body
    begin
-      shape := Tb2PolygonShape.Create;
-      shape.SetAsEdge(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
+      edge := Tb2EdgeShape.Create;
+      edge.SetVertices(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
 
       sd := Tb2FixtureDef.Create;
-      sd.shape := shape;
+      sd.shape := edge;
       sd.friction := 0.3;
 
       bd := Tb2BodyDef.Create;

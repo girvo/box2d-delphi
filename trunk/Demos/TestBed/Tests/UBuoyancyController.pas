@@ -36,7 +36,7 @@ var
    i: Integer;
    bd: Tb2BodyDef;
    ground: Tb2Body;
-   shape: Tb2PolygonShape;
+   shape: Tb2EdgeShape;
    vertices: Tb2PolyVertices;
    w, b, s: Float;
 begin
@@ -50,27 +50,27 @@ begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
 
-      shape := Tb2PolygonShape.Create;
+      shape := Tb2EdgeShape.Create;
 
       // Floor
-      shape.SetAsEdge(MakeVector(-20.0, -10.0), MakeVector(20.0, -10.0));
+      shape.SetVertices(MakeVector(-20.0, -10.0), MakeVector(20.0, -10.0));
       ground.CreateFixture(shape, 0.0, False, False);
 
       // Left wall
-      shape.SetAsEdge(MakeVector(-20.0, -10.0), MakeVector(-20.0, 15.0));
+      shape.SetVertices(MakeVector(-20.0, -10.0), MakeVector(-20.0, 15.0));
       ground.CreateFixture(shape, 0.0, False, False);
 
       // Right wall
-      shape.SetAsEdge(MakeVector(20.0, -10.0), MakeVector(20.0, 15.0));
+      shape.SetVertices(MakeVector(20.0, -10.0), MakeVector(20.0, 15.0));
       ground.CreateFixture(shape, 0.0, False, False);
 
       // Roof
-      shape.SetAsEdge(MakeVector(-20.0, 15.0), MakeVector(20.0, 15.0));
+      shape.SetVertices(MakeVector(-20.0, 15.0), MakeVector(20.0, 15.0));
       ground.CreateFixture(shape, 0.0);
    end;
 
-   shape := Tb2PolygonShape.Create;
-   shape.SetAsEdge(MakeVector(16, 8), MakeVector(-3, -4));
+   shape := Tb2EdgeShape.Create;
+   shape.SetVertices(MakeVector(16, 8), MakeVector(-3, -4));
    bd := Tb2BodyDef.Create;
    bd.bodyType := b2_staticBody;
    m_world.CreateBody(bd).CreateFixture(shape, 0.0);

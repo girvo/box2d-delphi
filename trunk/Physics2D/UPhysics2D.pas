@@ -1586,14 +1586,16 @@ type
       function GetVertex(index: Int32): TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
    end;
 
-   /// A convex polygon.
+   /// A convex polygon. It is assumed that the interior of the polygon is to
+   /// the left of each edge.
+   /// Polygons have a maximum number of vertices equal to b2_maxPolygonVertices.
+   /// In most cases you should not need many vertices for a convex polygon.
    Tb2PolygonShape = class(Tb2Shape)
    public
       m_centroid: TVector2; // Local position of the polygon centroid.
       m_vertices: Tb2PolyVertices;
       m_normals: Tb2PolyVertices;
       m_vertexCount: Int32;
-      m_edgeShapeMassed: Boolean; // If true density is linear density and mass will not be zero.
 
       constructor Create;
 
@@ -1609,6 +1611,7 @@ type
 
       /// Copy vertices. This assumes the vertices define a convex polygon.
       /// It is assumed that the exterior is the the right of each edge.
+      /// The count must be in the range [3, b2_maxPolygonVertices].
       procedure SetVertices(vertices: PVector2; count: Int32);
 
       /// Build vertices to represent an axis-aligned box.
@@ -1623,14 +1626,6 @@ type
       /// @param angle the rotation of the box in local coordinates.
       procedure SetAsBox(hx, hy: Float; const center: TVector2; angle: Float); overload;
 
-      /// Set this as a single edge.
-      procedure SetAsEdge(const v1, v2: TVector2);
-
-      /// Get the supporting vertex index in the given direction.
-      //function GetSupport(const d: TVector2): Int32;
-	    /// Get the supporting vertex in the given direction.
-    	//function GetSupportVertex(const d: TVector2): PVector2;
-
       property GetVertexCount: Int32 read m_vertexCount;
    end;
 
@@ -1640,9 +1635,11 @@ type
    Tb2EdgeShape = class(Tb2Shape)
    public
       m_vertex1, m_vertex2: TVector2; /// These are the edge vertices
+      m_normal1, m_normal2: TVector2;
 	    /// Optional adjacent vertices. These are used for smooth collision.
     	m_vertex0, m_vertex3: TVector2;
 	    m_hasVertex0, m_hasVertex3: Boolean;
+      m_edgeShapeMassed: Boolean; // If true density is linear density and mass will not be zero.
 
       constructor Create;
 
@@ -1662,12 +1659,13 @@ type
    /// The loop may cross upon itself, but this is not recommended for smooth collision.
    /// The loop has double sided collision, so you can use inside and outside collision.
    /// Therefore, you may use any winding order.
+   /// Since there may be many vertices, they are allocated using b2Alloc.
    Tb2LoopShape = class(Tb2Shape)
    public
       m_vertices: TVectorArray;
       m_count: Int32;
 
-      constructor Create;
+      constructor Create(pv: PVector2; count: Int32);
 
       procedure SetVertices(pv: PVector2; count: Int32);
       procedure GetChildEdge(edge: Tb2EdgeShape; index: Int32);
@@ -2905,14 +2903,9 @@ var
    pRef, p1, p2, p3, e1, e2: TVector2;
    area, triangleArea: Float;
 begin
-   //b2Assert(count >= 2);
+   //b2Assert(count >= 3);
 
    area := 0.0;
-   if count = 2 then
-   begin
-      Result := b2MiddlePoint(vs[0], vs[1]);
-      Exit;
-   end;
 
    // pRef is the reference point for forming triangles.
    // It's location doesn't change the result (except for rounding error).
@@ -10300,6 +10293,15 @@ type
       hasVertex0, hasVertex3: Boolean;
    end;
 
+   // This lets us treate and edge shape and a polygon in the same way in the SAT collider.
+   Pb2EPProxy = ^Tb2EPProxy;
+   Tb2EPProxy = record
+      vertices: Tb2PolyVertices;
+      normals: Tb2PolyVertices;
+      centroid: TVector2;
+      count: Int32;
+   end;
+
    /// Used for computing contact manifolds.
    Pb2ClipVertex = ^Tb2ClipVertex;
    Tb2ClipVertex = record
@@ -10314,23 +10316,20 @@ type
    Tb2EPCollider = class
    public
       m_edgeA: Tb2FatEdge;
-      m_polygonA: Tb2PolygonShape;
-      m_polygonB: Tb2PolygonShape;
+      m_proxyA, m_proxyB: Tb2EPProxy;
       m_xf: Tb2Transform;
       m_normal0, m_normal2,
       m_limit11, m_limit12,
       m_limit21, m_limit22: TVector2;
       m_radius: Float;
 
-      constructor Create;
-      destructor Destroy; override;
       procedure Initialize(edgeA: Tb2EdgeShape; polygonB: Tb2PolygonShape;
          const xfA, xfB: Tb2Transform);
       procedure Collide(var manifold: Tb2Manifold);
       procedure ComputeAdjacency();
       function ComputeEdgeSeparation: Tb2EPAxis;
       function ComputePolygonSeparation: Tb2EPAxis;
- 	    procedure FindIncidentEdge(var c: Tb2ClipVertices; poly1, poly2: Tb2PolygonShape;
+ 	    procedure FindIncidentEdge(var c: Tb2ClipVertices; proxy1, proxy2: Pb2EPProxy;
          edge1: Int32);
    end;
 
@@ -10435,19 +10434,6 @@ end;
 
 { Tb2EPCollider }
 
-constructor Tb2EPCollider.Create;
-begin
-   m_polygonA := Tb2PolygonShape.Create;
-   m_polygonB := Tb2PolygonShape.Create;
-end;
-
-destructor Tb2EPCollider.Destroy;
-begin
-   m_polygonA.Free;
-   m_polygonB.Free;
-   inherited;
-end;
-
 procedure Tb2EPCollider.Initialize(edgeA: Tb2EdgeShape;
    polygonB: Tb2PolygonShape; const xfA, xfB: Tb2Transform);
 var
@@ -10455,21 +10441,6 @@ var
    e: TVector2;
 begin
    m_xf := b2MulT(xfA, xfB);
-
-   // Create a polygon for edge shape A
-   m_polygonA.SetAsEdge(edgeA.m_vertex1, edgeA.m_vertex2);
-
-   // Build polygonB in frame A
-   m_polygonB.m_radius := polygonB.m_radius;
-   m_polygonB.m_vertexCount := polygonB.m_vertexCount;
-   m_polygonB.m_centroid := b2Mul(m_xf, polygonB.m_centroid);
-   for i := 0 to m_polygonB.m_vertexCount - 1 do
-   begin
-      m_polygonB.m_vertices[i] := b2Mul(m_xf, polygonB.m_vertices[i]);
-      m_polygonB.m_normals[i] := b2Mul(m_xf.R, polygonB.m_normals[i]);
-   end;
-
-   m_radius := m_polygonA.m_radius + m_polygonB.m_radius;
 
    // Edge geometry
    m_edgeA.v0 := edgeA.m_vertex0;
@@ -10491,6 +10462,29 @@ begin
    {$ENDIF}
    m_edgeA.hasVertex0 := edgeA.m_hasVertex0;
    m_edgeA.hasVertex3 := edgeA.m_hasVertex3;
+
+   // Proxy for edge
+   m_proxyA.vertices[0] := m_edgeA.v1;
+   m_proxyA.vertices[1] := m_edgeA.v2;
+   m_proxyA.normals[0] := m_edgeA.normal;
+   {$IFDEF OP_OVERLOAD}
+   m_proxyA.normals[1] := -m_edgeA.normal;
+   {$ELSE}
+   m_proxyA.normals[1] := Negative(m_edgeA.normal);
+   {$ENDIF}
+   m_proxyA.centroid := b2MiddlePoint(m_edgeA.v1, m_edgeA.v2);
+   m_proxyA.count := 2;
+
+   // Proxy for polygon
+   m_proxyB.count := polygonB.m_vertexCount;
+   m_proxyB.centroid := b2Mul(m_xf, polygonB.m_centroid);
+   for i := 0 to polygonB.m_vertexCount - 1 do
+   begin
+      m_proxyB.vertices[i] := b2Mul(m_xf, polygonB.m_vertices[i]);
+      m_proxyB.normals[i] := b2Mul(m_xf.R, polygonB.m_normals[i]);
+   end;
+
+   m_radius := 2.0 * b2_polygonRadius;
 
    m_limit11 := b2Vec2_Zero;
    m_limit12 := b2Vec2_Zero;
@@ -10520,7 +10514,7 @@ const k_absoluteTol = 0.001;
 var
    i: Integer;
    edgeAxis, polygonAxis, primaryAxis: Tb2EPAxis;
-   poly1, poly2: Tb2PolygonShape;
+   proxy1, proxy2: Pb2EPProxy;
    incidentEdge, clipPoints1, clipPoints2: Tb2ClipVertices;
    edge1, count1, iv1, iv2, np, pointCount: Int32;
    vertices1: Pb2PolyVertices;
@@ -10553,21 +10547,21 @@ begin
 
    if primaryAxis.AxisType = e_ep_edgeA then
    begin
-      poly1 := m_polygonA;
-      poly2 := m_polygonB;
+		  proxy1 := @m_proxyA;
+		  proxy2 := @m_proxyB;
       manifold.manifoldType := e_manifold_faceA;
    end
    else
    begin
-      poly1 := m_polygonB;
-      poly2 := m_polygonA;
+		  proxy1 := @m_proxyB;
+		  proxy2 := @m_proxyA;
       manifold.manifoldType := e_manifold_faceB;
    end;
 
    edge1 := primaryAxis.index;
-   FindIncidentEdge(incidentEdge, poly1, poly2, primaryAxis.index);
-   count1 := poly1.m_vertexCount;
-   vertices1 := @poly1.m_vertices;
+   FindIncidentEdge(incidentEdge, proxy1, proxy2, primaryAxis.index);
+   count1 := proxy1^.count;
+   vertices1 := @proxy1^.vertices;
 
    iv1 := edge1;
    if edge1 + 1 < count1 then
@@ -10670,7 +10664,7 @@ begin
 
    // Determine allowable the normal regions based on adjacency.
    // Note: it may be possible that no normal is admissable.
-   centerB := m_polygonB.m_centroid;
+   centerB := m_proxyB.centroid;
    if m_edgeA.hasVertex0 then
    begin
       {$IFDEF OP_OVERLOAD}
@@ -10853,12 +10847,12 @@ begin
       axis.index := i;
       axis.separation := FLT_MAX;
 
-      for j := 0 to m_polygonB.m_vertexCount - 1 do
+      for j := 0 to m_proxyB.count - 1 do
       begin
          {$IFDEF OP_OVERLOAD}
-         s := b2Dot(n, m_polygonB.m_vertices[j] - m_edgeA.v1);
+         s := b2Dot(n, m_proxyB.vertices[j] - m_edgeA.v1);
          {$ELSE}
-         s := b2Dot(n, Subtract(m_polygonB.m_vertices[j], m_edgeA.v1));
+         s := b2Dot(n, Subtract(m_proxyB.vertices[j], m_edgeA.v1));
          {$ENDIF}
          if s < axis.separation then
             axis.separation := s;
@@ -10888,12 +10882,12 @@ begin
    axis.AxisType := e_ep_unknown;
    axis.index := -1;
    axis.separation := -FLT_MAX;
-   for i := 0 to m_polygonB.m_vertexCount - 1 do
+   for i := 0 to m_proxyB.count - 1 do
    begin
       {$IFDEF OP_OVERLOAD}
-      n := -m_polygonB.m_normals[i];
+      n := -m_proxyB.normals[i];
       {$ELSE}
-      n := Negative(m_polygonB.m_normals[i]);
+      n := Negative(m_proxyB.normals[i]);
       {$ENDIF}
 
       // Adjacency
@@ -10904,11 +10898,11 @@ begin
          Continue;
 
       {$IFDEF OP_OVERLOAD}
-      s1 := b2Dot(n, m_polygonB.m_vertices[i] - m_edgeA.v1);
-      s2 := b2Dot(n, m_polygonB.m_vertices[i] - m_edgeA.v2);
+      s1 := b2Dot(n, m_proxyB.vertices[i] - m_edgeA.v1);
+      s2 := b2Dot(n, m_proxyB.vertices[i] - m_edgeA.v2);
       {$ELSE}
-      s1 := b2Dot(n, Subtract(m_polygonB.m_vertices[i], m_edgeA.v1));
-      s2 := b2Dot(n, Subtract(m_polygonB.m_vertices[i], m_edgeA.v2));
+      s1 := b2Dot(n, Subtract(m_proxyB.vertices[i], m_edgeA.v1));
+      s2 := b2Dot(n, Subtract(m_proxyB.vertices[i], m_edgeA.v2));
       {$ENDIF}
       s := b2Min(s1, s2);
 
@@ -10930,8 +10924,8 @@ begin
    Result := axis;
 end;
 
-procedure Tb2EPCollider.FindIncidentEdge(var c: Tb2ClipVertices; poly1,
-   poly2: Tb2PolygonShape; edge1: Int32);
+procedure Tb2EPCollider.FindIncidentEdge(var c: Tb2ClipVertices;
+   proxy1, proxy2: Pb2EPProxy; edge1: Int32);
 var
    i: Integer;
    index, i1, i2: Int32;
@@ -10939,20 +10933,20 @@ var
    normals1, normals2, vertices2: Pb2PolyVertices;
    minDot, dot: Float;
 begin
-   normals1 := @poly1.m_normals;
+   normals1 := @proxy1^.normals;
 
-   vertices2 := @poly2.m_vertices;
-   normals2 := @poly2.m_normals;
+   vertices2 := @proxy2^.vertices;
+   normals2 := @proxy2^.normals;
 
    //b2Assert(0 <= edge1 && edge1 < count1);
 
-   // Get the normal of the reference edge in poly2's frame.
+   // Get the normal of the reference edge in proxy2's frame.
    normal1 := normals1^[edge1];
 
-   // Find the incident edge on poly2.
+   // Find the incident edge on proxy2.
    index := 0;
    minDot := FLT_MAX;
-   for i := 0 to poly2.m_vertexCount - 1 do
+   for i := 0 to proxy2^.count - 1 do
    begin
       dot := b2Dot(normal1, normals2[i]);
       if dot < minDot then
@@ -10964,7 +10958,7 @@ begin
 
    // Build the clip vertices for the incident edge.
    i1 := index;
-   if i1 + 1 < poly2.m_vertexCount then
+   if i1 + 1 < proxy2^.count then
       i2 :=  i1 + 1
    else
       i2 := 0;
@@ -11578,7 +11572,6 @@ begin
    m_radius := b2_polygonRadius;
    m_vertexCount := 0;
    m_centroid := b2Vec2_Zero;
-   m_edgeShapeMassed := False;
 end;
 
 function Tb2PolygonShape.Clone: Tb2Shape;
@@ -11593,7 +11586,6 @@ begin
       m_vertices := Self.m_vertices;
       m_normals := Self.m_normals;
       m_vertexCount := Self.m_vertexCount;
-      m_edgeShapeMassed := Self.m_edgeShapeMassed;
    end;
 end;
 
@@ -11648,79 +11640,6 @@ begin
    d := Subtract(p2, p1);
    {$ENDIF}
 
-   if m_vertexCount = 2 then
-   begin
-      //v1 := m_vertices[0];
-      //v2 := m_vertices[1];
-      //b2Vec2 normal := m_normals[0];
-
-      // q := p1 + t * d
-      // dot(normal, q - v1) := 0
-      // dot(normal, p1 - v1) + t * dot(normal, d) := 0
-      {$IFDEF OP_OVERLOAD}
-      numerator := b2Dot(m_normals[0], m_vertices[0] - p1);
-      {$ELSE}
-      numerator := b2Dot(m_normals[0], Subtract(m_vertices[0], p1));
-      {$ENDIF}
-      denominator := b2Dot(m_normals[0], d);
-
-      if denominator = 0.0 then
-      begin
-         Result := False;
-         Exit;
-      end;
-
-      t := numerator / denominator;
-      if (t < 0.0) or (1.0 < t) then
-      begin
-         Result := False;
-         Exit;
-      end;
-
-      {$IFDEF OP_OVERLOAD}
-      q := p1 + t * d;
-      {$ELSE}
-      q := Add(p1, Multiply(d, t));
-      {$ENDIF}
-
-      // q := v1 + s * r
-      // s := dot(q - v1, r) / dot(r, r)
-      {$IFDEF OP_OVERLOAD}
-      r := m_vertices[1] - m_vertices[0];
-      {$ELSE}
-      r := Subtract(m_vertices[1], m_vertices[0]);
-      {$ENDIF}
-      rr := b2Dot(r, r);
-      if rr = 0.0 then
-      begin
-         Result := False;
-         Exit;
-      end;
-
-      {$IFDEF OP_OVERLOAD}
-      s := b2Dot(q - m_vertices[0], r) / rr;
-      {$ELSE}
-      s := b2Dot(Subtract(q, m_vertices[0]), r) / rr;
-      {$ENDIF}
-      if (s < 0.0) or (1.0 < s) then
-      begin
-         Result := False;
-         Exit;
-      end;
-
-      output.fraction := t;
-      if numerator > 0.0 then
-         {$IFDEF OP_OVERLOAD}
-         output.normal := -m_normals[0]
-         {$ELSE}
-         output.normal := Negative(m_normals[0])
-         {$ENDIF}
-      else
-         output.normal := m_normals[0];
-      Result := True;
-      Exit;
-   end
-   else
    begin
       lower := 0.0;
       upper := input.maxFraction;
@@ -11856,28 +11775,6 @@ begin
    // The rest of the derivation is handled by computer algebra.
 
    //b2Assert(m_vertexCount >= 3);
-
-   // A line segment has zero mass.
-   if m_vertexCount = 2 then
-   begin
-      massData.center := b2MiddlePoint(m_vertices[0], m_vertices[1]);
-      if m_edgeShapeMassed then
-      begin
-         {$IFDEF OP_OVERLOAD}
-         area := (m_vertices[0] - m_vertices[1]).Length;
-         {$ELSE}
-         area := LengthVec(Subtract(m_vertices[0], m_vertices[1]));
-         {$ENDIF}
-         massData.mass := density * area;
-         massData.I := massData.mass * Sqr(area) / 12;
-      end
-      else
-      begin
-         massData.mass := 0.0;
-         massData.I := 0.0;
-      end;
-      Exit;
-   end;
 
    center := b2Vec2_Zero;
    area := 0.0;
@@ -12067,7 +11964,7 @@ var
    edge: TVector2;
    pv: PVector2;
 begin
-   //b2Assert(2 <= count && count <= b2_maxPolygonVertices);
+   //b2Assert(3 <= count && count <= b2_maxPolygonVertices);
    m_vertexCount := count;
 
    // Copy vertices.
@@ -12142,61 +12039,6 @@ begin
    end;
 end;
 
-procedure Tb2PolygonShape.SetAsEdge(const v1, v2: TVector2);
-begin
-   m_vertexCount := 2;
-   m_vertices[0] := v1;
-   m_vertices[1] := v2;
-   m_centroid := b2MiddlePoint(v1, v2);
-   {$IFDEF OP_OVERLOAD}
-   m_normals[0] := b2Cross(v2 - v1, 1.0);
-   m_normals[0].Normalize;
-   m_normals[1] := -m_normals[0];
-   {$ELSE}
-   m_normals[0] := b2Cross(Subtract(v2, v1), 1.0);
-   Normalize(m_normals[0]);
-   m_normals[1] := Negative(m_normals[0]);
-   {$ENDIF}
-end;
-
-{function Tb2PolygonShape.GetSupport(const d: TVector2): Int32;
-var
-   i: Integer;
-   bestValue, value: Float;
-begin
-   Result := 0;
-   bestValue := b2Dot(m_vertices[0], d);
-   for i := 1 to m_vertexCount - 1 do
-   begin
-      value := b2Dot(m_vertices[i], d);
-      if value > bestValue then
-      begin
-         Result := i;
-         bestValue := value;
-      end;
-   end;
-end;
-
-function Tb2PolygonShape.GetSupportVertex(const d: TVector2): PVector2;
-var
-   i: Integer;
-   bestIndex: Int32;
-   bestValue, value: Float;
-begin
-   bestIndex := 0;
-   bestValue := b2Dot(m_vertices[0], d);
-   for i := 1 to m_vertexCount - 1 do
-   begin
-      value := b2Dot(m_vertices[i], d);
-      if value > bestValue then
-      begin
-         bestIndex := i;
-         bestValue := value;
-      end;
-   end;
-   Result := @m_vertices[bestIndex];
-end;}
-
 { Tb2EdgeShape }
 
 constructor Tb2EdgeShape.Create;
@@ -12205,6 +12047,7 @@ begin
    m_radius := b2_polygonRadius;
 	 m_hasVertex0 := False;
    m_hasVertex3 := False;
+   m_edgeShapeMassed := False;
 end;
 
 procedure Tb2EdgeShape.SetVertices(const v1, v2: TVector2);
@@ -12213,6 +12056,16 @@ begin
    m_vertex2 := v2;
    m_hasVertex0 := False;
    m_hasVertex3 := False;
+
+   {$IFDEF OP_OVERLOAD}
+   m_normal1 := b2Cross(v2 - v1, 1.0);
+   m_normal1.Normalize;
+   m_normal2 := -m_normal1;
+   {$ELSE}
+   m_normal1 := b2Cross(Subtract(v2, v1), 1.0);
+   Normalize(m_normal1);
+   m_normal2 := Negative(m_normal1);
+   {$ENDIF}
 end;
 
 function Tb2EdgeShape.Clone: Tb2Shape;
@@ -12225,8 +12078,11 @@ begin
    begin
       m_vertex1 := Self.m_vertex1;
       m_vertex2 := Self.m_vertex2;
+      m_normal1 := Self.m_normal1;
+      m_normal2 := Self.m_normal2;
       m_hasVertex0 := Self.m_hasVertex0;
       m_hasVertex3 := Self.m_hasVertex3;
+      m_edgeShapeMassed := Self.m_edgeShapeMassed;
    end;
 end;
 
@@ -12363,11 +12219,26 @@ begin
 end;
 
 procedure Tb2EdgeShape.ComputeMass(var massData: Tb2MassData; density: Float);
+var
+   area: Float;
 begin
-   //B2_NOT_USED(density);
-   massData.mass := 0.0;
    massData.center := b2MiddlePoint(m_vertex1, m_vertex2);
-   massData.I := 0.0;
+
+   if m_edgeShapeMassed then
+   begin
+      {$IFDEF OP_OVERLOAD}
+      area := (m_vertex1 - m_vertex2).Length;
+      {$ELSE}
+      area := LengthVec(Subtract(m_vertex1, m_vertex2));
+      {$ENDIF}
+      massData.mass := density * area;
+      massData.I := massData.mass * Sqr(area) / 12;
+   end
+   else
+   begin
+      massData.mass := 0.0;
+      massData.I := 0.0;
+   end;
 end;
 
 function Tb2EdgeShape.ComputeSubmergedArea(const normal: TVector2;
@@ -12378,12 +12249,11 @@ end;
 
 { Tb2LoopShape }
 
-constructor Tb2LoopShape.Create;
+constructor Tb2LoopShape.Create(pv: PVector2; count: Int32);
 begin
    m_type := e_loopShape;
    m_radius := b2_polygonRadius;
-   m_vertices := nil;
-   m_count := 0;
+   SetVertices(pv, count);
 end;
 
 procedure Tb2LoopShape.SetVertices(pv: PVector2; count: Int32);
@@ -12431,16 +12301,9 @@ end;
 
 function Tb2LoopShape.Clone: Tb2Shape;
 begin
-   Result := Tb2LoopShape.Create;
+   Result := Tb2LoopShape.Create(@Self.m_vertices[0], Self.m_count);
    Result.m_type := m_type;
    Result.m_radius := m_radius;
-
-   with Tb2LoopShape(Result) do
-   begin
-      m_count := Self.m_count;
-      SetLength(m_vertices, m_count);
-      Move(Self.m_vertices[0], m_vertices[0], SizeOf(TVector2) * m_count);
-   end;
 end;
 
 function Tb2LoopShape.GetChildCount: Int32;

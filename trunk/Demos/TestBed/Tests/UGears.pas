@@ -25,7 +25,8 @@ constructor TGears.Create;
 var
    ground, body1, body2, body3: Tb2Body;
    bd, bd1, bd2, bd3: Tb2BodyDef;
-   shape, box: Tb2PolygonShape;
+   edge: Tb2EdgeShape;
+   box: Tb2PolygonShape;
    circle1, circle2: Tb2CircleShape;
    jd1, jd2: Tb2RevoluteJointDef;
    jd3: Tb2PrismaticJointDef;
@@ -36,9 +37,9 @@ begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
 
-      shape := Tb2PolygonShape.Create;
-      shape.SetAsEdge(MakeVector(50.0, 0.0), MakeVector(-50.0, 0.0));
-      ground.CreateFixture(shape, 0.0);
+      edge := Tb2EdgeShape.Create;
+      edge.SetVertices(MakeVector(50.0, 0.0), MakeVector(-50.0, 0.0));
+      ground.CreateFixture(edge, 0.0);
    end;
 
    begin

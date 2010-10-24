@@ -26,6 +26,7 @@ var
    i: Integer;
    bd: Tb2BodyDef;
    ground, body: Tb2Body;
+   edge: Tb2EdgeShape;
    shape: Tb2PolygonShape;
    lshape: Tb2LoopShape;
    fd: Tb2FixtureDef;
@@ -40,9 +41,9 @@ begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
 
-      shape := Tb2PolygonShape.Create;
-      shape.SetAsEdge(MakeVector(-20.0, 0.0), MakeVector(20.0, 0.0));
-      ground.CreateFixture(shape, 0.0);
+      edge := Tb2EdgeShape.Create;
+      edge.SetVertices(MakeVector(-20.0, 0.0), MakeVector(20.0, 0.0));
+      ground.CreateFixture(edge, 0.0);
    end;
 
    // Collinear edges
@@ -50,16 +51,17 @@ begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
 
-      shape := Tb2PolygonShape.Create;
-      shape.SetAsEdge(MakeVector(-8.0, 1.0), MakeVector(-6.0, 1.0));
-      ground.CreateFixture(shape, 0.0, False, False);
-      shape.SetAsEdge(MakeVector(-6.0, 1.0), MakeVector(-4.0, 1.0));
-      ground.CreateFixture(shape, 0.0, False, False);
-      shape.SetAsEdge(MakeVector(-4.0, 1.0), MakeVector(-2.0, 1.0));
-      ground.CreateFixture(shape, 0.0);
+      edge := Tb2EdgeShape.Create;
+      edge.SetVertices(MakeVector(-8.0, 1.0), MakeVector(-6.0, 1.0));
+      ground.CreateFixture(edge, 0.0, False, False);
+      edge.SetVertices(MakeVector(-6.0, 1.0), MakeVector(-4.0, 1.0));
+      ground.CreateFixture(edge, 0.0, False, False);
+      edge.SetVertices(MakeVector(-4.0, 1.0), MakeVector(-2.0, 1.0));
+      ground.CreateFixture(edge, 0.0);
    end;
 
-   // Square tiles
+   // Square tiles. This shows that adjacency shapes may
+   // have non-smooth collision. There is no solution to this problem.
    begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
@@ -73,7 +75,7 @@ begin
       ground.CreateFixture(shape, 0.0);
    end;
 
-   // Square made from an edge loop.
+   // Square made from an edge loop. Collision should be smooth.
    begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
@@ -82,12 +84,11 @@ begin
 			SetValue(vertices[1], 1.0, 3.0);
 			SetValue(vertices[2], 1.0, 5.0);
 			SetValue(vertices[3], -1.0, 5.0);
-			lshape := Tb2LoopShape.Create;
-      lshape.SetVertices(@vertices[0], 4);
+			lshape := Tb2LoopShape.Create(@vertices[0], 4);
 			ground.CreateFixture(lshape, 0.0);
    end;
 
-   // Edge loop
+   // Edge loop. Collision should be smooth.
    begin
 			bd := Tb2BodyDef.Create;
 			SetValue(bd.position, -10.0, 4.0);
@@ -103,8 +104,7 @@ begin
 			SetValue(vs[7], -4.0, 3.0);
 			SetValue(vs[8], -6.0, 2.0);
 			SetValue(vs[9], -6.0, 0.0);
-			lshape := Tb2LoopShape.Create;
-      lshape.SetVertices(@vs[0], 10);
+			lshape := Tb2LoopShape.Create(@vs[0], 10);
 			ground.CreateFixture(lshape, 0.0);
    end;
 

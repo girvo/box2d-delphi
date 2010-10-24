@@ -28,7 +28,7 @@ constructor TPolyCollision.Create;
 begin
    inherited;
    m_polygonA := Tb2PolygonShape.Create;
-   m_polygonA.SetAsEdge(MakeVector(20.0, 0.0), MakeVector(20.0, 20.0));
+   m_polygonA.SetAsBox(0.2, 0.4);
    {$IFDEF OP_OVERLOAD}
    m_transformA.SetValue(MakeVector(0.0, 0.0), 0.0);
    {$ELSE}

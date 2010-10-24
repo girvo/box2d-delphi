@@ -31,7 +31,7 @@ constructor TSensorTest.Create;
 var
    i: Integer;
    bd: Tb2BodyDef;
-   shape: Tb2PolygonShape;
+   shape: Tb2EdgeShape;
    fd: Tb2FixtureDef;
    cshape: Tb2CircleShape;
    ground: Tb2Body;
@@ -40,8 +40,8 @@ begin
    bd := Tb2BodyDef.Create;
    ground := m_world.CreateBody(bd);
 
-   shape := Tb2PolygonShape.Create;
-   shape.SetAsEdge(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
+   shape := Tb2EdgeShape.Create;
+   shape.SetVertices(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
    ground.CreateFixture(shape, 0.0);
 
    cshape := Tb2CircleShape.Create;

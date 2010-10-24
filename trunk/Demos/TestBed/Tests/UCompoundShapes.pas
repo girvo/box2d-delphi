@@ -21,6 +21,7 @@ var
    i: Integer;
    bd: Tb2BodyDef;
    body: Tb2Body;
+   edge: Tb2EdgeShape;
    shape, polygon1, polygon2, triangle1, triangle2, bottom, left, right: Tb2PolygonShape;
    circle1, circle2: Tb2CircleShape;
    xf1, xf2: Tb2Transform;
@@ -32,9 +33,9 @@ begin
       SetValue(bd.position, 0.0, 0.0);
       body := m_world.CreateBody(bd);
 
-      shape := Tb2PolygonShape.Create;
-      shape.SetAsEdge(MakeVector(50.0, 0.0), MakeVector(-50.0, 0.0));
-      body.CreateFixture(shape, 0.0);
+      edge := Tb2EdgeShape.Create;
+      edge.SetVertices(MakeVector(50.0, 0.0), MakeVector(-50.0, 0.0));
+      body.CreateFixture(edge, 0.0);
    end;
 
    begin

@@ -139,6 +139,8 @@ type
    private
       function ComputePolygonShapeEffectiveForce(const windforce: TVector2;
          shape: Tb2PolygonShape; const xf: Tb2Transform): TVector2;
+      function ComputeEdgeShapeEffectiveForce(const windforce: TVector2;
+         shape: Tb2EdgeShape; const xf: Tb2Transform): TVector2;
    public
       Callback: Tb2WindForceCallback;
       procedure Step(const step: Tb2TimeStep); override;
@@ -528,10 +530,18 @@ begin
             else if shape.GetType = e_polygonShape then
                {$IFDEF OP_OVERLOAD}
                appliedforce.AddBy(ComputePolygonShapeEffectiveForce(windforce,
-                  Tb2PolygonShape(shape.GetShape), GetTransform^));
+                  Tb2PolygonShape(shape.GetShape), GetTransform^))
                {$ELSE}
                AddBy(appliedforce, ComputePolygonShapeEffectiveForce(windforce,
-                  Tb2PolygonShape(shape.GetShape), GetTransform^));
+                  Tb2PolygonShape(shape.GetShape), GetTransform^))
+               {$ENDIF}
+            else if shape.GetType = e_edgeShape then
+               {$IFDEF OP_OVERLOAD}
+               appliedforce.AddBy(ComputeEdgeShapeEffectiveForce(windforce,
+                  Tb2EdgeShape(shape.GetShape), GetTransform^));
+               {$ELSE}
+               AddBy(appliedforce, ComputeEdgeShapeEffectiveForce(windforce,
+                  Tb2EdgeShape(shape.GetShape), GetTransform^));
                {$ENDIF}
             shape := shape.GetNext;
          end;
@@ -541,31 +551,34 @@ begin
       end;
 end;
 
+procedure _ComputeSegmentEffectiveForce(const first, second: TVector2;
+   normal: TVector2; const xf: Tb2Transform; const windforce: TVector2;
+   var accumulated: TVector2);
+var
+   edge: TVector2;
+begin
+   normal := b2Mul(xf.R, normal); // to world coordinate
+   {$IFDEF OP_OVERLOAD}
+   edge := b2Mul(xf.R, second - first);
+   {$ELSE}
+   edge := b2Mul(xf.R, Subtract(second, first));
+   {$ENDIF}
+   if b2Dot(windforce, normal) < 0 then // this edge faces the wind
+   begin
+      if windforce.x > 0 then
+         accumulated.x := accumulated.x + Abs(windforce.x * edge.y)
+      else
+         accumulated.x := accumulated.x - Abs(windforce.x * edge.y);
+
+      if windforce.y > 0 then
+         accumulated.y := accumulated.y + Abs(windforce.y * edge.x)
+      else
+         accumulated.y := accumulated.y - Abs(windforce.y * edge.x);
+   end;
+end;
+
 function Tb2WindController.ComputePolygonShapeEffectiveForce(const windforce: TVector2;
    shape: Tb2PolygonShape; const xf: Tb2Transform): TVector2;
-   procedure Sub(const first, second: TVector2; normal: TVector2);
-   var
-      edge: TVector2;
-   begin
-      normal := b2Mul(xf.R, normal); // to world coordinate
-      {$IFDEF OP_OVERLOAD}
-      edge := b2Mul(xf.R, second - first);
-      {$ELSE}
-      edge := b2Mul(xf.R, Subtract(second, first));
-      {$ENDIF}
-      if b2Dot(windforce, normal) < 0 then // this edge faces the wind
-      begin
-         if windforce.x > 0 then
-            Result.x := Result.x + Abs(windforce.x * edge.y)
-         else
-            Result.x := Result.x - Abs(windforce.x * edge.y);
-
-         if windforce.y > 0 then
-            Result.y := Result.y + Abs(windforce.y * edge.x)
-         else
-            Result.y := Result.y - Abs(windforce.y * edge.x);
-      end;
-   end;
 var
    i: Integer;
 begin
@@ -575,8 +588,25 @@ begin
       if m_vertexCount < 2 then
          Exit;
       for i := 1 to m_vertexCount - 1 do
-         Sub(m_vertices[i - 1], m_vertices[i], m_normals[i - 1]);
-      Sub(m_vertices[m_vertexCount - 1], m_vertices[0], m_normals[m_vertexCount - 1]);
+         _ComputeSegmentEffectiveForce(m_vertices[i - 1], m_vertices[i],
+            m_normals[i - 1], xf, windforce, Result);
+
+      _ComputeSegmentEffectiveForce(m_vertices[m_vertexCount - 1],
+         m_vertices[0], m_normals[m_vertexCount - 1], xf, windforce, Result);
+   end;
+end;
+
+function Tb2WindController.ComputeEdgeShapeEffectiveForce(const windforce: TVector2;
+   shape: Tb2EdgeShape; const xf: Tb2Transform): TVector2;
+begin
+   Result := b2Vec2_Zero;
+   with shape do
+   begin
+      _ComputeSegmentEffectiveForce(m_vertex1, m_vertex2, m_normal1,
+         xf, windforce, Result);
+
+      _ComputeSegmentEffectiveForce(m_vertex2, m_vertex1, m_normal2,
+         xf, windforce, Result);
    end;
 end;
 

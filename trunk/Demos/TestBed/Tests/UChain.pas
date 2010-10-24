@@ -23,6 +23,7 @@ var
    i: Integer;
    ground, prevBody, body: Tb2Body;
    bd: Tb2BodyDef;
+   edge: Tb2EdgeShape;
    shape: Tb2PolygonShape;
    fd: Tb2FixtureDef;
    jd: Tb2RevoluteJointDef;
@@ -33,16 +34,14 @@ begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
 
-      shape := Tb2PolygonShape.Create;
-      shape.SetAsEdge(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
-      ground.CreateFixture(shape, 0.0);
+      edge := Tb2EdgeShape.Create;
+      edge.SetVertices(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
+      ground.CreateFixture(edge, 0.0);
    end;
 
    begin
       shape := Tb2PolygonShape.Create;
       shape.SetAsBox(0.6, 0.125);
-      //shape.SetAsEdge(MakeVector(-0.6, 0), MakeVector(0.6, 0));
-      shape.m_edgeShapeMassed := True;
 
       fd := Tb2FixtureDef.Create;
       fd.shape := shape;

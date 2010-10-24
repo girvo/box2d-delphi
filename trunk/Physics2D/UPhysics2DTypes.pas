@@ -308,7 +308,11 @@ const
    UINT16_MAX = $FFFF;
 
    b2_maxManifoldPoints = 2;
+
+   /// The maximum number of vertices on a convex polygon. You cannot increase
+   /// this too much because b2BlockAllocator has a maximum object size.
    b2_maxPolygonVertices = 8;
+
    b2_maxProxies = 512; // this must be a power of two
    b2_maxPairs = 8 * b2_maxProxies;	// this must be a power of two
 

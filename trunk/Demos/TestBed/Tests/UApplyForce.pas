@@ -28,7 +28,9 @@ var
    i: Integer;
    ground, body: Tb2Body;
    bd: Tb2BodyDef;
-   shape, poly1, poly2: Tb2PolygonShape;
+   edge: Tb2EdgeShape;
+   shape: Tb2PolygonShape;
+   poly1, poly2: Tb2PolygonShape;
    sd, sd1, sd2, fd: Tb2FixtureDef;
    xf1, xf2: Tb2Transform;
    vertices: array[0..2] of TVector2;
@@ -44,27 +46,27 @@ begin
       SetValue(bd.position, 0.0, 20.0);
       ground := m_world.CreateBody(bd);
 
-      shape := Tb2PolygonShape.Create;
+      edge := Tb2EdgeShape.Create;
       sd := Tb2FixtureDef.Create;
 
-      sd.shape := shape;
+      sd.shape := edge;
       sd.density := 0.0;
       sd.restitution := k_restitution;
 
       // Left vertical
-      shape.SetAsEdge(MakeVector(-20.0, -20.0), MakeVector(-20.0, 20.0));
+      edge.SetVertices(MakeVector(-20.0, -20.0), MakeVector(-20.0, 20.0));
       ground.CreateFixture(sd, False, False, False); // do not free sd, do not free shape, do not update mass
 
       // Right vertical
-      shape.SetAsEdge(MakeVector(20.0, -20.0), MakeVector(20.0, 20.0));
+      edge.SetVertices(MakeVector(20.0, -20.0), MakeVector(20.0, 20.0));
       ground.CreateFixture(sd, False, False, False);
 
       // Top horizontal
-      shape.SetAsEdge(MakeVector(-20.0, 20.0), MakeVector(20.0, 20.0));
+      edge.SetVertices(MakeVector(-20.0, 20.0), MakeVector(20.0, 20.0));
       ground.CreateFixture(sd, False, False, False);
 
       // Bottom horizontal
-      shape.SetAsEdge(MakeVector(-20.0, -20.0), MakeVector(20.0, -20.0));
+      edge.SetVertices(MakeVector(-20.0, -20.0), MakeVector(20.0, -20.0));
       ground.CreateFixture(sd); // free sd and shape
    end;
 

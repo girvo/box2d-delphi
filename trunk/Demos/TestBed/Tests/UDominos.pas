@@ -22,6 +22,7 @@ const
 var
    i: Integer;
    ground, body, b1, b2, b3, b4, b5, b6, b7: Tb2Body;
+   edge: Tb2EdgeShape;
    shape: Tb2PolygonShape;
    bd: Tb2BodyDef;
    fd: Tb2FixtureDef;
@@ -32,12 +33,12 @@ var
 begin
    inherited;
    begin
-      shape := Tb2PolygonShape.Create;
-      shape.SetAsEdge(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
+      edge := Tb2EdgeShape.Create;
+      edge.SetVertices(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
 
       bd := Tb2BodyDef.Create;
       b1 := m_world.CreateBody(bd);
-      b1.CreateFixture(shape, 0.0);
+      b1.CreateFixture(edge, 0.0);
    end;
 
    begin

@@ -26,6 +26,7 @@ constructor TContinuousTest.Create;
 var
    bd: Tb2BodyDef;
    body: Tb2Body;
+   edge: Tb2EdgeShape;
    shape: Tb2PolygonShape;
 begin
    inherited;
@@ -34,11 +35,11 @@ begin
       SetValue(bd.position, 0.0, 0.0);
       body := m_world.CreateBody(bd);
 
+      edge := Tb2EdgeShape.Create;
+      edge.SetVertices(MakeVector(-10.0, 0.0), MakeVector(10.0, 0.0));
+      body.CreateFixture(edge, 0, True, False);
+
       shape := Tb2PolygonShape.Create;
-
-      shape.SetAsEdge(MakeVector(-10.0, 0.0), MakeVector(10.0, 0.0));
-      body.CreateFixture(shape, 0, False, False);
-
       shape.SetAsBox(0.2, 1.0, MakeVector(0.5, 1.0), 0.0);
       body.CreateFixture(shape, 0.0);
    end;
