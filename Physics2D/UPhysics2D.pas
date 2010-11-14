@@ -1102,9 +1102,9 @@ type
 
    //////////////////////////////////////////////////////////////
    // Joints    
-   Tb2JointType = (e_unknownJoint, e_revoluteJoint, e_prismaticJoint, 
+   Tb2JointType = (e_unknownJoint, e_revoluteJoint, e_prismaticJoint,
       e_distanceJoint, e_pulleyJoint, e_mouseJoint, e_gearJoint, e_lineJoint,
-      e_weldJoint, e_frictionJoint, e_fixedJoint);
+      e_weldJoint, e_frictionJoint, e_fixedJoint, e_ropeJoint);
    Tb2LimitState = (e_inactiveLimit, e_atLowerLimit, e_atUpperLimit, e_equalLimits);
 
    Tb2Jacobian = record
@@ -2319,6 +2319,71 @@ type
       function GetReactionForce(inv_dt: Float): TVector2; override;
       function GetReactionTorque(inv_dt: Float): Float; override;
    end;
+
+   /// Rope joint definition. This requires two body anchor points and
+   /// a maximum lengths.
+   /// Note: by default the connected objects will not collide.
+   /// see collideConnected in b2JointDef.
+   Tb2RopeJointDef = class(Tb2JointDef)
+   public
+      /// The local anchor point relative to bodyA's origin.
+      localAnchorA: TVector2;
+
+      /// The local anchor point relative to bodyB's origin.
+      localAnchorB: TVector2;
+
+      /// The maximum length of the rope.
+      /// Warning: this must be larger than b2_linearSlop or
+      /// the joint will have no effect.
+      maxLength: Float;
+
+      constructor Create;
+   end;
+
+   /// A rope joint enforces a maximum distance between two points
+   /// on two bodies. It has no other effect.
+   /// Warning: if you attempt to change the maximum length during
+   /// the simulation you will get some non-physical behavior.
+   /// A model that would allow you to dynamically modify the length
+   /// would have some sponginess, so I chose not to implement it
+   /// that way. See b2DistanceJoint if you want to dynamically
+   /// control length.
+   Tb2RopeJoint = class(Tb2Joint)
+   protected
+      m_localAnchorA: TVector2;
+      m_localAnchorB: TVector2;
+
+      m_maxLength: Float;
+      m_length: Float;
+
+      // Jacobian info
+      m_u, m_rA, m_rB: TVector2;
+
+      // Effective mass
+      m_mass: Float;
+
+      // Impulses for accumulation/warm starting.
+      m_impulse: Float;
+
+      m_state: Tb2LimitState;
+
+      procedure InitVelocityConstraints(const step: Tb2TimeStep); override;
+      procedure SolveVelocityConstraints(const step: Tb2TimeStep); override;
+      function SolvePositionConstraints(baumgarte: Float): Boolean; override;
+   public
+      constructor Create(def: Tb2RopeJointDef);
+
+      function GetAnchorA: TVector2; override;
+      function GetAnchorB: TVector2; override;
+
+      function GetReactionForce(inv_dt: Float): TVector2; override;
+      function GetReactionTorque(inv_dt: Float): Float; override;
+
+      property MaxLength: Float read m_maxLength; /// Get the maximum length of the rope.
+      property LimitState: Tb2LimitState read m_state;
+   end;
+
+//////////////////////////////////////////////////////////////////
 
 procedure b2GetPointStates(var state1, state2: Tb2PointStateArray;
    const manifold1, manifold2: Tb2Manifold);
@@ -5771,6 +5836,7 @@ begin
       e_weldJoint: j := Tb2WeldJoint.Create(Tb2WeldJointDef(def));
       e_frictionJoint: j := Tb2FrictionJoint.Create(Tb2FrictionJointDef(def));
       e_fixedJoint: j := Tb2FixedJoint.Create(Tb2FixedJointDef(def));
+      e_ropeJoint: j := Tb2RopeJoint.Create(Tb2RopeJointDef(def));
    end;
 
    // Connect to the world list.
@@ -16225,6 +16291,225 @@ begin
 
    // Constraint is satisfied if all constraint equations are nearly zero
    Result := (Abs(C[0]) < b2_linearSlop) and (Abs(C[1]) < b2_linearSlop) and (Abs(C[2]) < b2_angularSlop);
+end;
+
+{ Tb2RopeJointDef }
+
+constructor Tb2RopeJointDef.Create;
+begin
+		JointType := e_ropeJoint;
+		SetValue(localAnchorA, -1.0, 0.0);
+		SetValue(localAnchorB, 1.0, 0.0);
+		maxLength := 0.0;
+end;
+
+{ Tb2RopeJoint }
+
+// Limit:
+// C = norm(pB - pA) - L
+// u = (pB - pA) / norm(pB - pA)
+// Cdot = dot(u, vB + cross(wB, rB) - vA - cross(wA, rA))
+// J = [-u -cross(rA, u) u cross(rB, u)]
+// K = J * invM * JT
+//   = invMassA + invIA * cross(rA, u)^2 + invMassB + invIB * cross(rB, u)^2
+
+constructor Tb2RopeJoint.Create(def: Tb2RopeJointDef);
+begin
+   inherited Create(def);
+   m_localAnchorA := def.localAnchorA;
+   m_localAnchorB := def.localAnchorB;
+
+   m_maxLength := def.maxLength;
+
+   m_mass := 0.0;
+   m_impulse := 0.0;
+   m_state := e_inactiveLimit;
+   m_length := 0.0;
+end;
+
+procedure Tb2RopeJoint.InitVelocityConstraints(const step: Tb2TimeStep);
+var
+   C: Float;
+   crA, crB, invMass: Float;
+   P: TVector2;
+begin
+   {$IFDEF OP_OVERLOAD}
+   m_rA := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
+   m_rB := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
+
+   // Rope axis
+   m_u := m_bodyB.m_sweep.c + m_rB - m_bodyA.m_sweep.c - m_rA;
+
+   m_length := m_u.Length;
+   {$ELSE}
+   m_rA := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
+   m_rB := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
+
+   // Rope axis
+   m_u := Subtract(Add(m_bodyB.m_sweep.c, m_rB), Add(m_bodyA.m_sweep.c, m_rA));
+
+   m_length := LengthVec(m_u);
+   {$ENDIF}
+
+   C := m_length - m_maxLength;
+   if C > 0.0 then
+      m_state := e_atUpperLimit
+   else
+      m_state := e_inactiveLimit;
+
+   if m_length > b2_linearSlop then
+      {$IFDEF OP_OVERLOAD}
+      m_u := m_u / m_length
+      {$ELSE}
+      m_u := Divide(m_u, m_length)
+      {$ENDIF}
+   else
+   begin
+      m_u := b2Vec2_Zero;
+      m_mass := 0.0;
+      m_impulse := 0.0;
+      Exit;
+   end;
+
+   // Compute effective mass.
+   crA := b2Cross(m_rA, m_u);
+   crB := b2Cross(m_rB, m_u);
+   invMass := m_bodyA.m_invMass + m_bodyA.m_invI * crA * crA + m_bodyB.m_invMass + m_bodyB.m_invI * crB * crB;
+
+   if invMass <> 0.0 then
+      m_mass := 1 / invMass
+   else
+      m_mass := 0.0;
+
+   if step.warmStarting then
+   begin
+      // Scale the impulse to support a variable time step.
+      m_impulse := m_impulse * step.dtRatio;
+
+      {$IFDEF OP_OVERLOAD}
+      P := m_impulse * m_u;
+      m_bodyA.m_linearVelocity.SubtractBy(m_bodyA.m_invMass * P);
+      m_bodyB.m_linearVelocity.AddBy(m_bodyB.m_invMass * P);
+      {$ELSE}
+      P := Multiply(m_u, m_impulse);
+      SubtractBy(m_bodyA.m_linearVelocity, Multiply(P, m_bodyA.m_invMass));
+      AddBy(m_bodyB.m_linearVelocity, Multiply(P, m_bodyB.m_invMass));
+      {$ENDIF}
+      m_bodyA.m_angularVelocity := m_bodyA.m_angularVelocity - m_bodyA.m_invI * b2Cross(m_rA, P);
+      m_bodyB.m_angularVelocity := m_bodyB.m_angularVelocity + m_bodyB.m_invI * b2Cross(m_rB, P);
+   end
+   else
+      m_impulse := 0.0;
+end;
+
+procedure Tb2RopeJoint.SolveVelocityConstraints(const step: Tb2TimeStep);
+var
+   vA, vB, P: TVector2;
+   C, Cdot, impulse, oldImpulse: Float;
+begin
+   //B2_NOT_USED(step);
+
+   // Cdot := dot(u, v + cross(w, r))
+   {$IFDEF OP_OVERLOAD}
+   vA := m_bodyA.m_linearVelocity + b2Cross(m_bodyA.m_angularVelocity, m_rA);
+   vB := m_bodyB.m_linearVelocity + b2Cross(m_bodyB.m_angularVelocity, m_rB);
+   Cdot := b2Dot(m_u, vB - vA);
+   {$ELSE}
+   vA := Add(m_bodyA.m_linearVelocity, b2Cross(m_bodyA.m_angularVelocity, m_rA));
+   vB := Add(m_bodyB.m_linearVelocity, b2Cross(m_bodyB.m_angularVelocity, m_rB));
+   Cdot := b2Dot(m_u, Subtract(vB, vA));
+   {$ENDIF}
+   C := m_length - m_maxLength;
+
+   // Predictive constraint.
+   if C < 0.0 then
+      Cdot := Cdot + step.inv_dt * C;
+
+   impulse := -m_mass * Cdot;
+   oldImpulse := m_impulse;
+   m_impulse := b2Min(0.0, m_impulse + impulse);
+   impulse := m_impulse - oldImpulse;
+
+   {$IFDEF OP_OVERLOAD}
+   P := impulse * m_u;
+   m_bodyA.m_linearVelocity.SubtractBy(m_bodyA.m_invMass * P);
+   m_bodyB.m_linearVelocity.AddBy(m_bodyB.m_invMass * P);
+   {$ELSE}
+   P := Multiply(m_u, impulse);
+   SubtractBy( m_bodyA.m_linearVelocity, Multiply(P, m_bodyA.m_invMass));
+   AddBy(m_bodyB.m_linearVelocity, Multiply(P, m_bodyB.m_invMass));
+   {$ENDIF}
+   m_bodyA.m_angularVelocity := m_bodyA.m_angularVelocity - m_bodyA.m_invI * b2Cross(m_rA, P);
+   m_bodyB.m_angularVelocity := m_bodyB.m_angularVelocity + m_bodyB.m_invI * b2Cross(m_rB, P);
+end;
+
+function Tb2RopeJoint.SolvePositionConstraints(baumgarte: Float): Boolean;
+var
+   rA, rB, u, P: TVector2;
+   length, C, impulse: Float;
+begin
+   //B2_NOT_USED(baumgarte);
+
+   {$IFDEF OP_OVERLOAD}
+   rA := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
+   rB := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
+
+   u := m_bodyB.m_sweep.c + rB - m_bodyA.m_sweep.c - rA;
+   length := u.Normalize;
+   {$ELSE}
+   rA := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
+   rB := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
+
+   u := Subtract(Add(m_bodyB.m_sweep.c, rB), Add(m_bodyA.m_sweep.c, rA));
+   length := Normalize(u);
+   {$ENDIF}
+
+   C := length - m_maxLength;
+   C := b2Clamp(C, 0.0, b2_maxLinearCorrection);
+
+   impulse := -m_mass * C;
+
+   {$IFDEF OP_OVERLOAD}
+   P := impulse * u;
+   m_bodyA.m_sweep.c.SubtractBy(m_bodyA.m_invMass * P);
+   m_bodyB.m_sweep.c.AddBy(m_bodyB.m_invMass * P);
+   {$ELSE}
+   P := Multiply(u, impulse);
+   SubtractBy(m_bodyA.m_sweep.c, Multiply(P, m_bodyA.m_invMass));
+   AddBy(m_bodyB.m_sweep.c, Multiply(P, m_bodyB.m_invMass));
+   {$ENDIF}
+   m_bodyA.m_sweep.a := m_bodyA.m_sweep.a - m_bodyA.m_invI * b2Cross(rA, P);
+   m_bodyB.m_sweep.a := m_bodyB.m_sweep.a + m_bodyB.m_invI * b2Cross(rB, P);
+
+   m_bodyA.SynchronizeTransform;
+   m_bodyB.SynchronizeTransform;
+
+   Result := (length - m_maxLength) < b2_linearSlop;
+end;
+
+function Tb2RopeJoint.GetAnchorA: TVector2;
+begin
+   Result := m_bodyA.GetWorldPoint(m_localAnchorA);
+end;
+
+function Tb2RopeJoint.GetAnchorB: TVector2;
+begin
+   Result := m_bodyB.GetWorldPoint(m_localAnchorB);
+end;
+
+function Tb2RopeJoint.GetReactionForce(inv_dt: Float): TVector2;
+begin
+   {$IFDEF OP_OVERLOAD}
+   Result := (inv_dt * m_impulse) * m_u;
+   {$ELSE}
+   Result := Multiply(m_u, m_impulse * inv_dt);
+   {$ENDIF}
+end;
+
+function Tb2RopeJoint.GetReactionTorque(inv_dt: Float): Float;
+begin
+	 //B2_NOT_USED(inv_dt);
+	 Result := 0.0;
 end;
 
 initialization

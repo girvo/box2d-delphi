@@ -97,6 +97,7 @@
 			<DCCReference Include="Tests\UBulletTest.pas"/>
 			<DCCReference Include="Tests\UPinBall.pas"/>
 			<DCCReference Include="Tests\URevolute.pas"/>
+			<DCCReference Include="Tests\URope.pas"/>
 			<None Include="..\..\OpenGL Canvas\OpenGLCanvas.inc"/>
 			<None Include="..\..\Physics2D\Physics2D.inc"/>
 			<None Include="..\..\Physics2D\delete.bat"/>
