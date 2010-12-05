@@ -14,7 +14,7 @@ type
       m_joint4, m_joint5: Tb2GearJoint;
 
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
    end;
 
 implementation
@@ -109,9 +109,9 @@ begin
    end;
 end;
 
-procedure TGears.Step(var settings: TSettings; timeStep: Float);
+procedure TGears.Step(var settings: TSettings; timeStep: PhysicsFloat);
 var
-   value: Float;
+   value: PhysicsFloat;
 begin
    inherited;
    value := m_joint1.GetJointAngle + m_joint4.Ratio * m_joint2.GetJointAngle;
@@ -124,3 +124,4 @@ end;
 initialization
    RegisterTestEntry('Gears', TGears);
 end.
+

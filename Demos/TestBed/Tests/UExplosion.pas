@@ -19,7 +19,7 @@ type
 
       constructor Create; override;
       destructor Destroy; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 {$ENDIF}
@@ -48,7 +48,7 @@ begin
    inherited;
 end;
 
-procedure TExplosion.Step(var settings: TSettings; timeStep: Float);
+procedure TExplosion.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
    DrawText('Pyramid demo is also explodable.');
@@ -105,7 +105,7 @@ var
    bd: Tb2BodyDef;
    sd: Tb2PolygonShape;
    body: Tb2Body;
-   x, y: Float;
+   x, y: PhysicsFloat;
 begin
    if Assigned(ec) then
    begin
@@ -153,3 +153,4 @@ initialization
    RegisterTestEntry('Explosion', TExplosion);
 {$ENDIF}
 end.
+

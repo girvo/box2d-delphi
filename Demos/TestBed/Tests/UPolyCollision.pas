@@ -12,11 +12,11 @@ type
       m_polygonA, m_polygonB: Tb2PolygonShape;
       m_transformA, m_transformB: Tb2Transform;
       m_positionB: TVector2;
-      m_angleB: Float;
+      m_angleB: PhysicsFloat;
 
       constructor Create; override;
       destructor Destroy; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 
@@ -53,7 +53,7 @@ begin
    inherited;
 end;
 
-procedure TPolyCollision.Step(var settings: TSettings; timeStep: Float);
+procedure TPolyCollision.Step(var settings: TSettings; timeStep: PhysicsFloat);
 const
    color: RGBA = (0.9, 0.9, 0.9, 1.0);
    color2: RGBA = (0.9, 0.3, 0.3, 1.0);
@@ -110,3 +110,4 @@ initialization
    RegisterTestEntry('PolyCollision', TPolyCollision);
 
 end.
+

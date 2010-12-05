@@ -15,7 +15,7 @@ type
 	    m_button: Boolean;
 
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
       procedure KeyboardUp(key: Byte); override;
    end;
@@ -129,7 +129,7 @@ begin
       m_button := False;
 end;
 
-procedure TPinBall.Step(var settings: TSettings; timeStep: Float);
+procedure TPinBall.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    if m_button then
    begin
@@ -150,3 +150,4 @@ initialization
    RegisterTestEntry('Pin Ball', TPinBall);
 
 end.
+

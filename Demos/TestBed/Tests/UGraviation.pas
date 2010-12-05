@@ -17,7 +17,7 @@ type
       constructor Create; override;
       destructor Destroy; override;
       procedure Keyboard(key: Byte); override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
    end;
 {$ENDIF}
 
@@ -97,7 +97,7 @@ begin
       CreateBall;
 end;
 
-procedure TGraviation.Step(var settings: TSettings; timeStep: Float);
+procedure TGraviation.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
    DrawText('Press ''R'' to toggle rejection or graviation. ''C'' to create a ball.');
@@ -108,3 +108,4 @@ initialization
 {$ENDIF}
 
 end.
+

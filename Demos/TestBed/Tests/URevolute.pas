@@ -12,7 +12,7 @@ type
       m_joint: Tb2RevoluteJoint;
 
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 
@@ -76,7 +76,7 @@ begin
    end;
 end;
 
-procedure TRevolute.Step(var settings: TSettings; timeStep: Float);
+procedure TRevolute.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
    DrawText('Keys: (l) limits, (a) left, (s) off, (d) right');
@@ -86,3 +86,4 @@ initialization
    RegisterTestEntry('Revolute', TRevolute);
 
 end.
+

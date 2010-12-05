@@ -13,7 +13,7 @@ type
     	m_joint2: Tb2PrismaticJoint;
 
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 
@@ -122,7 +122,7 @@ begin
    end;
 end;
 
-procedure TSliderCrank.Step(var settings: TSettings; timeStep: Float);
+procedure TSliderCrank.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
    DrawText('Keys: (f) toggle friction, (m) toggle motor');
@@ -149,3 +149,4 @@ initialization
    RegisterTestEntry('Slider Crank', TSliderCrank);
 
 end.
+

@@ -13,7 +13,7 @@ type
       m_joint3: Tb2PrismaticJoint;
 
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 
@@ -101,7 +101,7 @@ begin
    end;
 end;
 
-procedure TMotorsAndLimits.Step(var settings: TSettings; timeStep: Float);
+procedure TMotorsAndLimits.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
    DrawText('Keys: (L) limits, (M) motors, (P) prismatic speed');
@@ -139,3 +139,4 @@ initialization
    RegisterTestEntry('Motors & Limits', TMotorsAndLimits);
 
 end.
+

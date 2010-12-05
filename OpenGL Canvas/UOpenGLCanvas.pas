@@ -4,7 +4,7 @@ unit UOpenGLCanvas;
    doesn't require you install the component. 
 
   http://hi.baidu.com/wqyfavor
-  wqyfavor@163.com
+  wqyfavor@qq.com
   QQ: 466798985}
 
 interface

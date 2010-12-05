@@ -24,7 +24,7 @@ type
       constructor Create; override;
       destructor Destroy; override;
 
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 
@@ -46,7 +46,7 @@ var
    fd: Tb2FixtureDef;
    jd: Tb2RevoluteJointDef;
    anchor: TVector2;
-   extraLength: Float;
+   extraLength: PhysicsFloat;
 begin
    inherited;
 
@@ -137,7 +137,7 @@ begin
    end;
 end;
 
-procedure TRope.Step(var settings: TSettings; timeStep: Float);
+procedure TRope.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
    DrawText('Press (j) to toggle the rope joint.');
@@ -151,3 +151,4 @@ initialization
    RegisterTestEntry('Rope Joint', TRope);
 
 end.
+

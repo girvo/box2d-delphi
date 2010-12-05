@@ -24,12 +24,12 @@ type
       m_polygons: array[0..3] of Tb2PolygonShape;
       m_circle: Tb2CircleShape;
 
-      m_angle: Float;
+      m_angle: PhysicsFloat;
       m_mode: TMode;
 
       constructor Create; override;
       destructor Destroy; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 
@@ -43,7 +43,7 @@ type
       m_point, m_normal: TVector2;
 
       function ReportFixture(fixture:	Tb2Fixture; const point, normal: TVector2;
-         fraction: Float): Float; override;
+         fraction: PhysicsFloat): PhysicsFloat; override;
    end;
 
    // This callback finds any hit. Polygon 0 is filtered.
@@ -53,7 +53,7 @@ type
       m_point, m_normal: TVector2;
 
       function ReportFixture(fixture:	Tb2Fixture; const point, normal: TVector2;
-         fraction: Float): Float; override;
+         fraction: PhysicsFloat): PhysicsFloat; override;
    end;
 
 const
@@ -67,13 +67,13 @@ type
 	    m_count: Int32;
 
       function ReportFixture(fixture:	Tb2Fixture; const point, normal: TVector2;
-         fraction: Float): Float; override;
+         fraction: PhysicsFloat): PhysicsFloat; override;
    end;
 
 { TRayCastClosestCallback }
 
 function TRayCastClosestCallback.ReportFixture(fixture: Tb2Fixture; const point,
-   normal: TVector2; fraction: Float): Float;
+   normal: TVector2; fraction: PhysicsFloat): PhysicsFloat;
 var
    userData: PInt32;
 begin
@@ -92,7 +92,7 @@ end;
 { TRayCastAnyCallback }
 
 function TRayCastAnyCallback.ReportFixture(fixture: Tb2Fixture; const point,
-   normal: TVector2; fraction: Float): Float;
+   normal: TVector2; fraction: PhysicsFloat): PhysicsFloat;
 var
    userData: PInt32;
 begin
@@ -111,7 +111,7 @@ end;
 { TRayCastMultipleCallback }
 
 function TRayCastMultipleCallback.ReportFixture(fixture: Tb2Fixture;
-   const point, normal: TVector2; fraction: Float): Float;
+   const point, normal: TVector2; fraction: PhysicsFloat): PhysicsFloat;
 var
    userData: PInt32;
 begin
@@ -141,7 +141,7 @@ var
    ground: Tb2Body;
    shape: Tb2EdgeShape;
    vertices: Tb2PolyVertices;
-   w, b, s: Float;
+   w, b, s: PhysicsFloat;
 begin
    inherited;
    // Ground body
@@ -271,7 +271,7 @@ begin
    end;
 end;
 
-procedure TRayCast.Step(var settings: TSettings; timeStep: Float);
+procedure TRayCast.Step(var settings: TSettings; timeStep: PhysicsFloat);
 const
    L = 11.0;
    point1: TVector2 = (X: 0.0; Y: 10.0);
@@ -375,4 +375,5 @@ initialization
    RegisterTestEntry('RayCast', TRayCast);
 
 end.
+
 

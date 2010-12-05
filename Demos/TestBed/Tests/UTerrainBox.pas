@@ -17,7 +17,7 @@ type
       m_polygons: array[0..2] of Tb2PolygonShape;
       constructor Create; override;
       destructor Destroy; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 
@@ -29,7 +29,7 @@ constructor TTerrainBox.Create;
 var
    i: Integer;
    vertices: Tb2PolyVertices;
-   w, b, s: Float;
+   w, b, s: PhysicsFloat;
 begin
    inherited;
    CreateBox(0); // Build terrain
@@ -80,7 +80,7 @@ begin
    inherited;
 end;
 
-procedure TTerrainBox.Step(var settings: TSettings; timeStep: Float);
+procedure TTerrainBox.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
    DrawText('Press ''R'' to rotate box.');
@@ -194,3 +194,4 @@ initialization
    RegisterTestEntry('Terrain Box', TTerrainBox);
 
 end.
+

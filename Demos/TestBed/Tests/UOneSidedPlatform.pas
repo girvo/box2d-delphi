@@ -13,7 +13,7 @@ type
    private
       procedure PreSolve(var contact: Tb2Contact; const oldManifold: Tb2Manifold); override;
    public
-      m_radius, m_top, m_bottom: Float;
+      m_radius, m_top, m_bottom: PhysicsFloat;
       m_state: TState;
       m_platform, m_character: Tb2Fixture;
 
@@ -99,3 +99,4 @@ initialization
    RegisterTestEntry('One Sided Platform', TOneSidedPlatform);
 
 end.
+

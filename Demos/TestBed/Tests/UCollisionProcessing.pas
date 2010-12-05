@@ -10,7 +10,7 @@ type
    TCollisionProcessing = class(TTester)
    public
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
    end;
 
 implementation
@@ -127,7 +127,7 @@ begin
    body6.CreateFixture(circleShapeDef);
 end;
 
-procedure TCollisionProcessing.Step(var settings: TSettings; timeStep: Float);
+procedure TCollisionProcessing.Step(var settings: TSettings; timeStep: PhysicsFloat);
 const
    k_maxNuke = 6;
 var
@@ -184,3 +184,4 @@ initialization
    RegisterTestEntry('Collision Processing', TCollisionProcessing);
 
 end.
+

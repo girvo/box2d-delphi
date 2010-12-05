@@ -13,7 +13,7 @@ type
 
       constructor Create; override;
       destructor Destroy; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
    end;
 
    TTimeOfImpact2 = class(TTester)
@@ -23,7 +23,7 @@ type
       bullet2: Tb2Body;
 
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
    end;
 
 implementation
@@ -48,7 +48,7 @@ begin
    inherited;
 end;
 
-procedure TTimeOfImpact.Step(var settings: TSettings; timeStep: Float);
+procedure TTimeOfImpact.Step(var settings: TSettings; timeStep: PhysicsFloat);
 const
    clVertices: RGBA = (0.9, 0.9, 0.9, 1.0);
    clVertices2: RGBA = (0.5, 0.9, 0.5, 1.0);
@@ -194,7 +194,7 @@ begin
    bullet2.CreateFixture(cd, 15);
 end;
 
-procedure TTimeOfImpact2.Step(var settings: TSettings; timeStep: Float);
+procedure TTimeOfImpact2.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
    DrawText('Switch Time of Impact option and reset the scene.');
@@ -209,3 +209,4 @@ initialization
    RegisterTestEntry('Time of Impact2', TTimeOfImpact2);
 
 end.
+

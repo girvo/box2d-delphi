@@ -88,12 +88,12 @@ type
       procedure DrawPolygon(const vertices: Tb2PolyVertices; vertexCount: Int32; const color: RGBA); override;
       procedure DrawPolygon4(const vertices: TVectorArray4; vertexCount: Int32; const color: RGBA); override;
       procedure DrawSolidPolygon(const vertices: Tb2PolyVertices; vertexCount: Int32; const color: RGBA); override;
-      procedure DrawCircle(const center: TVector2; radius: Float; const color: RGBA); override;
-      procedure DrawSolidCircle(const center, axis: TVector2; radius: Float; const color: RGBA); override;
+      procedure DrawCircle(const center: TVector2; radius: PhysicsFloat; const color: RGBA); override;
+      procedure DrawSolidCircle(const center, axis: TVector2; radius: PhysicsFloat; const color: RGBA); override;
       procedure DrawSegment(const p1, p2: TVector2; const color: RGBA); override;
       procedure DrawTransform(const xf: Tb2Transform); override;
 
-      procedure DrawPoint(const p: TVector2; size: Float; const color: RGBA);
+      procedure DrawPoint(const p: TVector2; size: PhysicsFloat; const color: RGBA);
       procedure DrawAABB(const aabb: Tb2AABB; const color: RGBA);
   end;
 
@@ -121,7 +121,7 @@ type
   TTestClass = class of TTester;
   TTester = class(Tb2ContactListener)
   protected
-     m_RemainTime: Float;
+     m_RemainTime: PhysicsFloat;
   public
      m_stepCount: Integer;
      m_groundBody: Tb2Body;
@@ -144,20 +144,20 @@ type
      destructor Destroy; override;
 
      procedure NextLine;
-     procedure Step(var settings: TSettings; timeStep: Float); virtual;
+     procedure Step(var settings: TSettings; timeStep: PhysicsFloat); virtual;
      procedure Keyboard(key: Byte); virtual;
      procedure KeyboardUp(key: Byte); virtual;
      procedure MouseDown(const p: TVector2); virtual;
      procedure ShiftMouseDown(const p: TVector2);
      procedure MouseUp(const p: TVector2); virtual;
      procedure MouseMove(const p: TVector2);
-     procedure LaunchBomb(velocity_factor: Float = 1.0); overload; virtual;
+     procedure LaunchBomb(velocity_factor: PhysicsFloat = 1.0); overload; virtual;
      procedure LaunchBomb(const position, velocity: TVector2); overload;
 	   procedure SpawnBomb(const worldPt: TVector2);
 	   procedure CompleteBombSpawn(const p: TVector2);
 
-     procedure SetCanvasTranslation(x, y: Float);
-     procedure SetCanvasTranslationOffset(dx, dy: Float);
+     procedure SetCanvasTranslation(x, y: PhysicsFloat);
+     procedure SetCanvasTranslationOffset(dx, dy: PhysicsFloat);
      procedure DrawText(const text: string);
 
      // Let derived tests know that a joint was destroyed.
@@ -613,12 +613,12 @@ begin
    {$ENDIF}
 end;
 
-procedure TDrawer.DrawCircle(const center: TVector2; radius: Float; const color: RGBA);
+procedure TDrawer.DrawCircle(const center: TVector2; radius: PhysicsFloat; const color: RGBA);
 begin
    Canvas.SetPenColor(TColorVector(color)).Ellipse(center.x, center.y, radius, radius);
 end;
 
-procedure TDrawer.DrawSolidCircle(const center, axis: TVector2; radius: Float; const color: RGBA);
+procedure TDrawer.DrawSolidCircle(const center, axis: TVector2; radius: PhysicsFloat; const color: RGBA);
 var
    tmp: TColorVector;
    p: TVector2;
@@ -666,7 +666,7 @@ begin
    end;
 end;
 
-procedure TDrawer.DrawPoint(const p: TVector2; size: Float; const color: RGBA);
+procedure TDrawer.DrawPoint(const p: TVector2; size: PhysicsFloat; const color: RGBA);
 begin
    glPointSize(size);
    glColor3f(color[0], color[1], color[2]);
@@ -759,7 +759,7 @@ begin
    m_textLine := m_textLine - 15;
 end;
 
-procedure TTester.Step(var settings: TSettings; timeStep: Float);
+procedure TTester.Step(var settings: TSettings; timeStep: PhysicsFloat);
 const
    k_axisScale = 0.4;
    clPoint: RGBA = (0.0, 1.0, 0.0, 1.0);
@@ -987,7 +987,7 @@ begin
       m_mouseJoint.SetTarget(p);
 end;
 
-procedure TTester.LaunchBomb(velocity_factor: Float = 1.0);
+procedure TTester.LaunchBomb(velocity_factor: PhysicsFloat = 1.0);
 var
    p, v: TVector2;
 begin
@@ -1060,7 +1060,7 @@ begin
    m_bombSpawning := False;
 end;
 
-procedure TTester.SetCanvasTranslation(x, y: Float);
+procedure TTester.SetCanvasTranslation(x, y: PhysicsFloat);
 begin
    with m_debugDraw.Canvas do
    begin
@@ -1071,7 +1071,7 @@ begin
    end;
 end;
 
-procedure TTester.SetCanvasTranslationOffset(dx, dy: Float);
+procedure TTester.SetCanvasTranslationOffset(dx, dy: PhysicsFloat);
 begin
    with m_debugDraw.Canvas do
    begin

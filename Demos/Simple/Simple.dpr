@@ -3,8 +3,8 @@ program Simple;
 uses
   Forms,
   UPhysicsDebug in 'UPhysicsDebug.pas' {frmDebug},
-  UPhysics2D in '..\..\Source\UPhysics2D.pas',
-  UPhysics2DTypes in '..\..\Source\UPhysics2DTypes.pas';
+  UPhysics2D in '..\..\Physics2D\UPhysics2D.pas',
+  UPhysics2DTypes in '..\..\Physics2D\UPhysics2DTypes.pas';
 
 {$R *.res}
 

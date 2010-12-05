@@ -18,7 +18,7 @@ type
 
       constructor Create; override;
 
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 
@@ -52,7 +52,7 @@ begin
    m_fixture2 := nil;
 end;
 
-procedure TShapeEditing.Step(var settings: TSettings; timeStep: Float);
+procedure TShapeEditing.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
 	 DrawText('Press C create a shape, D destroy a shape.');
@@ -87,3 +87,4 @@ initialization
    RegisterTestEntry('Shape Editing', TShapeEditing);
 
 end.
+

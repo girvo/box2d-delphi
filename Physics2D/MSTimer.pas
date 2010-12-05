@@ -1,7 +1,7 @@
 //
 // This unit is part of the GLScene Project, http://glscene.org
 // Rewrite and simplify TGLCadencer.
-// Wqyfavor    wqyfavor@163.com
+// Wqyfavor    wqyfavor@qq.com
 
 unit MSTimer;
 

@@ -13,14 +13,14 @@ type
    PActor = ^TActor;
    TActor = record
       aabb: Tb2AABB;
-      fraction: Float;
+      fraction: PhysicsFloat;
       overlap: Boolean;
       proxyId: Int32;
    end;
 
    TDynamicTreeTest = class(TTester)
    private
-      m_worldExtent, m_proxyExtent: Float;
+      m_worldExtent, m_proxyExtent: PhysicsFloat;
       m_tree: Tb2DynamicTree;
       m_queryAABB: Tb2AABB;
       m_rayCastInput: Tb2RayCastInput;
@@ -42,11 +42,11 @@ type
    public
       constructor Create; override;
       destructor Destroy; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
 
       function QueryCallback(proxyId: Int32): Boolean; override;
-      function RayCastCallback(const input: Tb2RayCastInput; proxyId: Int32): Float; override;
+      function RayCastCallback(const input: Tb2RayCastInput; proxyId: Int32): PhysicsFloat; override;
    end;
 
 implementation
@@ -223,7 +223,7 @@ begin
    Result := True;
 end;
 
-function TDynamicTreeTest.RayCastCallback(const input: Tb2RayCastInput; proxyId: Int32): Float;
+function TDynamicTreeTest.RayCastCallback(const input: Tb2RayCastInput; proxyId: Int32): PhysicsFloat;
 var
    actor: PActor;
    output: Tb2RayCastOutput;
@@ -282,7 +282,7 @@ begin
       //b2Assert(bruteOutput.fraction == m_rayCastOutput.fraction);
 end;
 
-procedure TDynamicTreeTest.Step(var settings: TSettings; timeStep: Float);
+procedure TDynamicTreeTest.Step(var settings: TSettings; timeStep: PhysicsFloat);
 const
    c_color: RGBA = (0.9, 0.9, 0.9, 1.0);
    c_color2: RGBA = (0.7, 0.7, 0.7, 1.0);
@@ -373,3 +373,4 @@ end;
 initialization
    RegisterTestEntry('Dynamic Tree Test', TDynamicTreeTest);
 end.
+

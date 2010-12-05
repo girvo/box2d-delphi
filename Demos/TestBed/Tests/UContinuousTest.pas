@@ -12,10 +12,10 @@ type
       procedure Launch;
    public
       m_body: Tb2Body;
-      m_angularVelocity: Float;
+      m_angularVelocity: PhysicsFloat;
 
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
    end;
 
 implementation
@@ -63,7 +63,7 @@ begin
    end;
 end;
 
-procedure TContinuousTest.Step(var settings: TSettings; timeStep: Float);
+procedure TContinuousTest.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
   { if (m_stepCount	= 12)
       m_stepCount += 0; }
@@ -98,3 +98,4 @@ end;
 initialization
    RegisterTestEntry('Continuous Test', TContinuousTest);
 end.
+

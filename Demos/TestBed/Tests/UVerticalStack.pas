@@ -18,7 +18,7 @@ type
       m_indices: array[0..e_rowCount * e_columnCount - 1] of Int32;
 
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 
@@ -28,7 +28,7 @@ implementation
 
 constructor TVerticalStack.Create;
 const
-   xs: array[0..4] of Float = (0.0, -10.0, -5.0, 5.0, 10.0);
+   xs: array[0..4] of PhysicsFloat = (0.0, -10.0, -5.0, 5.0, 10.0);
 var
    i, j: Integer;
    edge: Tb2EdgeShape;
@@ -37,7 +37,7 @@ var
    ground: Tb2Body;
    fd: Tb2FixtureDef;
    n: Int32;
-   x: Float;
+   x: PhysicsFloat;
 begin
    inherited;
    begin
@@ -86,7 +86,7 @@ begin
    m_bullet := nil;
 end;
 
-procedure TVerticalStack.Step(var settings: TSettings; timeStep: Float);
+procedure TVerticalStack.Step(var settings: TSettings; timeStep: PhysicsFloat);
 var
    shape: Tb2CircleShape;
    fd: Tb2FixtureDef;
@@ -160,3 +160,4 @@ initialization
    RegisterTestEntry('Vertical Stack', TVerticalStack);
 
 end.
+

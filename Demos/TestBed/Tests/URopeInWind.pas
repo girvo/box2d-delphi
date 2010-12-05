@@ -21,7 +21,7 @@ type
 
       constructor Create; override;
       destructor Destroy; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 {$ENDIF}
@@ -82,7 +82,7 @@ begin
    inherited;
 end;
 
-procedure TRopeInWind.Step(var settings: TSettings; timeStep: Float);
+procedure TRopeInWind.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
    DrawText('Turn on "Center of Masses" and use +/- to control rope smooth.');
@@ -137,3 +137,4 @@ initialization
    RegisterTestEntry('Rope In Wind', TRopeInWind);
 {$ENDIF}
 end.
+

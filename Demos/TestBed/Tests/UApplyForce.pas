@@ -12,7 +12,7 @@ type
       m_body: Tb2Body;
 
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 
@@ -34,7 +34,7 @@ var
    sd, sd1, sd2, fd: Tb2FixtureDef;
    xf1, xf2: Tb2Transform;
    vertices: array[0..2] of TVector2;
-   mass, inertia, radius: Float;
+   mass, inertia, radius: PhysicsFloat;
    jd: Tb2FrictionJointDef;
 begin
    inherited;
@@ -162,7 +162,7 @@ begin
    end;
 end;
 
-procedure TApplyForce.Step(var settings: TSettings; timeStep: Float);
+procedure TApplyForce.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
    DrawText('Use W\A\D to control the plane.');
@@ -188,3 +188,4 @@ initialization
    RegisterTestEntry('Apply Force', TApplyForce);
 
 end.
+

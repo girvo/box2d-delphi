@@ -33,11 +33,11 @@ var
    groundShapeDef, shapeDef: Tb2PolygonShape;
    fd: Tb2FixtureDef;
    body: Tb2Body;
-   timeStep: Float;
+   timeStep: PhysicsFloat;
    viterations, piterations: Int32;
    i: Integer;
    position: TVector2;
-   angle: Float;
+   angle: PhysicsFloat;
 begin
    //ReportMemoryLeaksOnShutdown := True;
    SetValue(gravity, 0, -10);
