@@ -19,12 +19,12 @@ type
       m_bodies: array[0..e_maxBodies - 1] of Tb2Body;
       m_polygons: array[0..3] of Tb2PolygonShape;
       m_circle: Tb2CircleShape;
-      m_angle: Float;
+      m_angle: PhysicsFloat;
 
       constructor Create; override;
       destructor Destroy; override;
 
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 
@@ -37,7 +37,7 @@ var
    i: Integer;
    bd: Tb2BodyDef;
    ground: Tb2Body;
-   x1, y1, x2, y2, w, b, s: Float;
+   x1, y1, x2, y2, w, b, s: PhysicsFloat;
    shape: Tb2EdgeShape;
    vertices: array[0..7] of TVector2;
 begin
@@ -119,7 +119,7 @@ end;
 procedure TEdgeShapes.CreateShape(index: Int32);
 var
    bd: Tb2BodyDef;
-   x, y: Float;
+   x, y: PhysicsFloat;
    fd: Tb2FixtureDef;
 begin
    if Assigned(m_bodies[m_bodyIndex]) then
@@ -172,13 +172,13 @@ type
       m_point, m_normal: TVector2;
 
       function ReportFixture(fixture:	Tb2Fixture; const point, normal: TVector2;
-         fraction: Float): Float; override;
+         fraction: PhysicsFloat): PhysicsFloat; override;
    end;
 
 { TEdgeShapesCallback }
 
 function TEdgeShapesCallback.ReportFixture(fixture: Tb2Fixture; const point,
-   normal: TVector2; fraction: Float): Float;
+   normal: TVector2; fraction: PhysicsFloat): PhysicsFloat;
 begin
 		m_fixture := fixture;
 		m_point := point;
@@ -186,7 +186,7 @@ begin
     Result := fraction;
 end;
 
-procedure TEdgeShapes.Step(var settings: TSettings; timeStep: Float);
+procedure TEdgeShapes.Step(var settings: TSettings; timeStep: PhysicsFloat);
 const
    L = 25;
    point1: TVector2 = (X: 0.0; Y: 10.0);
@@ -244,3 +244,4 @@ initialization
    RegisterTestEntry('Edge Shapes', TEdgeShapes);
 
 end.
+

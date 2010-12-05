@@ -10,7 +10,7 @@ type
    TTiles = class(TTester)
    public
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
    end;
 
 implementation
@@ -83,11 +83,11 @@ begin
    shape.Free;
 end;
 
-procedure TTiles.Step(var settings: TSettings; timeStep: Float);
+procedure TTiles.Step(var settings: TSettings; timeStep: PhysicsFloat);
 var
    cm: Tb2ContactManager;
    height, leafCount, minimumNodeCount: Int32;
-   minimumHeight: Float;
+   minimumHeight: PhysicsFloat;
 begin
    cm := m_world.GetContactManager;
    height := cm.m_broadPhase.ComputeHeight;
@@ -104,3 +104,4 @@ initialization
    RegisterTestEntry('Tiles', TTiles);
 
 end.
+

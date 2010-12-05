@@ -12,7 +12,7 @@ type
       m_joint1: Tb2PulleyJoint;
 
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
    end;
 
 implementation
@@ -27,7 +27,7 @@ var
    shape: Tb2PolygonShape;
    body1, body2: Tb2Body;
    pulleyDef: Tb2PulleyJointDef;
-   b, y, L: Float;
+   b, y, L: PhysicsFloat;
 begin
    inherited;
    begin
@@ -66,9 +66,9 @@ begin
    end;
 end;
 
-procedure TPulleys.Step(var settings: TSettings; timeStep: Float);
+procedure TPulleys.Step(var settings: TSettings; timeStep: PhysicsFloat);
 var
-   L: Float;
+   L: PhysicsFloat;
 begin
    inherited;
    L := m_joint1.GetLength1 + m_joint1.GetRatio * m_joint1.GetLength2;
@@ -79,3 +79,4 @@ initialization
    RegisterTestEntry('Pulleys', TPulleys);
 
 end.
+

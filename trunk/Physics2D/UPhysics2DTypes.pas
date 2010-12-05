@@ -53,7 +53,7 @@ unit UPhysics2DTypes;
 
   Translator: Qianyuan Wang(ÍõÇ¬Ôª)
   Contact me: http://hi.baidu.com/wqyfavor
-              wqyfavor@163.com
+              wqyfavor@qq.com
               QQ: 466798985
 }
 
@@ -87,14 +87,14 @@ type
    TPointsF = array of TPointF;
 
    // Float type
-   PFloat = ^Float;
+   PPhysicsFloat = ^PhysicsFloat;
    {$IFDEF EXTENDED_PRECISION}
-   Float = Extended;
+   PhysicsFloat = Extended;
    {$ELSE}
       {$IFDEF DOUBLE_PRECISION}
-      Float = Double;
+      PhysicsFloat = Double;
       {$ELSE}
-      Float = Single;
+      PhysicsFloat = Single;
       {$ENDIF}
    {$ENDIF}
    Float32 = Single;
@@ -115,26 +115,26 @@ const
       {$ENDIF}
    {$ENDIF}
 
-   function IsValid(f: Float): Boolean; {$IFNDEF OP_OVERLOAD}overload;{$ENDIF}
+   function IsValid(f: PhysicsFloat): Boolean; {$IFNDEF OP_OVERLOAD}overload;{$ENDIF}
 
 type
    PVector2 = ^TVector2;
-   TVector2Arraied = array[0..1] of Float; // The same with TVector2
+   TVector2Arraied = array[0..1] of PhysicsFloat; // The same with TVector2
    TVector2 = record
-      x, y: Float;
+      x, y: PhysicsFloat;
 
       {$IFDEF OP_OVERLOAD}
       function IsValid: Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
-      function Length: Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-      function SqrLength: Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-      function Normalize: Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function Length: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function SqrLength: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function Normalize: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       procedure SetZero; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       procedure SetNegative; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-      procedure SetValue(x, y: Float); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-      procedure SetLength(value: Float); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      procedure SetValue(x, y: PhysicsFloat); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      procedure SetLength(value: PhysicsFloat); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
-      class function From(const x, y: Float): TVector2; static; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      class function From(const x, y: PhysicsFloat): TVector2; static; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       // Operators
       class operator Negative(const AValue: TVector2): TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       class operator Add(const Left, Right: TVector2): TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
@@ -166,19 +166,19 @@ type
    TVectorArray4 = array[0..3] of TVector2;
 
    TVector3 = record // Added from v2.1.0
-      x, y, z: Float;
+      x, y, z: PhysicsFloat;
 
       {$IFDEF OP_OVERLOAD}
       function IsValid: Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-      function Length: Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-      function SqrLength: Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-      function Normalize: Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function Length: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function SqrLength: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function Normalize: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       procedure SetZero; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       procedure SetNegative; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-      procedure SetValue(x, y, z: Float); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-      procedure SetLength(value: Float); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      procedure SetValue(x, y, z: PhysicsFloat); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      procedure SetLength(value: PhysicsFloat); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
-      class function From(const x, y, z: Float): TVector3; static; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      class function From(const x, y, z: PhysicsFloat): TVector3; static; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
       class operator Negative(const AValue: TVector3): TVector3; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       class operator Add(const Left, Right: TVector3): TVector3; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
@@ -215,7 +215,7 @@ type
       procedure SetValue(const _col1, _col2: TVector2); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       /// Initialize this matrix using an angle. This matrix becomes
 	    /// an orthonormal rotation matrix.
-      procedure SetValue(angle: Float); overload;
+      procedure SetValue(angle: PhysicsFloat); overload;
 
       function Invert: TMatrix22;
       function GetInverse: TMatrix22; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} // The same with Invert, imported from v2.1.0
@@ -261,8 +261,8 @@ type
 
       {$IFDEF OP_OVERLOAD}
       procedure SetIdentity; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-      procedure SetValue(const p: TVector2; angle: Float); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-      function GetAngle: Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      procedure SetValue(const p: TVector2; angle: PhysicsFloat); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function GetAngle: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       class function From(const position: TVector2; const R: TMatrix22): Tb2Transform; static;
       {$ENDIF}
    end;
@@ -274,20 +274,20 @@ type
    Tb2Sweep = record
       localCenter: TVector2; // local center of mass position
       c0, c: TVector2; // center world positions
-      a0, a: Float; // world angles
+      a0, a: PhysicsFloat; // world angles
 
       /// Fraction of the current time step in the range [0,1]
       /// c0 and a0 are the positions at alpha0.
-      alpha0: Float;
+      alpha0: PhysicsFloat;
 
       {$IFDEF OP_OVERLOAD}
       /// Get the interpolated transform at a specific time.
       /// @param beta is a factor in [0,1], where 0 indicates alpha0.
-    	procedure GetTransform(var xf: Tb2Transform; beta: Float); /// Renamed to GetTransform from v2.1.0
+    	procedure GetTransform(var xf: Tb2Transform; beta: PhysicsFloat); /// Renamed to GetTransform from v2.1.0
 
       /// Advance the sweep forward, yielding a new initial state.
       /// @param alpha the new initial time.
-      procedure Advance(alpha: Float);
+      procedure Advance(alpha: PhysicsFloat);
 
 	    /// Normalize the angles. Normalize an angle in radians to be between -pi and pi
 	    procedure Normalize;
@@ -383,22 +383,22 @@ const
    b2_angularSleepTolerance = 2.0 / 180.0;		// 2 degrees/s
 
 function MakePoint(x, y: TPointFloat): TPointF; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function MakeVector(x, y: Float): TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function MakeVector(x, y: PhysicsFloat): TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure SetZero(var p: TPointF); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure SetZero(var v: TVector2); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure SetValue(var p: TPointF; ax, ay: TPointFloat); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-procedure SetValue(var v: TVector2; ax, ay: Float); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-procedure SetValue(var v: TVector3; ax, ay, az: Float); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure SetValue(var v: TVector2; ax, ay: PhysicsFloat); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure SetValue(var v: TVector3; ax, ay, az: PhysicsFloat); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 {$IFNDEF OP_OVERLOAD}
 // For TVector2
 function IsValid(const v: TVector2): Boolean; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function LengthVec(const v: TVector2): Float; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function LengthVec(const v: TVector2): PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
-function SqrLength(const v: TVector2): Float; overload;  {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function Normalize(var v: TVector2): Float; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function SqrLength(const v: TVector2): PhysicsFloat; overload;  {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function Normalize(var v: TVector2): PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure SetNegative(var v: TVector2); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-procedure SetLengthVec(var v: TVector2; value: Float); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure SetLengthVec(var v: TVector2; value: PhysicsFloat); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 function Negative(const AValue: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function Add(const Left, Right: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
@@ -424,12 +424,12 @@ procedure DivideBy(var v: TVector2; const Operand: Extended); overload; {$IFDEF 
 
 // For TVector3
 function IsValid(const v: TVector3): Boolean; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function LengthVec(const v: TVector3): Float; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function LengthVec(const v: TVector3): PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
-function SqrLength(const v: TVector3): Float; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function Normalize(var v: TVector3): Float; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function SqrLength(const v: TVector3): PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function Normalize(var v: TVector3): PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure SetNegative(var v: TVector3); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-procedure SetLengthVec(var v: TVector3; value: Float); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure SetLengthVec(var v: TVector3; value: PhysicsFloat); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 function Negative(const AValue: TVector3): TVector3; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function Add(const Left, Right: TVector3): TVector3; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
@@ -457,7 +457,7 @@ procedure DivideBy(var v: TVector3; const Operand: Extended); overload; {$IFDEF 
 procedure SetIdentity(var m: TMatrix22); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure SetZero(var m: TMatrix22); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure SetValue(var m: TMatrix22; const _col1, _col2: TVector2); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-procedure SetValue(var m: TMatrix22; angle: Float); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure SetValue(var m: TMatrix22; angle: PhysicsFloat); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 function Invert(const m: TMatrix22): TMatrix22;
 function GetInverse(const m: TMatrix22): TMatrix22; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} // The same with Invert, imported from v2.1.0
@@ -482,45 +482,45 @@ function Subtract(const Left, Right: TMatrix33): TMatrix33; overload;
 
 // For T2bXForm
 procedure SetIdentity(var xf: Tb2Transform); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-procedure SetValue(var xf: Tb2Transform; const p: TVector2; angle: Float); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function GetAngle(const xf: Tb2Transform): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure SetValue(var xf: Tb2Transform; const p: TVector2; angle: PhysicsFloat); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function GetAngle(const xf: Tb2Transform): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 // For Tb2Sweep
-procedure GetTransform(const Sweep: Tb2Sweep; var xf: Tb2Transform; beta: Float);
-procedure Advance(var Sweep: Tb2Sweep; alpha: Float);
+procedure GetTransform(const Sweep: Tb2Sweep; var xf: Tb2Transform; beta: PhysicsFloat);
+procedure Advance(var Sweep: Tb2Sweep; alpha: PhysicsFloat);
 procedure Normalize(var Sweep: Tb2Sweep); overload;
 
 {$ENDIF}
 
-function b2MixFriction(friction1, friction2: Float): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function b2MixRestitution(restitution1, restitution2: Float): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2MixFriction(friction1, friction2: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2MixRestitution(restitution1, restitution2: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
-function b2Max(const a, b: Float): Float; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2Max(const a, b: PhysicsFloat): PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2Max(const a, b: TVector2): TVector2; overload;
-function b2Min(const a, b: Float): Float; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2Min(const a, b: PhysicsFloat): PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2Min(const a, b: TVector2): TVector2; overload;
 function b2Max(const a, b: Int32): Int32; overload;
 function b2Min(const a, b: Int32): Int32; overload;
 
-procedure b2Swap(var a, b: Float); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure b2Swap(var a, b: PhysicsFloat); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure b2Swap(var a, b: Int32); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure b2Swap(var a, b: TVector2); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 function b2Clamp(const a, low, high: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function b2Clamp(const a, low, high: Float): Float; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2Clamp(const a, low, high: PhysicsFloat): PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 function b2MiddlePoint(const a, b: TVector2): TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
-function b2Dot(const a, b: TVector2): Float; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function b2Dot(const a, b: TVector3): Float; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function b2Cross(const a, b: TVector2): Float; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function b2Cross(const a: TVector2; s: Float): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function b2Cross(s: Float; const a: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2Dot(const a, b: TVector2): PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2Dot(const a, b: TVector3): PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2Cross(const a, b: TVector2): PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2Cross(const a: TVector2; s: PhysicsFloat): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2Cross(s: PhysicsFloat; const a: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2Cross(const a, b: TVector3): TVector3; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2Mul(const A: TMatrix22; const v: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2MulT(const A: TMatrix22; const v: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function b2Distance(const a, b: TVector2): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function b2DistanceSquared(const a, b: TVector2): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2Distance(const a, b: TVector2): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2DistanceSquared(const a, b: TVector2): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2Mul(const A, B: TMatrix22): TMatrix22; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2MulT(const A, B: TMatrix22): TMatrix22; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2Mul(const T: Tb2Transform; const v: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
@@ -540,8 +540,8 @@ procedure SinCos(const Theta: Single; var Sin, Cos: Single);
 {$ENDIF}
 {$ENDIF}
 
-function RandomFloat: Float; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function RandomFloat(lo, hi: Float): Float; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function RandomFloat: PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function RandomFloat(lo, hi: PhysicsFloat): PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 implementation
 
@@ -573,12 +573,12 @@ end;
 {$ENDIF}
 {$ENDIF}
 
-function RandomFloat: Float;
+function RandomFloat: PhysicsFloat;
 begin
    Result := Random;
 end;
 
-function RandomFloat(lo, hi: Float): Float;
+function RandomFloat(lo, hi: PhysicsFloat): PhysicsFloat;
 begin
    Result := (hi - lo) * Random + lo;
 end;
@@ -589,7 +589,7 @@ begin
    Result.y := y;
 end;
 
-function MakeVector(x, y: Float): TVector2;
+function MakeVector(x, y: PhysicsFloat): TVector2;
 begin
    Result.x := x;
    Result.y := y;
@@ -614,7 +614,7 @@ begin
    end;
 end;
 
-procedure SetValue(var v: TVector2; ax, ay: Float);
+procedure SetValue(var v: TVector2; ax, ay: PhysicsFloat);
 begin
    with v do
    begin
@@ -623,7 +623,7 @@ begin
    end;
 end;
 
-procedure SetValue(var v: TVector3; ax, ay, az: Float);
+procedure SetValue(var v: TVector3; ax, ay, az: PhysicsFloat);
 begin
    with v do
    begin
@@ -640,19 +640,19 @@ begin
    Result := UPhysics2DTypes.IsValid(v.x) and UPhysics2DTypes.IsValid(v.y);
 end;
 
-function LengthVec(const v: TVector2): Float;
+function LengthVec(const v: TVector2): PhysicsFloat;
 begin
    with v do
       Result := Sqrt(x * x + y * y);
 end;
 
-function SqrLength(const v: TVector2): Float;
+function SqrLength(const v: TVector2): PhysicsFloat;
 begin
    with v do
       Result := x * x + y * y;
 end;
 
-function Normalize(var v: TVector2): Float;
+function Normalize(var v: TVector2): PhysicsFloat;
 begin
    Result := LengthVec(v);
 	 if Result < FLT_EPSILON then
@@ -677,9 +677,9 @@ begin
    end;
 end;
 
-procedure SetLengthVec(var v: TVector2; value: Float);
+procedure SetLengthVec(var v: TVector2; value: PhysicsFloat);
 var
-   l: Float;
+   l: PhysicsFloat;
 begin
    with v do
    begin
@@ -828,19 +828,19 @@ begin
       UPhysics2DTypes.IsValid(v.z);
 end;
 
-function LengthVec(const v: TVector3): Float;
+function LengthVec(const v: TVector3): PhysicsFloat;
 begin
    with v do
       Result := Sqrt(x * x + y * y + z * z);
 end;
 
-function SqrLength(const v: TVector3): Float;
+function SqrLength(const v: TVector3): PhysicsFloat;
 begin
    with v do
       Result := x * x + y * y + z * z;
 end;
 
-function Normalize(var v: TVector3): Float;
+function Normalize(var v: TVector3): PhysicsFloat;
 begin
    Result := LengthVec(v);
 	 if Result < FLT_EPSILON then
@@ -867,9 +867,9 @@ begin
    end;
 end;
 
-procedure SetLengthVec(var v: TVector3; value: Float);
+procedure SetLengthVec(var v: TVector3; value: PhysicsFloat);
 var
-   l: Float;
+   l: PhysicsFloat;
 begin
    with v do
    begin
@@ -1056,9 +1056,9 @@ begin
    end;
 end;
 
-procedure SetValue(var m: TMatrix22; angle: Float);
+procedure SetValue(var m: TMatrix22; angle: PhysicsFloat);
 var
-   c, s: Float;
+   c, s: PhysicsFloat;
 begin
     SinCos(angle, s, c);
 
@@ -1073,7 +1073,7 @@ end;
 
 function Invert(const m: TMatrix22): TMatrix22;
 var
-   a, b, c, d, det: Float;
+   a, b, c, d, det: PhysicsFloat;
 begin
    with m do
    begin
@@ -1102,7 +1102,7 @@ end;
 
 function Solve(const m: TMatrix22; const b: TVector2): TVector2;
 var
-   a11, a12, a21, a22, det: Float;
+   a11, a12, a21, a22, det: PhysicsFloat;
 begin
    with m do
    begin
@@ -1191,7 +1191,7 @@ end;
 
 function Solve33(var m: TMatrix33; const b: TVector3): TVector3;
 var
-   det: Float;
+   det: PhysicsFloat;
 begin
    with m do
    begin
@@ -1206,7 +1206,7 @@ end;
 
 function Solve22(var m: TMatrix33; const b: TVector2): TVector2;
 var
-   det: Float;
+   det: PhysicsFloat;
 begin
    with m do
    begin
@@ -1270,7 +1270,7 @@ begin
    end;
 end;
 
-procedure SetValue(var xf: Tb2Transform; const p: TVector2; angle: Float);
+procedure SetValue(var xf: Tb2Transform; const p: TVector2; angle: PhysicsFloat);
 begin
    with xf do
    begin
@@ -1279,7 +1279,7 @@ begin
    end;
 end;
 
-function GetAngle(const xf: Tb2Transform): Float;
+function GetAngle(const xf: Tb2Transform): PhysicsFloat;
 begin
    with xf do
       Result := ArcTan2(R.col1.y, R.col1.x);
@@ -1287,9 +1287,9 @@ end;
 
 // For Tb2Sweep
 
-procedure GetTransform(const Sweep: Tb2Sweep; var xf: Tb2Transform; beta: Float);
+procedure GetTransform(const Sweep: Tb2Sweep; var xf: Tb2Transform; beta: PhysicsFloat);
 var
-   angle: Float;
+   angle: PhysicsFloat;
 begin
    with Sweep do
    begin
@@ -1302,9 +1302,9 @@ begin
    end;
 end;
 
-procedure Advance(var Sweep: Tb2Sweep; alpha: Float);
+procedure Advance(var Sweep: Tb2Sweep; alpha: PhysicsFloat);
 var
-   beta: Float;
+   beta: PhysicsFloat;
 begin
    with Sweep do
    begin
@@ -1320,7 +1320,7 @@ procedure Normalize(var Sweep: Tb2Sweep);
 const
    Pi2 = 2 * Pi;
 var
-   d: Float;
+   d: PhysicsFloat;
 begin
    with Sweep do
    begin
@@ -1333,13 +1333,13 @@ end;
 {$ENDIF}
 
 /// Friction mixing law. Feel free to customize this.
-function b2MixFriction(friction1, friction2: Float): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2MixFriction(friction1, friction2: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 begin
 	 Result := Sqrt(friction1 * friction2);
 end;
 
 /// Restitution mixing law. Feel free to customize this.
-function b2MixRestitution(restitution1, restitution2: Float): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2MixRestitution(restitution1, restitution2: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 begin
    if restitution1 > restitution2 then
       Result := restitution1
@@ -1347,7 +1347,7 @@ begin
       Result := restitution2;
 end;
 
-function b2Max(const a, b: Float): Float;
+function b2Max(const a, b: PhysicsFloat): PhysicsFloat;
 begin
    if a >= b then
       Result := a
@@ -1361,7 +1361,7 @@ begin
    Result.y := b2Max(a.y, b.y);
 end;
 
-function b2Min(const a, b: Float): Float;
+function b2Min(const a, b: PhysicsFloat): PhysicsFloat;
 begin
    if a >= b then
       Result := b
@@ -1391,9 +1391,9 @@ begin
       Result := a;
 end;
 
-procedure b2Swap(var a, b: Float);
+procedure b2Swap(var a, b: PhysicsFloat);
 var
-   tmp: Float;
+   tmp: PhysicsFloat;
 begin
    tmp := a;
    a := b;
@@ -1423,7 +1423,7 @@ begin
    Result := b2Max(low, b2Min(a, high));
 end;
 
-function b2Clamp(const a, low, high: Float): Float;
+function b2Clamp(const a, low, high: PhysicsFloat): PhysicsFloat;
 begin
    if a < low then
       Result := low
@@ -1439,37 +1439,37 @@ begin
    Result.y := (a.y + b.y) * 0.5;
 end;
 
-function IsValid(f: Float): Boolean;
+function IsValid(f: PhysicsFloat): Boolean;
 begin
    Result := not (IsNan(f) or IsInfinite(f));
 end;
 
 /// Peform the dot product on two vectors.
-function b2Dot(const a, b: TVector2): Float;
+function b2Dot(const a, b: TVector2): PhysicsFloat;
 begin
    Result := a.x * b.x + a.y * b.y;
 end;
 
-function b2Dot(const a, b: TVector3): Float;
+function b2Dot(const a, b: TVector3): PhysicsFloat;
 begin
    Result := a.x * b.x + a.y * b.y + a.z * b.z;
 end;
 
 /// Perform the cross product on two vectors. In 2D this produces a scalar.
-function b2Cross(const a, b: TVector2): Float;
+function b2Cross(const a, b: TVector2): PhysicsFloat;
 begin
 	 Result := a.x * b.y - a.y * b.x;
 end;
 
 /// Perform the cross product on a vector and a scalar. In 2D this produces a vector.
-function b2Cross(const a: TVector2; s: Float): TVector2;
+function b2Cross(const a: TVector2; s: PhysicsFloat): TVector2;
 begin
    Result.x := s * a.y;
    Result.y := -s * a.x;
 end;
 
 /// Perform the cross product on a scalar and a vector. In 2D this produces a vector.
-function b2Cross(s: Float; const a: TVector2): TVector2;
+function b2Cross(s: PhysicsFloat; const a: TVector2): TVector2;
 begin
    Result.x := -s * a.y;
    Result.y := s * a.x;
@@ -1499,22 +1499,22 @@ begin
 end;
 
 {$IFDEF OP_OVERLOAD}
-function b2Distance(const a, b: TVector2): Float;
+function b2Distance(const a, b: TVector2): PhysicsFloat;
 begin
    Result := (a - b).Length;
 end;
 
-function b2DistanceSquared(const a, b: TVector2): Float;
+function b2DistanceSquared(const a, b: TVector2): PhysicsFloat;
 begin
    Result := (a - b).SqrLength;
 end;
 {$ELSE}
-function b2Distance(const a, b: TVector2): Float;
+function b2Distance(const a, b: TVector2): PhysicsFloat;
 begin
    Result := LengthVec(Subtract(a, b));
 end;
 
-function b2DistanceSquared(const a, b: TVector2): Float;
+function b2DistanceSquared(const a, b: TVector2): PhysicsFloat;
 begin
    Result := SqrLength(Subtract(a, b));
 end;
@@ -1631,12 +1631,12 @@ begin
    Result := UPhysics2DTypes.IsValid(x) and UPhysics2DTypes.IsValid(y);
 end;
 
-function TVector2.Length: Float;
+function TVector2.Length: PhysicsFloat;
 begin
    Result := Sqrt(x * x + y * y);
 end;
 
-function TVector2.Normalize: Float;
+function TVector2.Normalize: PhysicsFloat;
 begin
    Result := Length();
 	 if Result < FLT_EPSILON then
@@ -1660,27 +1660,27 @@ begin
    y := -y;
 end;
 
-procedure TVector2.SetValue(x, y: Float);
+procedure TVector2.SetValue(x, y: PhysicsFloat);
 begin
    Self.x := x;
    Self.y := y;
 end;
 
-procedure TVector2.SetLength(value: Float);
+procedure TVector2.SetLength(value: PhysicsFloat);
 var
-   l: Float;
+   l: PhysicsFloat;
 begin
    l := value / Length;
    x := x * l;
    y := y * l;
 end;
 
-function TVector2.SqrLength: Float;
+function TVector2.SqrLength: PhysicsFloat;
 begin
    Result := x * x + y * y;
 end;
 
-class function TVector2.From(const x, y: Float): TVector2;
+class function TVector2.From(const x, y: PhysicsFloat): TVector2;
 begin
    Result.x := x;
    Result.y := y;
@@ -1828,9 +1828,9 @@ begin
    col2 := _col2;
 end;
 
-procedure TMatrix22.SetValue(angle: Float);
+procedure TMatrix22.SetValue(angle: PhysicsFloat);
 var
-   c, s: Float;
+   c, s: PhysicsFloat;
 begin
     SinCos(angle, s, c);
 		col1.x := c;
@@ -1841,7 +1841,7 @@ end;
 
 function TMatrix22.Invert: TMatrix22;
 var
-   a, b, c, d, det: Float;
+   a, b, c, d, det: PhysicsFloat;
 begin
    a := col1.x;
    b := col2.x;
@@ -1867,7 +1867,7 @@ end;
 
 function TMatrix22.Solve(const b: TVector2): TVector2;
 var
-   det: Float;
+   det: PhysicsFloat;
 begin
    det := col1.x * col2.y - col2.x * col1.y;
    if det <> 0.0 then
@@ -1930,7 +1930,7 @@ end;
 
 function TMatrix33.Solve33(const b: TVector3): TVector3;
 var
-   det: Float;
+   det: PhysicsFloat;
 begin
    det := b2Dot(col1, b2Cross(col2, col3));
    if det <> 0.0 then
@@ -1942,7 +1942,7 @@ end;
 
 function TMatrix33.Solve22(const b: TVector2): TVector2;
 var
-   det: Float;
+   det: PhysicsFloat;
 begin
    det := col1.x * col2.y - col2.x * col1.y;
 	 if det <> 0.0 then
@@ -1991,13 +1991,13 @@ begin
    R.SetIdentity;
 end;
 
-procedure Tb2Transform.SetValue(const p: TVector2; angle: Float);
+procedure Tb2Transform.SetValue(const p: TVector2; angle: PhysicsFloat);
 begin
    position := p;
    R.SetValue(angle);
 end;
 
-function Tb2Transform.GetAngle: Float;
+function Tb2Transform.GetAngle: PhysicsFloat;
 begin
    Result := ArcTan2(R.col1.y, R.col1.x);
 end;
@@ -2011,9 +2011,9 @@ end;
 
 { Tb2Sweep }
 {$IFDEF OP_OVERLOAD}
-procedure Tb2Sweep.GetTransform(var xf: Tb2Transform; beta: Float);
+procedure Tb2Sweep.GetTransform(var xf: Tb2Transform; beta: PhysicsFloat);
 var
-   angle: Float;
+   angle: PhysicsFloat;
 begin
    xf.position := (1.0 - beta) * c0 + beta * c;
    angle := (1.0 - beta) * a0 + beta * a;
@@ -2023,9 +2023,9 @@ begin
    xf.position.SubtractBy(b2Mul(xf.R, localCenter));
 end;
 
-procedure Tb2Sweep.Advance(alpha: Float);
+procedure Tb2Sweep.Advance(alpha: PhysicsFloat);
 var
-   beta: Float;
+   beta: PhysicsFloat;
 begin
    //b2Assert(alpha0 < 1.0f);
    beta := (alpha - alpha0) / (1.0 - alpha0);
@@ -2038,7 +2038,7 @@ procedure Tb2Sweep.Normalize;
 const
    Pi2 = 2 * Pi;
 var
-   d: Float;
+   d: PhysicsFloat;
 begin
    d :=  Pi2 * Floor(a0 / Pi2);
    a0 := a0 - d;
@@ -2055,12 +2055,12 @@ begin
       UPhysics2DTypes.IsValid(z);
 end;
 
-function TVector3.Length: Float;
+function TVector3.Length: PhysicsFloat;
 begin
    Result := Sqrt(x * x + y * y + z * z);
 end;
 
-function TVector3.Normalize: Float;
+function TVector3.Normalize: PhysicsFloat;
 begin
    Result := Length();
 	 if Result < FLT_EPSILON then
@@ -2087,16 +2087,16 @@ begin
    z := -z;
 end;
 
-procedure TVector3.SetValue(x, y, z: Float);
+procedure TVector3.SetValue(x, y, z: PhysicsFloat);
 begin
    Self.x := x;
    Self.y := y;
    Self.z := z;
 end;
 
-procedure TVector3.SetLength(value: Float);
+procedure TVector3.SetLength(value: PhysicsFloat);
 var
-   l: Float;
+   l: PhysicsFloat;
 begin
    l := value / Length;
    x := x * l;
@@ -2104,12 +2104,12 @@ begin
    z := z * l;
 end;
 
-function TVector3.SqrLength: Float;
+function TVector3.SqrLength: PhysicsFloat;
 begin
    Result := x * x + y * y + z * z;
 end;
 
-class function TVector3.From(const x, y, z: Float): TVector3;
+class function TVector3.From(const x, y, z: PhysicsFloat): TVector3;
 begin
    Result.x := x;
    Result.y := y;

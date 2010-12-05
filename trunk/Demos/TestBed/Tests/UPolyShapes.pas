@@ -22,7 +22,7 @@ type
       constructor Create; override;
       destructor Destroy; override;
 
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 
@@ -111,7 +111,7 @@ var
    ground: Tb2Body;
    shape: Tb2EdgeShape;
    vertices: array[0..7] of TVector2;
-   w, b, s: Float;
+   w, b, s: PhysicsFloat;
 begin
    inherited;
    // Ground body
@@ -176,7 +176,7 @@ begin
    inherited;
 end;
 
-procedure TPolyShapes.Step(var settings: TSettings; timeStep: Float);
+procedure TPolyShapes.Step(var settings: TSettings; timeStep: PhysicsFloat);
 const
    color: RGBA = (0.4, 0.7, 0.8, 1.0);
 var
@@ -280,4 +280,5 @@ initialization
    RegisterTestEntry('Poly Shapes', TPolyShapes);
 
 end.
+
 

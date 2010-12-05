@@ -53,7 +53,7 @@ unit UPhysics2DControllers;
 
   Translator: Qianyuan Wang(ÍõÇ¬Ôª)
   Contact me: http://hi.baidu.com/wqyfavor
-              wqyfavor@163.com
+              wqyfavor@qq.com
               QQ: 466798985
 }
 
@@ -68,13 +68,13 @@ type
    Tb2BuoyancyController = class(Tb2Controller)
    public
       normal: TVector2; /// The outer surface normal
-      offset: Float; /// The height of the fluid surface along the normal
-      density: Float; /// The fluid density
+      offset: PhysicsFloat; /// The height of the fluid surface along the normal
+      density: PhysicsFloat; /// The fluid density
       velocity: TVector2; /// Fluid velocity, for drag calculations
 
       /// Linear drag co-efficient
-      linearDrag: Float;      /// Linear drag co-efficient
-      angularDrag: Float;
+      linearDrag: PhysicsFloat;      /// Linear drag co-efficient
+      angularDrag: PhysicsFloat;
 
       /// If false, bodies are assumed to be uniformly dense, otherwise use the shapes densities
       useDensity: Boolean; //False by default to prevent a gotcha
@@ -104,7 +104,7 @@ type
    /// Applies simplified gravity between every pair of bodies.
    Tb2GravityController = class(Tb2Controller)
    public
-	    G:Float; /// Specifies the strength of the gravitiation force
+	    G:PhysicsFloat; /// Specifies the strength of the gravitiation force
 	    invSqr: Boolean; /// If true, gravity is proportional to r^-2, otherwise r^-1
       reject: Boolean; // If true, objects reject each other
 
@@ -126,11 +126,11 @@ type
       //By the way, tensor in this case just means matrix, don't let the terminology get you down.
 
       /// Set this to a positive number to clamp the maximum amount of damping done.
-      maxTimestep: Float;
+      maxTimestep: PhysicsFloat;
       // Typically one wants maxTimestep to be 1/(max eigenvalue of T), so that damping will never cause something to reverse direction
 
       procedure Step(const step: Tb2TimeStep); override;
-      procedure SetAxisAligned(xDamping, yDamping: Float);
+      procedure SetAxisAligned(xDamping, yDamping: PhysicsFloat);
    end;
 
    // Returns the wind vector. Contain information about both direction and magnitude
@@ -152,9 +152,9 @@ type
       FTriggered: Boolean;
       FEnergySet: Boolean;
       FAutoFree: Boolean;
-      FEnergy: Float; // All kinetic energy produced by explosion
+      FEnergy: PhysicsFloat; // All kinetic energy produced by explosion
       
-      procedure FSetEnergy(value: Float);
+      procedure FSetEnergy(value: PhysicsFloat);
       procedure RecalculateDefaultEnergy;
    public
       constructor Create;
@@ -167,7 +167,7 @@ type
 
       property Exploded: Boolean read FExploded; 
       property AutoFree: Boolean read FAutoFree write FAutoFree;
-      property Energy: Float read FEnergy write FSetEnergy;
+      property Energy: PhysicsFloat read FEnergy write FSetEnergy;
    end;
 
 {$ENDIF}
@@ -197,7 +197,7 @@ var
    body: Tb2Body;
    shape: Tb2Fixture;
    areac, massc, sc, localCentroid, buoyancyForce, dragForce: TVector2;
-   area, mass, sarea, shapeDensity: Float;
+   area, mass, sarea, shapeDensity: PhysicsFloat;
 begin
    //B2_NOT_USED(step);
    if not Assigned(m_bodyList) then
@@ -349,7 +349,7 @@ var
    i, j: Pb2ControllerEdge;
    body1, body2: Tb2Body;
    d, f: TVector2;
-   r2: Float;
+   r2: PhysicsFloat;
 begin
    //B2_NOT_USED(step);
    if invSqr then
@@ -453,7 +453,7 @@ end;
 procedure Tb2TensorDampingController.Step(const step: Tb2TimeStep);
 var
    i: Pb2ControllerEdge;
-   timestep: Float;
+   timestep: PhysicsFloat;
    damping: TVector2;
 begin
    timestep := step.dt;
@@ -479,7 +479,7 @@ begin
       end;
 end;
 
-procedure Tb2TensorDampingController.SetAxisAligned(xDamping, yDamping: Float);
+procedure Tb2TensorDampingController.SetAxisAligned(xDamping, yDamping: PhysicsFloat);
 begin
    T.col1.x := -xDamping;
    T.col1.y := 0;
@@ -620,7 +620,7 @@ begin
    FAutoFree := False;
 end;
 
-procedure Tb2ExplosionController.FSetEnergy(value: Float);
+procedure Tb2ExplosionController.FSetEnergy(value: PhysicsFloat);
 begin
    FEnergy := value;
    FEnergySet := True;
@@ -667,7 +667,7 @@ procedure Tb2ExplosionController.Step(const step: Tb2TimeStep);
 var
    i, j: Pb2ControllerEdge;
    body1, body2: Tb2Body;
-   totalMass, nTotalMass, divEnergy, linEnergy, angEnergy, ang_impulse: Float;
+   totalMass, nTotalMass, divEnergy, linEnergy, angEnergy, ang_impulse: PhysicsFloat;
    bodyCount: Int32;
    lin_impulse: TVector2;
 begin

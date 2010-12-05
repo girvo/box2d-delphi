@@ -9,16 +9,16 @@ uses
 type
    TJansenWalker = class(TTester)
    private
-      procedure CreateLeg(s: Float; const wheelAnchor: TVector2);
+      procedure CreateLeg(s: PhysicsFloat; const wheelAnchor: TVector2);
    public
       m_offset: TVector2;
       m_chassis, m_wheel: Tb2Body;
       m_motorJoint: Tb2RevoluteJoint;
       m_motorOn: Boolean;
-      m_motorSpeed: Float;
+      m_motorSpeed: PhysicsFloat;
 
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 
@@ -146,7 +146,7 @@ begin
    CreateLeg(1.0, wheelAnchor);
 end;
 
-procedure TJansenWalker.CreateLeg(s: Float; const wheelAnchor: TVector2);
+procedure TJansenWalker.CreateLeg(s: PhysicsFloat; const wheelAnchor: TVector2);
 var
    p1, p2, p3, p4, p5, p6: TVector2;
    vertices: array[0..2] of TVector2;
@@ -275,7 +275,7 @@ begin
    m_world.CreateJoint(rjd);
 end;
 
-procedure TJansenWalker.Step(var settings: TSettings; timeStep: Float);
+procedure TJansenWalker.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
 	 DrawText('Keys: left = A, brake = S, right = D, toggle motor = M');
@@ -295,3 +295,4 @@ initialization
    RegisterTestEntry('Theo Jansen''s Walker', TJansenWalker);
 
 end.
+

@@ -12,7 +12,7 @@ type
       procedure CreateCircle;
    public
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 
@@ -82,7 +82,7 @@ begin
    UpdateGravityText;
 end;
 
-procedure TConfined.Step(var settings: TSettings; timeStep: Float);
+procedure TConfined.Step(var settings: TSettings; timeStep: PhysicsFloat);
 var
    b: Tb2Body;
    sleeping: Boolean;
@@ -170,3 +170,4 @@ initialization
    RegisterTestEntry('Confined', TConfined);
 
 end.
+

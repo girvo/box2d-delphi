@@ -13,9 +13,9 @@ type
    public
 
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
-      procedure LaunchBomb(velocity_factor: Float = 1.0); override;
+      procedure LaunchBomb(velocity_factor: PhysicsFloat = 1.0); override;
    end;
 
 implementation
@@ -84,7 +84,7 @@ begin
    end;
 end;
 
-procedure TPyramid.Step(var settings: TSettings; timeStep: Float);
+procedure TPyramid.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
    DrawText(Format('Use +/- to change box count. Box Count: %d', [m_bodyCount]));
@@ -106,7 +106,7 @@ begin
    frmMain.btnResetClick(nil);
 end;
 
-procedure TPyramid.LaunchBomb(velocity_factor: Float);
+procedure TPyramid.LaunchBomb(velocity_factor: PhysicsFloat);
 begin
    inherited LaunchBomb(15.0);
 end;
@@ -116,3 +116,4 @@ initialization
    RegisterTestEntry('Pyramid', TPyramid);
 
 end.
+

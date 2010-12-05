@@ -20,7 +20,7 @@ type
       m_touching: array[0..e_count - 1] of Boolean;
 
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
    end;
 
 implementation
@@ -114,7 +114,7 @@ begin
    end;
 end;
 
-procedure TSensorTest.Step(var settings: TSettings; timeStep: Float);
+procedure TSensorTest.Step(var settings: TSettings; timeStep: PhysicsFloat);
 var
    i: Integer;
    body, ground: Tb2Body;
@@ -156,3 +156,4 @@ initialization
    RegisterTestEntry('Sensor Test', TSensorTest);
 
 end.
+

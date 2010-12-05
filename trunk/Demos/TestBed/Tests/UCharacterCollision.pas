@@ -10,7 +10,7 @@ type
    TCharacterCollision = class(TTester)
    public
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
    end;
 
 
@@ -30,7 +30,7 @@ var
    shape: Tb2PolygonShape;
    lshape: Tb2LoopShape;
    fd: Tb2FixtureDef;
-   d, angle, delta: Float;
+   d, angle, delta: PhysicsFloat;
    cshape: Tb2CircleShape;
    vertices: array[0..5] of TVector2;
    vs: array[0..9] of TVector2;
@@ -192,7 +192,7 @@ begin
    end;
 end;
 
-procedure TCharacterCollision.Step(var settings: TSettings; timeStep: Float);
+procedure TCharacterCollision.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
    DrawText('This demo tests various character collision shapes.');
@@ -203,3 +203,4 @@ end;
 initialization
    RegisterTestEntry('Character Collision', TCharacterCollision);
 end.
+

@@ -12,10 +12,10 @@ type
       procedure Launch;
    public
       m_body, m_bullet: Tb2Body;
-      m_x: Float;
+      m_x: PhysicsFloat;
 
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
    end;
 
 implementation
@@ -91,7 +91,7 @@ begin
    b2_toiMaxRootIters := 0;
 end;
 
-procedure TBulletTest.Step(var settings: TSettings; timeStep: Float);
+procedure TBulletTest.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
 
@@ -116,3 +116,4 @@ initialization
    RegisterTestEntry('Bullet Test', TBulletTest);
 
 end.
+

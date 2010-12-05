@@ -10,10 +10,10 @@ type
    TBodyTypes = class(TTester)
    public
       m_attachment, m_platform: Tb2Body;
-	    m_speed: Float;
+	    m_speed: PhysicsFloat;
 
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 
@@ -55,7 +55,7 @@ begin
       shape := Tb2PolygonShape.Create;
       shape.SetAsBox(0.5, 2.0);
       m_attachment.CreateFixture(shape, 2.0);
-   end; 
+   end;
 
    // Define platform
    begin
@@ -72,12 +72,12 @@ begin
       fd.friction := 0.6;
       fd.density := 2.0;
       m_platform.CreateFixture(fd);
-  
+
       rjd := Tb2RevoluteJointDef.Create;
       rjd.Initialize(m_attachment, m_platform, MakeVector(0.0, 5.0));
       rjd.maxMotorTorque := 50.0;
       rjd.enableMotor := True;
-      m_world.CreateJoint(rjd);   
+      m_world.CreateJoint(rjd);
 
       pjd := Tb2PrismaticJointDef.Create;
       pjd.Initialize(ground, m_platform, MakeVector(0.0, 5.0), MakeVector(1.0, 0.0));
@@ -107,10 +107,10 @@ begin
       fd.density := 2.0;
 
       body.CreateFixture(fd);
-   end;       
+   end;
 end;
 
-procedure TBodyTypes.Step(var settings: TSettings; timeStep: Float);
+procedure TBodyTypes.Step(var settings: TSettings; timeStep: PhysicsFloat);
 var
    p, v: TVector2;
 begin
@@ -125,9 +125,9 @@ begin
          v.x := -v.x;
          m_platform.SetLinearVelocity(v);
       end;
-   end;       
+   end;
 
-   inherited;   
+   inherited;
    DrawText('Keys: (d) dynamic, (s) static, (k) kinematic');
 end;
 
@@ -149,3 +149,4 @@ initialization
    RegisterTestEntry('Body Types', TBodyTypes);
 
 end.
+

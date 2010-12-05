@@ -41,9 +41,9 @@
 			<DCCReference Include="UPhysicsDebug.pas">
 				<Form>frmDebug</Form>
 			</DCCReference>
-			<DCCReference Include="..\..\Source\UPhysics2D.pas"/>
-			<DCCReference Include="..\..\Source\UPhysics2DTypes.pas"/>
-			<None Include="..\..\Source\Physics2D.inc"/>
+			<DCCReference Include="..\..\Physics2D\UPhysics2D.pas"/>
+			<DCCReference Include="..\..\Physics2D\UPhysics2DTypes.pas"/>
+			<None Include="..\..\Physics2D\Physics2D.inc"/>
 			<BuildConfiguration Include="Base">
 				<Key>Base</Key>
 			</BuildConfiguration>

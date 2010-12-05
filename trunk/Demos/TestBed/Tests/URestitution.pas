@@ -9,11 +9,11 @@ uses
 type
    TRestitution = class(TTester)
    private
-      k_restitution: Float;
+      k_restitution: PhysicsFloat;
    public
       body: Tb2Body;
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 
@@ -71,7 +71,7 @@ begin
    end;
 end;
 
-procedure TRestitution.Step(var settings: TSettings; timeStep: Float);
+procedure TRestitution.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
    DrawText(Format('Use +/- to control restitution. Present %f', [k_restitution]));
@@ -103,3 +103,4 @@ initialization
    RegisterTestEntry('Restitution Test', TRestitution);
 
 end.
+

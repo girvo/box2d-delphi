@@ -14,14 +14,14 @@ type
    public
       m_body1: Tb2Body;
 	    m_velocity: TVector2;
-	    m_angularVelocity: Float;
+	    m_angularVelocity: PhysicsFloat;
 	    m_shape1, m_shape2: Tb2PolygonShape;
       m_piece1, m_piece2: Tb2Fixture;
       m_broke, m_break: Boolean;
 
       constructor Create; override;
       destructor Destroy; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
    end;
 
 implementation
@@ -111,7 +111,7 @@ end;
 procedure TBreakable.PostSolve(var contact: Tb2Contact; const impulse: Tb2ContactImpulse);
 var
    i: Integer;
-   maxImpulse: Float;
+   maxImpulse: PhysicsFloat;
 begin
    if m_broke then // The body already broke.
       Exit;
@@ -125,7 +125,7 @@ begin
       m_break := True;
 end;
 
-procedure TBreakable.Step(var settings: TSettings; timeStep: Float);
+procedure TBreakable.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    if m_break then
    begin
@@ -147,3 +147,4 @@ initialization
    RegisterTestEntry('Breakable', TBreakable);
 
 end.
+

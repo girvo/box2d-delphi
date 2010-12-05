@@ -10,14 +10,14 @@ type
    TDistanceTest = class(TTester)
    public
       m_positionB: TVector2;
-      m_angleB: Float;
+      m_angleB: PhysicsFloat;
       m_transformA, m_transformB: Tb2Transform;
       m_polygonA, m_polygonB: Tb2PolygonShape;
 
       constructor Create; override;
       destructor Destroy; override;
 
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
    end;
 
@@ -59,7 +59,7 @@ begin
    inherited;
 end;
 
-procedure TDistanceTest.Step(var settings: TSettings; timeStep: Float);
+procedure TDistanceTest.Step(var settings: TSettings; timeStep: PhysicsFloat);
 const
    color1: RGBA = (0.9, 0.9, 0.9, 1.0);
    color2: RGBA = (1.0, 0.0, 0.0, 1.0);
@@ -125,4 +125,5 @@ initialization
    RegisterTestEntry('Distance Test', TDistanceTest);
 
 end.
+
 

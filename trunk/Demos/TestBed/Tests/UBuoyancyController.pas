@@ -11,18 +11,18 @@ type
 
    TBuoyancyController = class(TTester)
    private
-      time: Float;
+      time: PhysicsFloat;
       procedure CreateRandomObject;
    public
       wave: Boolean;
-      density: Float;
+      density: PhysicsFloat;
       bc: Tb2BuoyancyController;
       m_polygons: array[0..2] of Tb2PolygonShape;
 
       constructor Create; override;
       destructor Destroy; override;
       procedure Keyboard(key: Byte); override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
    end;
 {$ENDIF}
 
@@ -38,7 +38,7 @@ var
    ground: Tb2Body;
    shape: Tb2EdgeShape;
    vertices: Tb2PolyVertices;
-   w, b, s: Float;
+   w, b, s: PhysicsFloat;
 begin
    inherited;
    bc := Tb2BuoyancyController.Create;
@@ -206,13 +206,13 @@ begin
    end;
 end;
 
-procedure TBuoyancyController.Step(var settings: TSettings; timeStep: Float);
+procedure TBuoyancyController.Step(var settings: TSettings; timeStep: PhysicsFloat);
 const
    waterlevel: RGBA = (0.0, 0.0, 1.0, 1.0);
-   waterarea: RGBA = (0.0, 0.0, 1.0, 0.3);    
+   waterarea: RGBA = (0.0, 0.0, 1.0, 0.3);
 var
-   theta: Float;
-   vertices: array[0..3] of TVector2; 
+   theta: PhysicsFloat;
+   vertices: array[0..3] of TVector2;
 begin
    time := time + timeStep;
    if wave then
@@ -231,8 +231,8 @@ begin
    vertices[0] := MakeVector(-20, -10);
    vertices[1] := MakeVector(-20, -20 * Tan(theta));
    vertices[2] := MakeVector(20, 20 * Tan(theta));
-   vertices[3] := MakeVector(20, -10);              
-   
+   vertices[3] := MakeVector(20, -10);
+
    m_debugDraw.DrawSolidPolygon((Pb2PolyVertices(@vertices[0]))^, 4, waterarea);
    m_debugDraw.DrawSegment(vertices[1], vertices[2], waterlevel);
 end;
@@ -241,3 +241,4 @@ initialization
    RegisterTestEntry('Buoyancy Controller', TBuoyancyController);
 {$ENDIF}
 end.
+

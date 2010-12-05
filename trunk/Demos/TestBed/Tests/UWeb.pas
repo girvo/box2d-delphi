@@ -13,7 +13,7 @@ type
       m_joints: array[0..7] of Tb2Joint;
 
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
       procedure Keyboard(key: Byte); override;
       procedure JointDestroyed(joint: Tb2Joint); override;
    end;
@@ -191,7 +191,7 @@ begin
    end;
 end;
 
-procedure TWeb.Step(var settings: TSettings; timeStep: Float);
+procedure TWeb.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
 	 DrawText('This demonstrates a soft distance joint.');
@@ -238,3 +238,4 @@ initialization
    RegisterTestEntry('Web', TWeb);
 
 end.
+

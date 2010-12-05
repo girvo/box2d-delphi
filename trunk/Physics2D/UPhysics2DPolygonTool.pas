@@ -71,7 +71,7 @@ unit UPhysics2DPolygonTool;
 
   Translator: Qianyuan Wang(ÍõÇ¬Ôª)
   Contact me: http://hi.baidu.com/wqyfavor
-              wqyfavor@163.com
+              wqyfavor@qq.com
               QQ: 466798985
 }
 
@@ -1120,7 +1120,7 @@ var
    centroid, n1, n2, v: TPointF;
    normals, vertices: TPointsF;
    edge, tmpV, d: TVector2;
-   cross: Float;
+   cross: PhysicsFloat;
 begin
    error := -1;
    noError := True;

@@ -53,7 +53,7 @@ unit UPhysics2D;
 
   Translator: Qianyuan Wang(ÍõÇ¬Ôª)
   Contact me: http://hi.baidu.com/wqyfavor
-              wqyfavor@163.com
+              wqyfavor@qq.com
               QQ: 466798985
 }
 
@@ -119,7 +119,7 @@ type
    Tb2DistanceProxy = record
       m_vertices: PVector2;
       m_count: Int32;
-      m_radius: Float;
+      m_radius: PhysicsFloat;
       m_buffer: array[0..1] of TVector2;
 
       {$IFDEF OP_OVERLOAD}
@@ -147,14 +147,14 @@ type
    Tb2DistanceOutput = record
       pointA,            ///< closest point on shapeA
       pointB: TVector2;  ///< closest point on shapeB
-      distance: Float;
+      distance: PhysicsFloat;
       iterations: Int32; ///< number of GJK iterations used
    end;
 
    /// Used to warm start b2Distance.
    /// Set count to zero on first call.
    Tb2SimplexCache = record
-      metric: Float;		///< length or area
+      metric: PhysicsFloat;		///< length or area
       count: UInt16;
       indexA,
       indexB: array[0..2] of UInt8; /// vertices on shape A an B
@@ -164,7 +164,7 @@ type
    Tb2TOIInput = record
       proxyA, proxyB: Tb2DistanceProxy;
       sweepA, sweepB: Tb2Sweep;
-      tMax: Float; // defines sweep interval [0, tMax]
+      tMax: PhysicsFloat; // defines sweep interval [0, tMax]
    end;
 
    // Output parameters for b2TimeOfImpact.
@@ -172,7 +172,7 @@ type
       e_toi_touching, e_toi_separated);
    Tb2TOIOutput = record
       state: Tb2TOIOutputState;
-      t: Float;
+      t: PhysicsFloat;
    end;
 
    /// A manifold point is a contact point belonging to a contact
@@ -188,8 +188,8 @@ type
    Pb2ManifoldPoint = ^Tb2ManifoldPoint;
    Tb2ManifoldPoint = record
       localPoint: TVector2;		///< usage depends on manifold type    
-      normalImpulse: Float; ///< the non-penetration impulse
-      tangentImpulse: Float; ///< the friction impulse
+      normalImpulse: PhysicsFloat; ///< the non-penetration impulse
+      tangentImpulse: PhysicsFloat; ///< the friction impulse
       id: Tb2ContactID; ///< uniquely identifies a contact point between two shapes
       isNew: Boolean;
    end;
@@ -232,7 +232,7 @@ type
       /// point count, impulses, etc. The radii must come from the shapes
       /// that generated the manifold.
       procedure Initialize(const manifold: Tb2Manifold; const xfA, xfB: Tb2Transform;
-         radiusA, radiusB: Float);
+         radiusA, radiusB: PhysicsFloat);
       {$ENDIF}
    end;
 
@@ -247,13 +247,13 @@ type
    /// Ray-cast input data.
    Tb2RayCastInput = record
       p1, p2: TVector2;
-      maxFraction: Float;
+      maxFraction: PhysicsFloat;
    end;
 
    /// Ray-cast output data.
    Tb2RayCastOutput = record
       normal: TVector2;
-      fraction: Float;
+      fraction: PhysicsFloat;
    end;
 
    /// An axis aligned bounding box.
@@ -265,7 +265,7 @@ type
     	function IsValid: Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Verify that the bounds are sorted.
       function GetCenter: TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Get the center of the AABB.
       function GetExtents: TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Get the extents of the AABB (half-widths).
-    	function GetPerimeter: Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Get the perimeter length
+    	function GetPerimeter: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Get the perimeter length
       procedure Combine(const aabb: Tb2AABB); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Combine an AABB into this one.
       procedure Combine(const aabb1, aabb2: Tb2AABB); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Combine two AABBs into this one.
       function Contains(const aabb: Tb2AABB): Boolean; /// Does this aabb contain the provided AABB.
@@ -280,9 +280,9 @@ type
    // World
 
    Tb2TimeStep = record
-      dt: Float; // time step
-      inv_dt: Float; // inverse time step (0 if dt == 0).
-	    dtRatio: Float; // dt * inv_dt0
+      dt: PhysicsFloat; // time step
+      inv_dt: PhysicsFloat; // inverse time step (0 if dt == 0).
+	    dtRatio: PhysicsFloat; // dt * inv_dt0
       velocityIterations, positionIterations: Int32;
       warmStarting: Boolean;
    end;
@@ -317,8 +317,8 @@ type
       procedure DrawPolygon(const vertices: Tb2PolyVertices; vertexCount: Int32; const color: RGBA); virtual; abstract;
       procedure DrawPolygon4(const vertices: TVectorArray4; vertexCount: Int32; const color: RGBA); virtual; abstract;
       procedure DrawSolidPolygon(const vertices: Tb2PolyVertices; vertexCount: Int32; const color: RGBA); virtual; abstract;
-      procedure DrawCircle(const center: TVector2; radius: Float; const color: RGBA); virtual; abstract;
-      procedure DrawSolidCircle(const center, axis: TVector2; radius: Float; const color: RGBA); virtual; abstract;
+      procedure DrawCircle(const center: TVector2; radius: PhysicsFloat; const color: RGBA); virtual; abstract;
+      procedure DrawSolidCircle(const center, axis: TVector2; radius: PhysicsFloat; const color: RGBA); virtual; abstract;
       procedure DrawSegment(const p1, p2: TVector2; const color: RGBA); virtual; abstract;
       procedure DrawTransform(const xf: Tb2Transform); virtual; abstract;
    end;
@@ -327,7 +327,7 @@ type
    Tb2GenericCallBackWrapper = class
    public
       function QueryCallback(proxyId: Int32): Boolean; virtual; abstract;
-      function RayCastCallback(const input: Tb2RayCastInput; proxyId: Int32): Float; virtual; abstract;
+      function RayCastCallback(const input: Tb2RayCastInput; proxyId: Int32): PhysicsFloat; virtual; abstract;
    end;
 
    /// The world class manages all physics entities, dynamic simulation,
@@ -359,7 +359,7 @@ type
       m_destructionListener: Tb2DestructionListener;
       m_debugDraw: Tb2DebugDraw;
 
-      m_inv_dt0: Float;  // This is used to compute the time step ratio to support a variable time step.
+      m_inv_dt0: PhysicsFloat;  // This is used to compute the time step ratio to support a variable time step.
       m_warmStarting: Boolean;
       m_continuousPhysics: Boolean; // For debugging the solver
 
@@ -421,7 +421,7 @@ type
       /// @param timeStep the amount of time to simulate, this should not vary.
       /// @param velocityIterations for the velocity constraint solver.
       /// @param positionIterations for the position constraint solver.
-      procedure Step(timeStep: Float; velocityIterations,
+      procedure Step(timeStep: PhysicsFloat; velocityIterations,
          positionIterations: Int32; Draw: Boolean = False);
 
       /// Manually clear the force buffer on all bodies. By default, forces are cleared automatically
@@ -511,7 +511,7 @@ type
 	    localPoint: TVector2;
       rA, rB: TVector2;
 
-      normalImpulse, tangentImpulse, normalMass, tangentMass, velocityBias: Float;
+      normalImpulse, tangentImpulse, normalMass, tangentMass, velocityBias: PhysicsFloat;
    end;
 
    Pb2ContactConstraint = ^Tb2ContactConstraint;
@@ -524,9 +524,9 @@ type
       manifoldType: Tb2ManifoldType;
 
       bodyA, bodyB: Tb2Body;
-      radiusA, radiusB: Float;
-      restitution: Float;
-      friction: Float;
+      radiusA, radiusB: PhysicsFloat;
+      restitution: PhysicsFloat;
+      friction: PhysicsFloat;
       pointCount: Int32;
    end;
 
@@ -548,7 +548,7 @@ type
 
       m_manifold: Tb2Manifold;
       m_toiCount: Int32;
-      m_toi: Float;
+      m_toi: PhysicsFloat;
 
       m_evaluateProc: Tb2ContactEvaluateProc; // For different contacts
 
@@ -579,8 +579,8 @@ type
    /// sub-step forces may approach infinity for rigid body collisions. These
    /// match up one-to-one with the contact points in b2Manifold.
    Tb2ContactImpulse = record
-      normalImpulses: array[0..b2_maxManifoldPoints - 1] of Float;
-      tangentImpulses: array[0..b2_maxManifoldPoints - 1] of Float;
+      normalImpulses: array[0..b2_maxManifoldPoints - 1] of PhysicsFloat;
+      tangentImpulses: array[0..b2_maxManifoldPoints - 1] of PhysicsFloat;
    end;
 
    /// Implement this class to provide collision filtering. In other words,
@@ -655,7 +655,7 @@ type
       /// @return -1 to filter, 0 to terminate, fraction to clip the ray for
       /// closest hit, 1 to continue
       function ReportFixture(fixture:	Tb2Fixture; const point, normal: TVector2;
-         fraction: Float): Float; virtual; abstract;
+         fraction: PhysicsFloat): PhysicsFloat; virtual; abstract;
    end;
 
    Tb2ContactSolver = class
@@ -665,7 +665,7 @@ type
 
       destructor Destroy; override;
 
-      procedure Initialize(contacts: TList; count: Int32; impulseRatio: Float;
+      procedure Initialize(contacts: TList; count: Int32; impulseRatio: PhysicsFloat;
          warmStarting: Boolean);
 
       procedure InitializeVelocityConstraints;
@@ -673,8 +673,8 @@ type
       procedure SolveVelocityConstraints;
       procedure StoreImpulses;
 
-      function SolvePositionConstraints(baumgarte: Float): Boolean;
-      function SolveTOIPositionConstraints(baumgarte: Float; toiBodyA, toiBodyB: Tb2Body): Boolean;
+      function SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean;
+      function SolveTOIPositionConstraints(baumgarte: PhysicsFloat; toiBodyA, toiBodyB: Tb2Body): Boolean;
    end;
 
    // Delegate of b2World.
@@ -704,13 +704,13 @@ type
    /// This is an internal structure.
    Tb2Position = record
       x: TVector2;
-      a: Float;
+      a: PhysicsFloat;
    end;
 
    /// This is an internal structure.
    Tb2Velocity = record
       v: TVector2;
-      w: Float;
+      w: PhysicsFloat;
    end;
 
    Tb2Island = class
@@ -752,7 +752,7 @@ type
       localPoints: array[0..b2_maxManifoldPoints - 1] of TVector2;
       localNormal, localPoint: TVector2;
       manifoldType: Tb2ManifoldType;
-      radius: Float;
+      radius: PhysicsFloat;
       pointCount: Int32;
       bodyA, bodyB: Tb2Body;
    end;
@@ -924,8 +924,8 @@ type
 
    /// This holds the mass data computed for a shape.
    Tb2MassData = record
-	    mass: Float; /// The mass of the shape, usually in kilograms.
-      I: Float; /// The rotational inertia of the shape about the local origin.
+	    mass: PhysicsFloat; /// The mass of the shape, usually in kilograms.
+      I: PhysicsFloat; /// The rotational inertia of the shape about the local origin.
       center: TVector2; /// The position of the shape's centroid relative to the shape's origin.
    end;
 
@@ -943,7 +943,7 @@ type
       m_destroyed: Boolean;
       m_baseMass: Tb2MassData; // Density = 1
    public      
-      m_radius: Float;
+      m_radius: PhysicsFloat;
 
       constructor Create;
       destructor Destroy; override;
@@ -977,7 +977,7 @@ type
       /// The inertia tensor is computed about the local origin.
       /// @param massData returns the mass data for this shape.
       /// @param density the density in kilograms per meter squared.
-      procedure ComputeMass(var massData: Tb2MassData; density: Float); virtual; abstract;
+      procedure ComputeMass(var massData: Tb2MassData; density: PhysicsFloat); virtual; abstract;
 
       { * Compute the volume and centroid of this shape intersected with a half plane
         * @param normal the surface normal
@@ -985,8 +985,8 @@ type
         * @param xf the shape transform
         * @param c returns the centroid
         * @return the total volume less than offset along normal }
-      function ComputeSubmergedArea(const normal: TVector2; offset: Float;
-         const xf: Tb2Transform; var c: TVector2): Float; virtual; abstract;
+      function ComputeSubmergedArea(const normal: TVector2; offset: PhysicsFloat;
+         const xf: Tb2Transform; var c: TVector2): PhysicsFloat; virtual; abstract;
       property GetType: Tb2ShapeType read m_type;
    end;
 
@@ -1023,9 +1023,9 @@ type
       /// can create the shape on the stack.
       shape: Tb2Shape;
       userData: Pointer; /// Use this to store application specific fixture data.
-      friction: Float; /// The friction coefficient, usually in the range [0,1].
-      restitution: Float; /// The restitution (elasticity) usually in the range [0,1].
-      density: Float; /// The density, usually in kg/m^2.
+      friction: PhysicsFloat; /// The friction coefficient, usually in the range [0,1].
+      restitution: PhysicsFloat; /// The restitution (elasticity) usually in the range [0,1].
+      density: PhysicsFloat; /// The density, usually in kg/m^2.
       isSensor: Boolean; /// A sensor shape collects contact information but never generates a collision response.
       filter: Tb2Filter; /// Contact filtering data.
 
@@ -1037,13 +1037,13 @@ type
       m_shape: Tb2Shape;
       destructor Destroy2;
    protected
-      m_density: Float;
+      m_density: PhysicsFloat;
 
       m_next: Tb2Fixture;
       m_body: Tb2Body;
 
       m_friction,
-      m_restitution: Float;
+      m_restitution: PhysicsFloat;
 
       m_proxies: array of Tb2FixtureProxy;
       m_proxyCount: Int32;
@@ -1095,9 +1095,9 @@ type
       property GetNext: Tb2Fixture read m_next;
       property IsSensor: Boolean read m_isSensor write m_isSensor;
       property UserData: Pointer read m_userData write m_userData;
-      property Density: Float read m_density write m_density;
-      property Friction: Float read m_friction write m_friction;
-      property Restitution: Float read m_restitution write m_restitution;
+      property Density: PhysicsFloat read m_density write m_density;
+      property Friction: PhysicsFloat read m_friction write m_friction;
+      property Restitution: PhysicsFloat read m_restitution write m_restitution;
    end;
 
    //////////////////////////////////////////////////////////////
@@ -1109,12 +1109,12 @@ type
 
    Tb2Jacobian = record
       linearA, linearB: TVector2;
-      angularA, angularB: Float;
+      angularA, angularB: PhysicsFloat;
 
       {$IFDEF OP_OVERLOAD}
       procedure SetZero;
-      procedure SetValue(const x1, x2: TVector2; a1, a2: Float);
-      function Compute(const x1, x2: TVector2; a1, a2: Float): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      procedure SetValue(const x1, x2: TVector2; a1, a2: PhysicsFloat);
+      function Compute(const x1, x2: TVector2; a1, a2: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       {$ENDIF}      
    end;
 
@@ -1149,7 +1149,7 @@ type
       // Cache here per time step to reduce cache misses.
       m_localCenterA, m_localCenterB: TVector2;
       m_invMassA, m_invIA,
-      m_invMassB, m_invIB: Float;
+      m_invMassB, m_invIB: PhysicsFloat;
    protected
       m_type: Tb2JointType;
       m_prev, m_next: Tb2Joint;
@@ -1163,7 +1163,7 @@ type
       procedure SolveVelocityConstraints(const step: Tb2TimeStep); virtual; abstract;
 
       // This returns True if the position errors are within tolerance.
-      function SolvePositionConstraints(baumgarte: Float): Boolean; virtual; abstract;
+      function SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean; virtual; abstract;
 
    public
       constructor Create(def: Tb2JointDef);
@@ -1175,10 +1175,10 @@ type
       function GetAnchorB: TVector2; virtual; abstract;
 
       /// Get the reaction force on bodyB at the joint anchor in Newtons.
-      function GetReactionForce(inv_dt: Float): TVector2; virtual; abstract;
+      function GetReactionForce(inv_dt: PhysicsFloat): TVector2; virtual; abstract;
 
       /// Get the reaction torque on bodyB in N*m.
-      function GetReactionTorque(inv_dt: Float): Float; virtual; abstract;
+      function GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat; virtual; abstract;
 
 	    /// Short-cut function to determine if either body is inactive.
     	function IsActive: Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
@@ -1262,22 +1262,22 @@ type
       /// since this can lead to many overlapping shapes.
       position: TVector2;
 
-      angle: Float; // The world angle of the body in radians.
+      angle: PhysicsFloat; // The world angle of the body in radians.
 
     	/// The linear velocity of the body's origin in world co-ordinates.
 	    linearVelocity: TVector2;
 
-    	angularVelocity: Float; /// The angular velocity of the body.
+    	angularVelocity: PhysicsFloat; /// The angular velocity of the body.
 
       /// Linear damping is use to reduce the linear velocity. The damping parameter
       /// can be larger than 1.0f but the damping effect becomes sensitive to the
       /// time step when the damping parameter is large.
-      linearDamping: Float;
+      linearDamping: PhysicsFloat;
 
       /// Angular damping is use to reduce the angular velocity. The damping parameter
       /// can be larger than 1.0f but the damping effect becomes sensitive to the
       /// time step when the damping parameter is large.
-      angularDamping: Float;
+      angularDamping: PhysicsFloat;
 
       /// Set this flag to false if this body should never fall asleep. Note that
       /// this increases CPU usage.
@@ -1294,7 +1294,7 @@ type
 
       active: Boolean; /// Does this body start out active?
 
-	    inertiaScale: Float; /// Experimental: scales the inertia tensor.
+	    inertiaScale: PhysicsFloat; /// Experimental: scales the inertia tensor.
 
       constructor Create;
    end;
@@ -1320,12 +1320,12 @@ type
 	    m_controllerCount: Int32;
       {$ENDIF}
 
-      m_mass, m_invMass: Float;
-      m_I, m_invI: Float; // Rotational inertia about the center of mass.
-      m_storedInertia: Float;
+      m_mass, m_invMass: PhysicsFloat;
+      m_I, m_invI: PhysicsFloat; // Rotational inertia about the center of mass.
+      m_storedInertia: PhysicsFloat;
 
-      m_linearDamping: Float;
-      m_angularDamping: Float;
+      m_linearDamping: PhysicsFloat;
+      m_angularDamping: PhysicsFloat;
 
       destructor Destroy2; // Only free heap
       procedure ComputeStoredInertia;
@@ -1336,18 +1336,18 @@ type
 	    // This is used to prevent connected bodies from colliding.
 	    // It may lie, depending on the collideConnected flag.
 	    function ShouldCollide(other: Tb2Body): Boolean;
-      procedure Advance(alpha: Float);
+      procedure Advance(alpha: PhysicsFloat);
    protected
       m_xf: Tb2Transform; // the body origin transform
       m_sweep: Tb2Sweep; // the swept motion for CCD
 
       m_linearVelocity: TVector2;
-      m_angularVelocity: Float;
+      m_angularVelocity: PhysicsFloat;
 
       m_force: TVector2;
-      m_torque: Float;
+      m_torque: PhysicsFloat;
 
-      m_sleepTime: Float;
+      m_sleepTime: PhysicsFloat;
       m_userData: Pointer;
    public
       constructor Create(bd: Tb2BodyDef; world: Tb2World);
@@ -1370,7 +1370,7 @@ type
       /// @param shape the shape to be cloned.
       /// @param density the shape density (set to zero for static bodies).
       /// @warning This function is locked during callbacks.
-      function CreateFixture(shape: Tb2Shape; density: Float;
+      function CreateFixture(shape: Tb2Shape; density: PhysicsFloat;
          AutoFreeShape: Boolean = True; AutoResetMassData: Boolean = True): Tb2Fixture; overload;
 
       /// Destroy a fixture. This removes the fixture from the broad-phase and
@@ -1391,7 +1391,7 @@ type
       /// Manipulating a body's transform may cause non-physical behavior.
       /// @param position the world position of the body's local origin.
       /// @param angle the world rotation in radians.
-      procedure SetTransform(const position: TVector2; angle: Float);
+      procedure SetTransform(const position: TVector2; angle: PhysicsFloat);
     	/// Get the body transform for the body's origin.
     	/// @return the world transform of the body's origin.
     	function GetTransform: Pb2Transform; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
@@ -1402,7 +1402,7 @@ type
 
       /// Set the angular velocity.
       /// @param omega the new angular velocity in radians/second.
-      procedure SetAngularVelocity(omega: Float); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      procedure SetAngularVelocity(omega: PhysicsFloat); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
       /// Apply a force at a world point. If the force is not
       /// applied at the center of mass, it will generate a torque and
@@ -1415,7 +1415,7 @@ type
       /// without affecting the linear velocity of the center of mass.
       /// This wakes up the body.
       /// @param torque about the z-axis (out of the screen), usually in N-m.
-      procedure ApplyTorque(torque: Float);
+      procedure ApplyTorque(torque: PhysicsFloat);
 
       /// Apply an impulse at a point. This immediately modifies the velocity.
       /// It also modifies the angular velocity if the point of application
@@ -1425,7 +1425,7 @@ type
       procedure ApplyLinearImpulse(const impulse, point: TVector2);
       /// Apply an angular impulse.
       /// @param impulse the angular impulse in units of kg*m*m/s
-      procedure ApplyAngularImpulse(impulse: Float);
+      procedure ApplyAngularImpulse(impulse: PhysicsFloat);
 
     	/// Get the mass data of the body.
 	    /// @return a struct containing the mass, inertia and center of the body.
@@ -1528,19 +1528,19 @@ type
 
       ////////////////////////////////////
       property GetType: Tb2BodyType read m_type;
-      property GetAngle: Float read m_sweep.a;
+      property GetAngle: PhysicsFloat read m_sweep.a;
       property GetPosition: TVector2 read m_xf.position;
       property GetWorldCenter: TVector2 read m_sweep.c;
       property GetLocalCenter: TVector2 read m_sweep.localCenter;
       property GetLinearVelocity: TVector2 read m_linearVelocity;
-      property GetAngularVelocity: Float read m_angularVelocity;
-      property LinearDamping: Float read m_linearDamping write m_linearDamping;
-      property AngularDamping: Float read m_angularDamping write m_angularDamping;
+      property GetAngularVelocity: PhysicsFloat read m_angularVelocity;
+      property LinearDamping: PhysicsFloat read m_linearDamping write m_linearDamping;
+      property AngularDamping: PhysicsFloat read m_angularDamping write m_angularDamping;
 
-      property GetMass: Float read m_mass;
+      property GetMass: PhysicsFloat read m_mass;
       /// Get the rotational inertia of the body about the local origin.
       /// @return the rotational inertia, usually in kg-m^2.
-      property GetInertia: Float read m_storedInertia;
+      property GetInertia: PhysicsFloat read m_storedInertia;
 
       property GetFixtureList: Tb2Fixture read m_fixtureList;
       property GetJointList: Pb2JointEdge read m_jointList;
@@ -1569,9 +1569,9 @@ type
       function RayCast(var output: Tb2RayCastOutput; const input: Tb2RayCastInput;
          const transform: Tb2Transform; childIndex: Int32): Boolean; override;
       procedure ComputeAABB(var aabb: Tb2AABB; const xf: Tb2Transform; childIndex: Int32); override;
-      procedure ComputeMass(var massData: Tb2MassData; density: Float); override;
-      function ComputeSubmergedArea(const normal: TVector2; offset: Float;
-         const xf: Tb2Transform; var c: TVector2): Float; override;
+      procedure ComputeMass(var massData: Tb2MassData; density: PhysicsFloat); override;
+      function ComputeSubmergedArea(const normal: TVector2; offset: PhysicsFloat;
+         const xf: Tb2Transform; var c: TVector2): PhysicsFloat; override;
 
       /// Get the supporting vertex index in the given direction.
       function GetSupport(const d: TVector2): Int32; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
@@ -1605,9 +1605,9 @@ type
       function RayCast(var output: Tb2RayCastOutput; const input: Tb2RayCastInput;
          const transform: Tb2Transform; childIndex: Int32): Boolean; override;
       procedure ComputeAABB(var aabb: Tb2AABB; const xf: Tb2Transform; childIndex: Int32); override;
-      procedure ComputeMass(var massData: Tb2MassData; density: Float); override;
-      function ComputeSubmergedArea(const normal: TVector2; offset: Float;
-         const xf: Tb2Transform; var c: TVector2): Float; override;
+      procedure ComputeMass(var massData: Tb2MassData; density: PhysicsFloat); override;
+      function ComputeSubmergedArea(const normal: TVector2; offset: PhysicsFloat;
+         const xf: Tb2Transform; var c: TVector2): PhysicsFloat; override;
 
       /// Copy vertices. This assumes the vertices define a convex polygon.
       /// It is assumed that the exterior is the the right of each edge.
@@ -1617,14 +1617,14 @@ type
       /// Build vertices to represent an axis-aligned box.
       /// @param hx the half-width.
       /// @param hy the half-height.
-      procedure SetAsBox(hx, hy: Float); overload;
+      procedure SetAsBox(hx, hy: PhysicsFloat); overload;
 
       /// Build vertices to represent an oriented box.
       /// @param hx the half-width.
       /// @param hy the half-height.
       /// @param center the center of the box in local coordinates.
       /// @param angle the rotation of the box in local coordinates.
-      procedure SetAsBox(hx, hy: Float; const center: TVector2; angle: Float); overload;
+      procedure SetAsBox(hx, hy: PhysicsFloat; const center: TVector2; angle: PhysicsFloat); overload;
 
       property GetVertexCount: Int32 read m_vertexCount;
    end;
@@ -1650,9 +1650,9 @@ type
       function RayCast(var output: Tb2RayCastOutput; const input: Tb2RayCastInput;
          const transform: Tb2Transform; childIndex: Int32): Boolean; override;
       procedure ComputeAABB(var aabb: Tb2AABB; const xf: Tb2Transform; childIndex: Int32); override;
-      procedure ComputeMass(var massData: Tb2MassData; density: Float); override;
-      function ComputeSubmergedArea(const normal: TVector2; offset: Float;
-         const xf: Tb2Transform; var c: TVector2): Float; override;
+      procedure ComputeMass(var massData: Tb2MassData; density: PhysicsFloat); override;
+      function ComputeSubmergedArea(const normal: TVector2; offset: PhysicsFloat;
+         const xf: Tb2Transform; var c: TVector2): PhysicsFloat; override;
    end;
 
    /// A loop shape is a free form sequence of line segments that form a circular list.
@@ -1675,9 +1675,9 @@ type
       function RayCast(var output: Tb2RayCastOutput; const input: Tb2RayCastInput;
          const transform: Tb2Transform; childIndex: Int32): Boolean; override;
       procedure ComputeAABB(var aabb: Tb2AABB; const xf: Tb2Transform; childIndex: Int32); override;
-      procedure ComputeMass(var massData: Tb2MassData; density: Float); override;
-      function ComputeSubmergedArea(const normal: TVector2; offset: Float;
-         const xf: Tb2Transform; var c: TVector2): Float; override;
+      procedure ComputeMass(var massData: Tb2MassData; density: PhysicsFloat); override;
+      function ComputeSubmergedArea(const normal: TVector2; offset: PhysicsFloat;
+         const xf: Tb2Transform; var c: TVector2): PhysicsFloat; override;
    end;
 
    ////////////////////////////////////////////////////////////
@@ -1693,9 +1693,9 @@ type
       localAnchorA: TVector2; /// The local anchor point relative to bodyA's origin.
       localAnchorB: TVector2; /// The local anchor point relative to bodyB's origin.
 
-      length : Float; /// The natural length between the anchor points.
-      frequencyHz: Float; /// The mass-spring-damper frequency in Hertz.
-      dampingRatio: Float; /// The damping ratio. 0 = no damping, 1 = critical damping.
+      length : PhysicsFloat; /// The natural length between the anchor points.
+      frequencyHz: PhysicsFloat; /// The mass-spring-damper frequency in Hertz.
+      dampingRatio: PhysicsFloat; /// The damping ratio. 0 = no damping, 1 = critical damping.
 
       constructor Create;
       procedure Initialize(bodyA, bodyB: Tb2Body; const anchorA, anchorB: TVector2);
@@ -1707,14 +1707,14 @@ type
    Tb2DistanceJoint = class(Tb2Joint)
    protected
       m_localAnchor1, m_localAnchor2, m_u: TVector2;
-      m_frequencyHz, m_dampingRatio: Float;
+      m_frequencyHz, m_dampingRatio: PhysicsFloat;
       m_gamma, m_bias, m_impulse,
       m_mass,
-      m_length: Float;
+      m_length: PhysicsFloat;
 
       procedure InitVelocityConstraints(const step: Tb2TimeStep); override;
       procedure SolveVelocityConstraints(const step: Tb2TimeStep); override;
-      function SolvePositionConstraints(baumgarte: Float): Boolean; override;
+      function SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean; override;
    public
       constructor Create(def: Tb2DistanceJointDef);
 
@@ -1722,15 +1722,15 @@ type
       function GetAnchorB: TVector2; override;
 
       /// Get the reaction force given the inverse time step. Unit is N.
-      function GetReactionForce(inv_dt: Float): TVector2; override;
+      function GetReactionForce(inv_dt: PhysicsFloat): TVector2; override;
     	/// Get the reaction torque given the inverse time step.
     	/// Unit is N*m. This is always zero for a distance joint.
-      function GetReactionTorque(inv_dt: Float): Float; override;
+      function GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat; override;
 
       /// Manipulating the length can lead to non-physical behavior when the frequency is zero.
-      property Length: Float read m_length write m_length;
-      property Frequency: Float read m_frequencyHz write m_frequencyHz;
-      property DampingRatio: Float read m_dampingRatio write m_dampingRatio;
+      property Length: PhysicsFloat read m_length write m_length;
+      property Frequency: PhysicsFloat read m_frequencyHz write m_frequencyHz;
+      property DampingRatio: PhysicsFloat read m_dampingRatio write m_dampingRatio;
    end;
 
    /// Prismatic joint definition. This requires defining a line of
@@ -1746,16 +1746,16 @@ type
       localAnchorB: TVector2;
 
       localAxis1: TVector2; /// The local translation axis in bodyA.
-      referenceAngle: Float; /// The constrained angle between the bodies: body2_angle - body1_angle.
+      referenceAngle: PhysicsFloat; /// The constrained angle between the bodies: body2_angle - body1_angle.
 
       enableLimit: Boolean; /// Enable/disable the joint limit.
 
-      lowerTranslation: Float; /// The lower translation limit, usually in meters.
-      upperTranslation: Float; /// The upper translation limit, usually in meters.
+      lowerTranslation: PhysicsFloat; /// The lower translation limit, usually in meters.
+      upperTranslation: PhysicsFloat; /// The upper translation limit, usually in meters.
 
       enableMotor: Boolean; /// Enable/disable the joint motor.
-      maxMotorForce: Float; /// The maximum motor torque, usually in N-m.
-      motorSpeed: Float; /// The desired motor speed in radians per second.
+      maxMotorForce: PhysicsFloat; /// The maximum motor torque, usually in N-m.
+      motorSpeed: PhysicsFloat; /// The desired motor speed in radians per second.
 
       constructor Create;
       procedure Initialize(bodyA, bodyB: Tb2Body; const anchor, axis: TVector2); // world anchor and world axis
@@ -1768,20 +1768,20 @@ type
    Tb2PrismaticJoint = class(Tb2Joint)
    protected
       m_localAnchor1, m_localAnchor2, m_localXAxis1, m_localYAxis1: TVector2;
-      m_refAngle: Float;
+      m_refAngle: PhysicsFloat;
 
       m_axis, m_perp: TVector2;
       m_s1, m_s2,
-      m_a1, m_a2: Float;
+      m_a1, m_a2: PhysicsFloat;
 
       m_K: TMatrix33;
       m_impulse: TVector3;
 
       m_motorMass,			// effective mass for motor/limit translational constraint.
-      m_motorImpulse: Float;
+      m_motorImpulse: PhysicsFloat;
 
-      m_lowerTranslation, m_upperTranslation: Float;
-      m_maxMotorForce, m_motorSpeed: Float;
+      m_lowerTranslation, m_upperTranslation: PhysicsFloat;
+      m_maxMotorForce, m_motorSpeed: PhysicsFloat;
 
       m_enableLimit: Boolean;
       m_enableMotor: Boolean;
@@ -1790,35 +1790,35 @@ type
 
       procedure InitVelocityConstraints(const step: Tb2TimeStep); override;
       procedure SolveVelocityConstraints(const step: Tb2TimeStep); override;
-      function SolvePositionConstraints(baumgarte: Float): Boolean; override;
+      function SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean; override;
    public
       constructor Create(def: Tb2PrismaticJointDef);
 
       function GetAnchorA: TVector2; override;
       function GetAnchorB: TVector2; override;
 
-      function GetReactionForce(inv_dt: Float): TVector2; override;
-      function GetReactionTorque(inv_dt: Float): Float; override;
+      function GetReactionForce(inv_dt: PhysicsFloat): TVector2; override;
+      function GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat; override;
 
       /// Get the current joint translation, usually in meters.
-      function GetJointTranslation: Float;
+      function GetJointTranslation: PhysicsFloat;
       /// Get the current joint translation speed, usually in meters per second.
-      function GetJointSpeed: Float;
+      function GetJointSpeed: PhysicsFloat;
       /// Get the current motor force given the inverse time step, usually in N.
-      function GetMotorForce(inv_dt: Float): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function GetMotorForce(inv_dt: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 	    procedure EnableLimit(flag: Boolean); /// Enable/disable the joint limit.
 	    procedure EnableMotor(flag: Boolean); /// Enable/disable the joint motor.
-      procedure SetLimits(lower, upper: Float); /// Set the joint limits, usually in meters.
-      procedure SetMotorSpeed(speed: Float); /// Set the motor speed, usually in meters per second.
-	    procedure SetMaxMotorForce(force: Float); /// Set the maximum motor force, usually in N.
+      procedure SetLimits(lower, upper: PhysicsFloat); /// Set the joint limits, usually in meters.
+      procedure SetMotorSpeed(speed: PhysicsFloat); /// Set the motor speed, usually in meters per second.
+	    procedure SetMaxMotorForce(force: PhysicsFloat); /// Set the maximum motor force, usually in N.
 
-      property GetMotorSpeed: Float read m_motorSpeed; // usually in meters per second.
+      property GetMotorSpeed: PhysicsFloat read m_motorSpeed; // usually in meters per second.
       property IsLimitEnabled: Boolean read m_enableLimit;
-      property GetLowerLimit: Float read m_lowerTranslation;
-      property GetUpperLimit: Float read m_upperTranslation;
+      property GetLowerLimit: PhysicsFloat read m_lowerTranslation;
+      property GetUpperLimit: PhysicsFloat read m_upperTranslation;
       property IsMotorEnabled: Boolean read m_enableMotor;
-      property GetMaxMotorForce: Float read m_maxMotorForce;
+      property GetMaxMotorForce: PhysicsFloat read m_maxMotorForce;
    end;
 
    /// Mouse joint definition. This requires a world target point, tuning parameters, and the time step.
@@ -1830,10 +1830,10 @@ type
       /// The maximum constraint force that can be exerted
       /// to move the candidate body. Usually you will express
       /// as some multiple of the weight (multiplier * mass * gravity).
-      maxForce: Float;
+      maxForce: PhysicsFloat;
 
-      frequencyHz: Float; /// The response speed.
-      dampingRatio: Float; /// The damping ratio. 0 = no damping, 1 = critical damping.
+      frequencyHz: PhysicsFloat; /// The response speed.
+      dampingRatio: PhysicsFloat; /// The damping ratio. 0 = no damping, 1 = critical damping.
 
       constructor Create;
    end;
@@ -1850,16 +1850,16 @@ type
       m_localAnchor, m_target, m_impulse: TVector2;
       m_mass: TMatrix22; // effective mass for point-to-point constraint.
       m_C: TVector2; // position error
-      m_maxForce: Float;
+      m_maxForce: PhysicsFloat;
 
       m_frequencyHz,
       m_dampingRatio,
       m_beta, // bias factor
-      m_gamma: Float; // softness
+      m_gamma: PhysicsFloat; // softness
 
       procedure InitVelocityConstraints(const step: Tb2TimeStep); override;
       procedure SolveVelocityConstraints(const step: Tb2TimeStep); override;
-      function SolvePositionConstraints(baumgarte: Float): Boolean; override;
+      function SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean; override;
 
    public
       constructor Create(def: Tb2MouseJointDef);
@@ -1867,15 +1867,15 @@ type
       function GetAnchorA: TVector2; override;
       function GetAnchorB: TVector2; override;
 
-      function GetReactionForce(inv_dt: Float): TVector2; override;
-      function GetReactionTorque(inv_dt: Float): Float; override;
+      function GetReactionForce(inv_dt: PhysicsFloat): TVector2; override;
+      function GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat; override;
 
 	    procedure SetTarget(const target: TVector2); /// Use this to update the target point.
       function GetTarget: TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
-      property MaxForce: Float read m_maxForce write m_maxForce;
-      property Frequency: Float read m_frequencyHz write m_frequencyHz;
-      property DampingRatio: Float read m_dampingRatio write m_dampingRatio;
+      property MaxForce: PhysicsFloat read m_maxForce write m_maxForce;
+      property Frequency: PhysicsFloat read m_frequencyHz write m_frequencyHz;
+      property DampingRatio: PhysicsFloat read m_dampingRatio write m_dampingRatio;
    end;
 
    /// Pulley joint definition. This requires two ground anchors,
@@ -1888,18 +1888,18 @@ type
       localAnchorA: TVector2; /// The local anchor point relative to bodyA's origin.
       localAnchorB: TVector2; /// The local anchor point relative to bodyB's origin.
 
-      lengthA: Float; /// The a reference length for the segment attached to bodyA.
-      maxLengthA: Float; /// The maximum length of the segment attached to bodyA.
+      lengthA: PhysicsFloat; /// The a reference length for the segment attached to bodyA.
+      maxLengthA: PhysicsFloat; /// The maximum length of the segment attached to bodyA.
 
-      lengthB: Float; /// The a reference length for the segment attached to bodyB.
-      maxLengthB: Float; /// The maximum length of the segment attached to bodyB.
+      lengthB: PhysicsFloat; /// The a reference length for the segment attached to bodyB.
+      maxLengthB: PhysicsFloat; /// The maximum length of the segment attached to bodyB.
 
-      ratio: Float; /// The pulley ratio, used to simulate a block-and-tackle.
+      ratio: PhysicsFloat; /// The pulley ratio, used to simulate a block-and-tackle.
 
       constructor Create;
       /// Initialize the bodies, anchors, lengths, max lengths, and ratio using the world anchors.
       procedure Initialize(bodyA, bodyB: Tb2Body; const groundAnchorA, groundAnchorB,
-        anchorA, anchorB: TVector2; ratio: Float);
+        anchorA, anchorB: TVector2; ratio: PhysicsFloat);
    end;
 
    /// The pulley joint is connected to two bodies and two fixed ground points.
@@ -1913,35 +1913,35 @@ type
       m_groundAnchor1, m_groundAnchor2, m_localAnchor1, m_localAnchor2: TVector2;
       m_u1, m_u2: TVector2;
 
-      m_constant, m_ratio: Float;
-      m_maxLength1, m_maxLength2: Float;
+      m_constant, m_ratio: PhysicsFloat;
+      m_maxLength1, m_maxLength2: PhysicsFloat;
 
-      m_pulleyMass, m_limitMass1, m_limitMass2: Float; // Effective masses
+      m_pulleyMass, m_limitMass1, m_limitMass2: PhysicsFloat; // Effective masses
 
       // Impulses for accumulation/warm starting.
-      m_impulse, m_limitImpulse1, m_limitImpulse2: Float;
+      m_impulse, m_limitImpulse1, m_limitImpulse2: PhysicsFloat;
 
       m_state, m_limitState1, m_limitState2: Tb2LimitState;
 
       procedure InitVelocityConstraints(const step: Tb2TimeStep); override;
       procedure SolveVelocityConstraints(const step: Tb2TimeStep); override;
-      function SolvePositionConstraints(baumgarte: Float): Boolean; override;
+      function SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean; override;
    public
       constructor Create(def: Tb2PulleyJointDef);
 
       function GetAnchorA: TVector2; override;
       function GetAnchorB: TVector2; override;
 
-      function GetReactionForce(inv_dt: Float): TVector2; override;
-      function GetReactionTorque(inv_dt: Float): Float; override;
+      function GetReactionForce(inv_dt: PhysicsFloat): TVector2; override;
+      function GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat; override;
 
-      function GetLength1: Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-      function GetLength2: Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function GetLength1: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function GetLength2: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
       function GetGroundAnchorA: TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       function GetGroundAnchorB: TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
-      property GetRatio: Float read m_ratio;
+      property GetRatio: PhysicsFloat read m_ratio;
    end;
 
    /// Revolute joint definition. This requires defining an
@@ -1959,15 +1959,15 @@ type
    public
       localAnchorA: TVector2; /// The local anchor point relative to bodyA's origin.
       localAnchorB: TVector2; /// The local anchor point relative to bodyB's origin.
-      referenceAngle: Float; /// The bodyB angle minus bodyA angle in the reference state (radians).
+      referenceAngle: PhysicsFloat; /// The bodyB angle minus bodyA angle in the reference state (radians).
 
       enableLimit: Boolean; /// A flag to enable joint limits.
-      lowerAngle, upperAngle: Float; /// The lower(upper) angle for the joint limit (radians).
+      lowerAngle, upperAngle: PhysicsFloat; /// The lower(upper) angle for the joint limit (radians).
 
       enableMotor: Boolean; /// A flag to enable the joint motor.
       motorOnBodyB: Boolean; /// Only apply motor to bodyB
-      motorSpeed: Float; /// The desired motor speed. Usually in radians per second.
-      maxMotorTorque: Float; /// The maximum motor torque used to achieve the desired motor speed. Usually in N-m.
+      motorSpeed: PhysicsFloat; /// The desired motor speed. Usually in radians per second.
+      maxMotorTorque: PhysicsFloat; /// The maximum motor torque used to achieve the desired motor speed. Usually in N-m.
 
       constructor Create;
     	/// Initialize the bodies, anchors, and reference angle using the world anchor.
@@ -1985,23 +1985,23 @@ type
       m_localAnchor1, m_localAnchor2: TVector2; // relative
 
 	    m_impulse: TVector3;
-	    m_motorImpulse: Float;
+	    m_motorImpulse: PhysicsFloat;
 
 	    m_mass: TMatrix33;			// effective mass for point-to-point constraint.
-	    m_motorMass: Float;	// effective mass for motor/limit angular constraint.
+	    m_motorMass: PhysicsFloat;	// effective mass for motor/limit angular constraint.
 
       m_enableMotor: Boolean;
       m_motorOnBodyB: Boolean; /// Only apply motor to bodyB
-      m_maxMotorTorque, m_motorSpeed: Float;
+      m_maxMotorTorque, m_motorSpeed: PhysicsFloat;
 
       m_enableLimit: Boolean;
-      m_referenceAngle, m_lowerAngle, m_upperAngle: Float;
+      m_referenceAngle, m_lowerAngle, m_upperAngle: PhysicsFloat;
 
       m_limitState: Tb2LimitState;
 
       procedure InitVelocityConstraints(const step: Tb2TimeStep); override;
       procedure SolveVelocityConstraints(const step: Tb2TimeStep); override;
-      function SolvePositionConstraints(baumgarte: Float): Boolean; override;
+      function SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean; override;
 
    public
       constructor Create(def: Tb2RevoluteJointDef);
@@ -2010,31 +2010,31 @@ type
       function GetAnchorB: TVector2; override;
 
       /// Get the reaction force given the inverse time step. Unit is N.
-      function GetReactionForce(inv_dt: Float): TVector2; override;
+      function GetReactionForce(inv_dt: PhysicsFloat): TVector2; override;
 
       /// Get the reaction torque due to the joint limit given the inverse time step. Unit is N*m.
-      function GetReactionTorque(inv_dt: Float): Float; override;
-      function GetJointAngle: Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat; override;
+      function GetJointAngle: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
       /// Get the current joint angle speed in radians per second.
-      function GetJointSpeed: Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function GetJointSpeed: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
  	    /// Get the current motor torque given the inverse time step. Unit is N*m.
-      function GetMotorTorque(inv_dt: Float): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function GetMotorTorque(inv_dt: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 	    procedure EnableLimit(flag: Boolean); /// Enable/disable the joint limit.
-	    procedure SetLimits(lower, upper: Float); /// Set the joint limits in radians.
+	    procedure SetLimits(lower, upper: PhysicsFloat); /// Set the joint limits in radians.
 	    procedure EnableMotor(flag: Boolean); /// Enable/disable the joint motor.
-	    procedure SetMotorSpeed(speed: Float); /// Set the motor speed in radians per second.
-	    procedure SetMaxMotorTorque(torque: Float);  /// Set the maximum motor torque, usually in N-m.
+	    procedure SetMotorSpeed(speed: PhysicsFloat); /// Set the motor speed in radians per second.
+	    procedure SetMaxMotorTorque(torque: PhysicsFloat);  /// Set the maximum motor torque, usually in N-m.
 
       property IsLimitEnabled: Boolean read m_enableLimit;
       property IsMotorEnabled: Boolean read m_enableMotor;
       property MotorOnBodyB: Boolean read m_motorOnBodyB write m_motorOnBodyB;
-      property GetLowerLimit: Float read m_lowerAngle;
-      property GetUpperLimit: Float read m_upperAngle;
-      property GetMotorSpeed: Float read m_motorSpeed;
-      property GetMaxMotorTorque: Float read m_maxMotorTorque;
+      property GetLowerLimit: PhysicsFloat read m_lowerAngle;
+      property GetUpperLimit: PhysicsFloat read m_upperAngle;
+      property GetMotorSpeed: PhysicsFloat read m_motorSpeed;
+      property GetMaxMotorTorque: PhysicsFloat read m_maxMotorTorque;
    end;
 
    /// Gear joint definition. This definition requires two existing
@@ -2044,7 +2044,7 @@ type
    public
       joint1: Tb2Joint; /// The first revolute/prismatic joint attached to the gear joint.
       joint2: Tb2Joint; /// The second revolute/prismatic joint attached to the gear joint.
-      ratio: Float; /// The gear ratio.
+      ratio: PhysicsFloat; /// The gear ratio.
 
       constructor Create;
    end;
@@ -2075,13 +2075,13 @@ type
 
       m_J: Tb2Jacobian;
 
-      m_constant, m_ratio: Float;
-      m_mass: Float; // Effective mass
-      m_impulse: Float; // Impulse for accumulation/warm starting.
+      m_constant, m_ratio: PhysicsFloat;
+      m_mass: PhysicsFloat; // Effective mass
+      m_impulse: PhysicsFloat; // Impulse for accumulation/warm starting.
 
       procedure InitVelocityConstraints(const step: Tb2TimeStep); override;
       procedure SolveVelocityConstraints(const step: Tb2TimeStep); override;
-      function SolvePositionConstraints(baumgarte: Float): Boolean; override;
+      function SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean; override;
 
    public
       constructor Create(def: Tb2GearJointDef);
@@ -2089,10 +2089,10 @@ type
       function GetAnchorA: TVector2; override;
       function GetAnchorB: TVector2; override;
 
-      function GetReactionForce(inv_dt: Float): TVector2; override;
-      function GetReactionTorque(inv_dt: Float): Float; override;
+      function GetReactionForce(inv_dt: PhysicsFloat): TVector2; override;
+      function GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat; override;
 
-      property Ratio: Float read m_ratio write m_ratio;
+      property Ratio: PhysicsFloat read m_ratio write m_ratio;
    end;
 
    /// Friction joint definition.
@@ -2100,8 +2100,8 @@ type
    public
       localAnchorA: TVector2; /// The local anchor point relative to bodyA's origin.
       localAnchorB: TVector2; /// The local anchor point relative to bodyB's origin.
-      maxForce: Float; /// The maximum friction force in N.
-      maxTorque: Float; /// The maximum friction torque in N-m.
+      maxForce: PhysicsFloat; /// The maximum friction force in N.
+      maxTorque: PhysicsFloat; /// The maximum friction torque in N-m.
 
       constructor Create;
       procedure Initialize(bodyA, bodyB: Tb2Body; const anchor: TVector2); /// Initialize the bodies.
@@ -2115,28 +2115,28 @@ type
       m_localAnchorB: TVector2;
 
       m_linearMass: TMatrix22;
-      m_angularMass: Float;
+      m_angularMass: PhysicsFloat;
 
       m_linearImpulse: TVector2;
-      m_angularImpulse: Float;
+      m_angularImpulse: PhysicsFloat;
 
-      m_maxForce: Float;
-      m_maxTorque: Float;
+      m_maxForce: PhysicsFloat;
+      m_maxTorque: PhysicsFloat;
 
       procedure InitVelocityConstraints(const step: Tb2TimeStep); override;
       procedure SolveVelocityConstraints(const step: Tb2TimeStep); override;
-      function SolvePositionConstraints(baumgarte: Float): Boolean; override;
+      function SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean; override;
    public
       constructor Create(def: Tb2FrictionJointDef);
 
       function GetAnchorA: TVector2; override;
       function GetAnchorB: TVector2; override;
 
-      function GetReactionForce(inv_dt: Float): TVector2; override;
-      function GetReactionTorque(inv_dt: Float): Float; override;
+      function GetReactionForce(inv_dt: PhysicsFloat): TVector2; override;
+      function GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat; override;
 
-      property MaxForce: Float read m_maxForce write m_maxForce;
-      property MaxTorque: Float read m_maxTorque write m_maxTorque;
+      property MaxForce: PhysicsFloat read m_maxForce write m_maxForce;
+      property MaxTorque: PhysicsFloat read m_maxTorque write m_maxTorque;
    end;
 
    /// Line joint definition. This requires defining a line of
@@ -2152,13 +2152,13 @@ type
       localAxisA: TVector2; /// The local translation axis in body1.
       enableLimit: Boolean; /// Enable/disable the joint limit.
 
-      lowerTranslation: Float; /// The lower translation limit, usually in meters.
-      upperTranslation: Float; /// The upper translation limit, usually in meters.
+      lowerTranslation: PhysicsFloat; /// The lower translation limit, usually in meters.
+      upperTranslation: PhysicsFloat; /// The upper translation limit, usually in meters.
 
       enableMotor: Boolean; /// Enable/disable the joint motor.
-      maxMotorForce: Float; /// The maximum motor torque, usually in N-m.
+      maxMotorForce: PhysicsFloat; /// The maximum motor torque, usually in N-m.
 
-      motorSpeed: Float; /// The desired motor speed in radians per second.
+      motorSpeed: PhysicsFloat; /// The desired motor speed in radians per second.
 
       constructor Create;
       /// Initialize the bodies, anchors, axis, and reference angle using the world
@@ -2179,18 +2179,18 @@ type
 
       m_axis, m_perp:  TVector2;
       m_s1, m_s2,
-      m_a1, m_a2: Float;
+      m_a1, m_a2: PhysicsFloat;
 
       m_K: TMatrix22;
       m_impulse: TVector2;
 
-      m_motorMass: Float;			// effective mass for motor/limit translational constraint.
-      m_motorImpulse: Float;
+      m_motorMass: PhysicsFloat;			// effective mass for motor/limit translational constraint.
+      m_motorImpulse: PhysicsFloat;
 
       m_lowerTranslation,
       m_upperTranslation,
       m_maxMotorForce,
-      m_motorSpeed: Float;
+      m_motorSpeed: PhysicsFloat;
 
       m_enableLimit: Boolean;
       m_enableMotor: Boolean;
@@ -2198,7 +2198,7 @@ type
 
       procedure InitVelocityConstraints(const step: Tb2TimeStep); override;
       procedure SolveVelocityConstraints(const step: Tb2TimeStep); override;
-      function SolvePositionConstraints(baumgarte: Float): Boolean; override;
+      function SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean; override;
 
    public
       constructor Create(def: Tb2LineJointDef);
@@ -2206,31 +2206,31 @@ type
       function GetAnchorA: TVector2; override;
       function GetAnchorB: TVector2; override;
 
-      function GetReactionForce(inv_dt: Float): TVector2; override;
-      function GetReactionTorque(inv_dt: Float): Float; override;
+      function GetReactionForce(inv_dt: PhysicsFloat): TVector2; override;
+      function GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat; override;
 
       /// Get the current joint translation, usually in meters.
-      function GetJointTranslation: Float;
+      function GetJointTranslation: PhysicsFloat;
 
       /// Get the current joint translation speed, usually in meters per second.
-      function GetJointSpeed: Float;
+      function GetJointSpeed: PhysicsFloat;
 
       /// Get the current motor force given the inverse time step, usually in N.
-      function GetMotorForce(inv_dt: Float): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function GetMotorForce(inv_dt: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
       procedure EnableLimit(flag: Boolean); /// Enable/disable the joint limit.
-      procedure SetLimits(lower, upper: Float); /// Set the joint limits, usually in meters.
+      procedure SetLimits(lower, upper: PhysicsFloat); /// Set the joint limits, usually in meters.
 
       procedure EnableMotor(flag: Boolean); /// Enable/disable the joint motor.
-      procedure SetMotorSpeed(speed: Float); /// Set the motor speed, usually in meters per second.
-      procedure SetMaxMotorForce(force: Float); /// Set the maximum motor force, usually in N.
+      procedure SetMotorSpeed(speed: PhysicsFloat); /// Set the motor speed, usually in meters per second.
+      procedure SetMaxMotorForce(force: PhysicsFloat); /// Set the maximum motor force, usually in N.
 
       property IsLimitEnabled: Boolean read m_enableLimit; /// Is the joint limit enabled?
-      property GetLowerLimit: Float read m_lowerTranslation; /// Get the lower joint limit, usually in meters.
-      property GetUpperLimit: Float read m_upperTranslation; /// Get the upper joint limit, usually in meters.
+      property GetLowerLimit: PhysicsFloat read m_lowerTranslation; /// Get the lower joint limit, usually in meters.
+      property GetUpperLimit: PhysicsFloat read m_upperTranslation; /// Get the upper joint limit, usually in meters.
       property IsMotorEnabled: Boolean read m_enableMotor; /// Is the joint motor enabled?
-      property GetMotorSpeed: Float read m_motorSpeed; /// Get the motor speed, usually in meters per second.
-      property GetMaxMotorForce: Float read m_maxMotorForce;
+      property GetMotorSpeed: PhysicsFloat read m_motorSpeed; /// Get the motor speed, usually in meters per second.
+      property GetMaxMotorForce: PhysicsFloat read m_maxMotorForce;
    end;
 
    /// Weld joint definition. You need to specify local anchor points
@@ -2245,7 +2245,7 @@ type
       localAnchorB: TVector2;
 
       /// The body2 angle minus body1 angle in the reference state (radians).
-      referenceAngle: Float;
+      referenceAngle: PhysicsFloat;
 
       constructor Create;
 
@@ -2259,22 +2259,22 @@ type
    Tb2WeldJoint = class(Tb2Joint)
    protected
       m_localAnchorA, m_localAnchorB: TVector2;
-      m_referenceAngle: Float;
+      m_referenceAngle: PhysicsFloat;
 
       m_impulse: TVector3;
       m_mass: TMatrix33;
 
       procedure InitVelocityConstraints(const step: Tb2TimeStep); override;
       procedure SolveVelocityConstraints(const step: Tb2TimeStep); override;
-      function SolvePositionConstraints(baumgarte: Float): Boolean; override;
+      function SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean; override;
    public
       constructor Create(def: Tb2WeldJointDef);
 
       function GetAnchorA: TVector2; override;
       function GetAnchorB: TVector2; override;
 
-      function GetReactionForce(inv_dt: Float): TVector2; override;
-      function GetReactionTorque(inv_dt: Float): Float; override;
+      function GetReactionForce(inv_dt: PhysicsFloat): TVector2; override;
+      function GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat; override;
    end;
 
    /// FixedJoint: Attaches two bodies rigidly together
@@ -2293,31 +2293,31 @@ type
    protected
       // Configured state for bodies
       m_dp: TVector2;		//< Distance between body->GetTransform().position between the two bodies at rest in the reference frame of bodyA
-      m_a: Float;		//< Angle between the bodies at rest
+      m_a: PhysicsFloat;		//< Angle between the bodies at rest
       m_R0: TMatrix22;		//< Rotation matrix of m_a
 
       // State for solving
-      m_inv_dt: Float;	//< Stored 1/dt
+      m_inv_dt: PhysicsFloat;	//< Stored 1/dt
       m_d: TVector2;			//< Distance between center of masses for this time step (when the shapes of the bodies change, their local centers can change so we derive this from m_dp every frame)
-      m_a1: Float;			//< Stored angle of body 1 (a1) to determine if it changed
-      m_c, m_s: Float;		//< cos(a1) and sin(a1)
-      m_Ax, m_Ay: Float;	//< A = d/dt (R(a1) d)
-      m_mc: array[0..2, 0..2] of Float;	//< Effective constraint mass
+      m_a1: PhysicsFloat;			//< Stored angle of body 1 (a1) to determine if it changed
+      m_c, m_s: PhysicsFloat;		//< cos(a1) and sin(a1)
+      m_Ax, m_Ay: PhysicsFloat;	//< A = d/dt (R(a1) d)
+      m_mc: array[0..2, 0..2] of PhysicsFloat;	//< Effective constraint mass
 
       // State after solving
-      m_lambda: array[0..2] of Float;	//< Accumulated lambdas for warm starting and returning constraint force
+      m_lambda: array[0..2] of PhysicsFloat;	//< Accumulated lambdas for warm starting and returning constraint force
 
       procedure InitVelocityConstraints(const step: Tb2TimeStep); override;
       procedure SolveVelocityConstraints(const step: Tb2TimeStep); override;
-      function SolvePositionConstraints(baumgarte: Float): Boolean; override;
+      function SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean; override;
    public
       constructor Create(def: Tb2FixedJointDef);
 
       function GetAnchorA: TVector2; override;
       function GetAnchorB: TVector2; override;
 
-      function GetReactionForce(inv_dt: Float): TVector2; override;
-      function GetReactionTorque(inv_dt: Float): Float; override;
+      function GetReactionForce(inv_dt: PhysicsFloat): TVector2; override;
+      function GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat; override;
    end;
 
    /// Rope joint definition. This requires two body anchor points and
@@ -2335,7 +2335,7 @@ type
       /// The maximum length of the rope.
       /// Warning: this must be larger than b2_linearSlop or
       /// the joint will have no effect.
-      maxLength: Float;
+      maxLength: PhysicsFloat;
 
       constructor Create;
    end;
@@ -2353,33 +2353,33 @@ type
       m_localAnchorA: TVector2;
       m_localAnchorB: TVector2;
 
-      m_maxLength: Float;
-      m_length: Float;
+      m_maxLength: PhysicsFloat;
+      m_length: PhysicsFloat;
 
       // Jacobian info
       m_u, m_rA, m_rB: TVector2;
 
       // Effective mass
-      m_mass: Float;
+      m_mass: PhysicsFloat;
 
       // Impulses for accumulation/warm starting.
-      m_impulse: Float;
+      m_impulse: PhysicsFloat;
 
       m_state: Tb2LimitState;
 
       procedure InitVelocityConstraints(const step: Tb2TimeStep); override;
       procedure SolveVelocityConstraints(const step: Tb2TimeStep); override;
-      function SolvePositionConstraints(baumgarte: Float): Boolean; override;
+      function SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean; override;
    public
       constructor Create(def: Tb2RopeJointDef);
 
       function GetAnchorA: TVector2; override;
       function GetAnchorB: TVector2; override;
 
-      function GetReactionForce(inv_dt: Float): TVector2; override;
-      function GetReactionTorque(inv_dt: Float): Float; override;
+      function GetReactionForce(inv_dt: PhysicsFloat): TVector2; override;
+      function GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat; override;
 
-      property MaxLength: Float read m_maxLength; /// Get the maximum length of the rope.
+      property MaxLength: PhysicsFloat read m_maxLength; /// Get the maximum length of the rope.
       property LimitState: Tb2LimitState read m_state;
    end;
 
@@ -2411,7 +2411,7 @@ function b2TestOverlap(const a, b: Tb2AABB): Boolean; overload;
 function b2TestOverlap(shapeA, shapeB: Tb2Shape; indexA, indexB: Int32;
    const xfA, xfB: Tb2Transform): Boolean; overload;
 
-function b2TimeOfImpact(var output: Tb2TOIOutput; const input: Tb2TOIInput): Float;
+function b2TimeOfImpact(var output: Tb2TOIOutput; const input: Tb2TOIInput): PhysicsFloat;
 
 {$IFNDEF OP_OVERLOAD}
 // Methods for records
@@ -2432,13 +2432,13 @@ function GetSupportVertex(const dp: Tb2DistanceProxy; const d: TVector2): PVecto
 
 /// Tb2WorldManifold
 procedure Initialize(var worldManifold: Tb2WorldManifold;
-   const manifold: Tb2Manifold; const xfA, xfB: Tb2Transform; radiusA, radiusB: Float);
+   const manifold: Tb2Manifold; const xfA, xfB: Tb2Transform; radiusA, radiusB: PhysicsFloat);
 
 /// Tb2AABB
 function IsValid(const AABB: Tb2AABB): Boolean; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function GetCenter(const AABB: Tb2AABB): TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function GetExtents(const AABB: Tb2AABB): TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function GetPerimeter(const AABB: Tb2AABB): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function GetPerimeter(const AABB: Tb2AABB): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure Combine(var AABB: Tb2AABB; const _aabb: Tb2AABB); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure Combine(var AABB: Tb2AABB; const aabb1, aabb2: Tb2AABB); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function Contains(const AABB, _aabb: Tb2AABB): Boolean;
@@ -2446,8 +2446,8 @@ function RayCast(const AABB: Tb2AABB; var output: Tb2RayCastOutput; const input:
 
 /// Tb2Jacobian
 procedure SetZero(var jb: Tb2Jacobian); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-procedure SetValue(var jb: Tb2Jacobian; const x1, x2: TVector2; a1, a2: Float); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function Compute(var jb: Tb2Jacobian; const x1, x2: TVector2; a1, a2: Float): Float; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure SetValue(var jb: Tb2Jacobian; const x1, x2: TVector2; a1, a2: PhysicsFloat); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function Compute(var jb: Tb2Jacobian; const x1, x2: TVector2; a1, a2: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 /// Tb2DynamicTreeNode
 function IsLeaf(const node: Tb2DynamicTreeNode): Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
@@ -2728,7 +2728,7 @@ end;
 
 /// Tb2WorldManifold
 procedure Initialize(var worldManifold: Tb2WorldManifold;
-   const manifold: Tb2Manifold; const xfA, xfB: Tb2Transform; radiusA, radiusB: Float);
+   const manifold: Tb2Manifold; const xfA, xfB: Tb2Transform; radiusA, radiusB: PhysicsFloat);
 var
    i: Integer;
    pointA, pointB, cA, cB, planePoint, clipPoint: TVector2;
@@ -2814,7 +2814,7 @@ begin
       Result := Multiply(Subtract(upperBound, lowerBound), 0.5);
 end;
 
-function GetPerimeter(const AABB: Tb2AABB): Float;
+function GetPerimeter(const AABB: Tb2AABB): PhysicsFloat;
 begin
    with AABB do
       Result := 2.0 * ((upperBound.x - lowerBound.x) + (upperBound.y - lowerBound.y));
@@ -2854,7 +2854,7 @@ function RayCast(const AABB: Tb2AABB; var output: Tb2RayCastOutput;
    const input: Tb2RayCastInput): Boolean;
 var
    i: Integer;
-   tmin, tmax, inv_d, t1, t2, s: Float;
+   tmin, tmax, inv_d, t1, t2, s: PhysicsFloat;
    p, d, absD, normal: TVector2;
 begin
    with AABB do
@@ -2939,7 +2939,7 @@ begin
    end;
 end;
 
-procedure SetValue(var jb: Tb2Jacobian; const x1, x2: TVector2; a1, a2: Float);
+procedure SetValue(var jb: Tb2Jacobian; const x1, x2: TVector2; a1, a2: PhysicsFloat);
 begin
    with jb do
    begin
@@ -2950,7 +2950,7 @@ begin
    end;
 end;
 
-function Compute(var jb: Tb2Jacobian; const x1, x2: TVector2; a1, a2: Float): Float;
+function Compute(var jb: Tb2Jacobian; const x1, x2: TVector2; a1, a2: PhysicsFloat): PhysicsFloat;
 begin
    with jb do
       Result := b2Dot(linearA, x1) + angularA * a1 + b2Dot(linearB, x2) + angularB * a2;
@@ -2966,7 +2966,7 @@ const
 var
    i: Integer;
    pRef, p1, p2, p3, e1, e2: TVector2;
-   area, triangleArea: Float;
+   area, triangleArea: PhysicsFloat;
 begin
    //b2Assert(count >= 3);
 
@@ -3070,7 +3070,7 @@ end;
 function Tb2DistanceProxy.GetSupport(const d: TVector2): Int32;
 var
    i: Integer;
-   bestValue, value: Float;
+   bestValue, value: PhysicsFloat;
    {$IFNDEF D2009UP}p: PVector2;{$ENDIF}
 begin
    Result := 0;
@@ -3104,7 +3104,7 @@ end;
 function Tb2DistanceProxy.GetSupportVertex(const d: TVector2): PVector2;
 var
    i, bestIndex: Integer;
-   bestValue, value: Float;
+   bestValue, value: PhysicsFloat;
    {$IFNDEF D2009UP}p: PVector2;{$ENDIF}
 begin
    bestIndex := 0;
@@ -3183,7 +3183,7 @@ end;
 function GetSupport(const dp: Tb2DistanceProxy; const d: TVector2): Int32;
 var
    i: Integer;
-   bestValue, value: Float;
+   bestValue, value: PhysicsFloat;
    {$IFNDEF D2009UP}p: PVector2;{$ENDIF}
 begin
    with dp do
@@ -3220,7 +3220,7 @@ end;
 function GetSupportVertex(const dp: Tb2DistanceProxy; const d: TVector2): PVector2;
 var
    i, bestIndex: Integer;
-   bestValue, value: Float;
+   bestValue, value: PhysicsFloat;
    {$IFNDEF D2009UP}p: PVector2;{$ENDIF}
 begin
    with dp do
@@ -3270,16 +3270,16 @@ type
       m_axis: TVector2;
 
       function Initialize(const cache: Tb2SimplexCache; const proxyA,
-         proxyB: Tb2DistanceProxy; const sweepA, sweepB: Tb2Sweep; const t1: Float): Float;
-      function FindMinSeparation(var indexA, indexB: Int32; t: Float): Float;
-      function Evaluate(indexA, indexB: Int32; t: Float): Float;
+         proxyB: Tb2DistanceProxy; const sweepA, sweepB: Tb2Sweep; const t1: PhysicsFloat): PhysicsFloat;
+      function FindMinSeparation(var indexA, indexB: Int32; t: PhysicsFloat): PhysicsFloat;
+      function Evaluate(indexA, indexB: Int32; t: PhysicsFloat): PhysicsFloat;
    end;
 
 { Tb2SeparationFunction }
 
 function Tb2SeparationFunction.Initialize(const cache: Tb2SimplexCache;
    const proxyA, proxyB: Tb2DistanceProxy; const sweepA, sweepB: Tb2Sweep;
-   const t1: Float): Float;
+   const t1: PhysicsFloat): PhysicsFloat;
 var
    xfA, xfB: Tb2Transform;
    localPointB1, localPointB2, localPointA1, localPointA2, normal: TVector2;
@@ -3448,7 +3448,7 @@ begin
    end;
 end;
 
-function Tb2SeparationFunction.FindMinSeparation(var indexA, indexB: Int32; t: Float): Float;
+function Tb2SeparationFunction.FindMinSeparation(var indexA, indexB: Int32; t: PhysicsFloat): PhysicsFloat;
 var
    xfA, xfB: Tb2Transform;
    normal: TVector2;
@@ -3567,7 +3567,7 @@ begin
    end;
 end;
 
-function Tb2SeparationFunction.Evaluate(indexA, indexB: Int32; t: Float): Float;
+function Tb2SeparationFunction.Evaluate(indexA, indexB: Int32; t: PhysicsFloat): PhysicsFloat;
 var
    xfA, xfB: Tb2Transform;
    {$IFNDEF D2009UP}pA, pB: PVector2;{$ENDIF}
@@ -3666,13 +3666,13 @@ var
 /// a fraction between [0,tMax]. This uses a swept separating axis and may miss some intermediate,
 /// non-tunneling collision. If you change the time interval, you should call this function again.
 /// Note: use b2Distance to compute the contact point and normal at the time of impact.
-function b2TimeOfImpact(var output: Tb2TOIOutput; const input: Tb2TOIInput): Float;
+function b2TimeOfImpact(var output: Tb2TOIOutput; const input: Tb2TOIInput): PhysicsFloat;
 const
    c_tolerance = 0.25 * b2_linearSlop;
    k_maxIterations = 20;	// TODO_ERIN b2Settings
 var
    sweepA, sweepB: Tb2Sweep;
-   t1, s1, t2, s2, a1, a2, t, s, totalRadius, target, tolerance: Float;
+   t1, s1, t2, s2, a1, a2, t, s, totalRadius, target, tolerance: PhysicsFloat;
    iter, pushBackIter: Int32;
    cache: Tb2SimplexCache;
    distanceInput: Tb2DistanceInput;
@@ -3880,7 +3880,7 @@ type
       wA: TVector2;		// support point in proxyA
       wB: TVector2;		// support point in proxyB
       w: TVector2;		// wB - wA
-      a: Float;		// barycentric coordinate for closest point
+      a: PhysicsFloat;		// barycentric coordinate for closest point
       indexA: Int32;	// wA index
       indexB: Int32;	// wB index
    end;
@@ -3897,7 +3897,7 @@ type
       function GetSearchDirection: TVector2;
       function GetClosestPoint: TVector2;
       procedure GetWitnessPoints(var pA, pB: TVector2);
-      function GetMetric: Float;
+      function GetMetric: PhysicsFloat;
 
       procedure Solve2;
 	    procedure Solve3;
@@ -3910,7 +3910,7 @@ procedure Tb2Simplex.ReadCache(const cache: Tb2SimplexCache; const proxyA,
 var
    vertices, v: Pb2SimplexVertex;
    i: Integer;
-   metric1, metric2: Float;
+   metric1, metric2: PhysicsFloat;
    {$IFNDEF D2009UP}pA, pB: PVector2;{$ENDIF}
 begin
    //b2Assert(cache.count <= 3);
@@ -4087,7 +4087,7 @@ begin
    end;
 end;
 
-function Tb2Simplex.GetMetric: Float;
+function Tb2Simplex.GetMetric: PhysicsFloat;
 begin
    case m_count of
       0:
@@ -4135,7 +4135,7 @@ end;
 procedure Tb2Simplex.Solve2;
 var
    e12: TVector2;
-   d12_2, d12_1, inv_d12: Float;
+   d12_2, d12_1, inv_d12: PhysicsFloat;
 begin
    {$IFDEF OP_OVERLOAD}
    e12 := m_v2.w - m_v1.w;
@@ -4182,7 +4182,7 @@ var
    e12, e13, e23: TVector2;
    d12_1, d12_2, d13_1, d13_2, d23_1, d23_2,
    n123, d123_1, d123_2, d123_3,
-   inv_d: Float;
+   inv_d: PhysicsFloat;
 begin
    w1 := m_v1.w;
    w2 := m_v2.w;
@@ -4308,7 +4308,7 @@ var
    saveA, saveB: array[0..2] of Int32;
    saveCount, iter: Int32;
    vertices, vertex: Pb2SimplexVertex;
-   distanceSqr1, distanceSqr2, rA, rB: Float;
+   distanceSqr1, distanceSqr2, rA, rB: PhysicsFloat;
    d, normal: TVector2;
    duplicate: Boolean;
    {$IFNDEF D2009UP}pA, pB: PVector2;{$ENDIF}
@@ -4545,7 +4545,7 @@ end;
 /////////////////////////////////////////////////////////////////////////////
 {$IFDEF OP_OVERLOAD}
 procedure Tb2WorldManifold.Initialize(const manifold: Tb2Manifold;
-   const xfA, xfB: Tb2Transform; radiusA, radiusB: Float);
+   const xfA, xfB: Tb2Transform; radiusA, radiusB: PhysicsFloat);
 var
    i: Integer;
    pointA, pointB, cA, cB, planePoint, clipPoint: TVector2;
@@ -4627,7 +4627,7 @@ begin
    Result := (upperBound - lowerBound) * 0.5;
 end;
 
-function Tb2AABB.GetPerimeter: Float;
+function Tb2AABB.GetPerimeter: PhysicsFloat;
 begin
    Result := 2.0 * ((upperBound.x - lowerBound.x) + (upperBound.y - lowerBound.y));
 end;
@@ -4657,7 +4657,7 @@ function Tb2AABB.RayCast(var output: Tb2RayCastOutput;
    const input: Tb2RayCastInput): Boolean;
 var
    i: Integer;
-   tmin, tmax, inv_d, t1, t2, s: Float;
+   tmin, tmax, inv_d, t1, t2, s: PhysicsFloat;
    p, d, absD, normal: TVector2;
 begin
    tmin := -FLT_MAX;
@@ -5034,7 +5034,7 @@ var
    b, bA, bB, body, other: Tb2Body;
    awakeA, awakeB, collideA, collideB: Boolean;
    c, minContact, contact: Pb2Contact;
-   minAlpha, alpha, alpha0, beta: Float;
+   minAlpha, alpha, alpha0, beta: PhysicsFloat;
    input: Tb2TOIInput;
    output: Tb2TOIOutput;
    backup, backup1, backup2: Tb2Sweep;
@@ -5543,7 +5543,7 @@ type
       broadPhase: Tb2BroadPhase;
 	    callback: Tb2RayCastCallback;
 
-      function RayCastCallback(const input: Tb2RayCastInput; proxyId: Int32): Float; override;
+      function RayCastCallback(const input: Tb2RayCastInput; proxyId: Int32): PhysicsFloat; override;
    end;
 
 var
@@ -5563,12 +5563,12 @@ end;
 { Tb2WorldRayCastWrapper }
 
 function Tb2WorldRayCastWrapper.RayCastCallback(const input: Tb2RayCastInput;
-   proxyId: Int32): Float;
+   proxyId: Int32): PhysicsFloat;
 var
    proxy: Pb2FixtureProxy;
    fixture: Tb2Fixture;
    output: Tb2RayCastOutput;
-   fraction: Float;
+   fraction: PhysicsFloat;
    point: TVector2;
 begin
    proxy := Pb2FixtureProxy(broadPhase.GetUserData(proxyId));
@@ -6003,7 +6003,7 @@ begin
 end;
 {$ENDIF}
 
-procedure Tb2World.Step(timeStep: Float; velocityIterations,
+procedure Tb2World.Step(timeStep: PhysicsFloat; velocityIterations,
    positionIterations: Int32; Draw: Boolean = False);
 var
    step: Tb2TimeStep;
@@ -6277,7 +6277,7 @@ begin
       FreeMemory(m_constraints);
 end;
 
-procedure Tb2ContactSolver.Initialize(contacts: TList; count: Int32; impulseRatio: Float;
+procedure Tb2ContactSolver.Initialize(contacts: TList; count: Int32; impulseRatio: PhysicsFloat;
    warmStarting: Boolean);
 var
    i, j: Integer;
@@ -6347,11 +6347,11 @@ var
    bodyA, bodyB: Tb2Body;
    manifold: Pb2Manifold;
    vA, vB, tangent: TVector2;
-   wA, wB, radiusA, radiusB, rA, rB, kNormal, kTangent, vRel: Float;
+   wA, wB, radiusA, radiusB, rA, rB, kNormal, kTangent, vRel: PhysicsFloat;
    worldManifold: Tb2WorldManifold;
    cp: Pb2ManifoldPoint;
    ccp: Pb2ContactConstraintPoint;
-   invMass, invIA, invIB, k11, k12, k22, rn1A, rn1B, rn2A, rn2B: Float;
+   invMass, invIA, invIB, k11, k12, k22, rn1A, rn1B, rn2A, rn2B: PhysicsFloat;
 begin
    for i := 0 to m_count - 1 do
    begin
@@ -6512,9 +6512,9 @@ var
    c: Pb2ContactConstraint;
    cp1, cp2: Pb2ContactConstraintPoint;
    bodyA, bodyB: Tb2Body;
-   wA, wB, invMassA, invMassB, invIA, invIB: Float;
-   friction, lambda, maxFriction, newImpulse: Float;
-   vn1, vn2: Float;
+   wA, wB, invMassA, invMassB, invIA, invIB: PhysicsFloat;
+   friction, lambda, maxFriction, newImpulse: PhysicsFloat;
+   vn1, vn2: PhysicsFloat;
    vA, vB, dv: TVector2;
    normal, tangent, P, a, b, x, d, P1, P2, dv1, dv2: TVector2;
 begin
@@ -6867,7 +6867,7 @@ type
    Tb2PositionSolverManifold = class
    public
       normal, point: TVector2;
-      separation: Float;
+      separation: PhysicsFloat;
 
       procedure Initialize(const cc: Tb2ContactConstraint; index: Int32);
    end;
@@ -6937,14 +6937,14 @@ end;
 
 var
    contactsolver_positionsolver: Tb2PositionSolverManifold;
-function Tb2ContactSolver.SolvePositionConstraints(baumgarte: Float): Boolean;
+function Tb2ContactSolver.SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean;
 var
    c: Pb2ContactConstraint;
-   minSeparation: Float;
+   minSeparation: PhysicsFloat;
    i, j: Integer;
-   invMassA, invMassB, invIA, invIB, rnA, rnB: Float;
+   invMassA, invMassB, invIA, invIB, rnA, rnB: PhysicsFloat;
    _normal, _point, P: TVector2;
-   _separation, _c, _K, impulse: Float;
+   _separation, _c, _K, impulse: PhysicsFloat;
    rA, rB: TVector2;
 begin
    minSeparation := 0.0;
@@ -7026,13 +7026,13 @@ begin
 end;
 
 // Sequential position solver for position constraints.
-function Tb2ContactSolver.SolveTOIPositionConstraints(baumgarte: Float; toiBodyA, toiBodyB: Tb2Body): Boolean;
+function Tb2ContactSolver.SolveTOIPositionConstraints(baumgarte: PhysicsFloat; toiBodyA, toiBodyB: Tb2Body): Boolean;
 var
-   minSeparation: Float;
+   minSeparation: PhysicsFloat;
    i, j: Integer;
    c: Pb2ContactConstraint;
    massA, massB, invMassA, invIA, invMassB, invIB, separation, _C, _K,
-      rnA, rnB, K, impulse: Float;
+      rnA, rnB, K, impulse: PhysicsFloat;
    normal, point, rA, rB, P: TVector2;
 begin
    minSeparation := 0.0;
@@ -7563,7 +7563,7 @@ var
    pswap: Pointer;
    i, j: Integer;
    contactsOkay, jointsOkay: Boolean;
-   minSleepTime, ratio, rotation: Float;
+   minSleepTime, ratio, rotation: PhysicsFloat;
    translation: TVector2;
 begin
    // Integrate velocities and apply damping.
@@ -7734,7 +7734,7 @@ var
    i: Integer;
    b: Tb2Body;
    translation: TVector2;
-   rotation: Float;
+   rotation: PhysicsFloat;
 begin
    island_solve_contact_solver.Initialize(m_contacts, m_contactCount,
       subStep.dtRatio, subStep.warmStarting);
@@ -8016,7 +8016,7 @@ end;
 procedure Tb2DynamicTree.InsertLeaf(leaf: Int32);
 var
    leafAABB, parentAABB, aabb: Tb2AABB;
-   siblingArea, parentArea, cost1, cost2, cost3, inheritanceCost: Float;
+   siblingArea, parentArea, cost1, cost2, cost3, inheritanceCost: PhysicsFloat;
    sibling, _child1, _child2, oldParent, newParent: Int32;
 begin
    Inc(m_insertionCount);
@@ -8446,7 +8446,7 @@ end;
 procedure Tb2DynamicTree.RayCast(callback: Tb2GenericCallBackWrapper;
    const input: Tb2RayCastInput);
 var
-   maxFraction, value: Float;
+   maxFraction, value: PhysicsFloat;
    r, t, v, abs_v, c, h: TVector2;
    segmentAABB: Tb2AABB;
    nodeId: Int32;
@@ -8988,7 +8988,7 @@ begin
    angularB := 0.0;
 end;
       
-procedure Tb2Jacobian.SetValue(const x1, x2: TVector2; a1, a2: Float);
+procedure Tb2Jacobian.SetValue(const x1, x2: TVector2; a1, a2: PhysicsFloat);
 begin
 	 linearA := x1;
    linearB := x2;
@@ -8996,7 +8996,7 @@ begin
    angularB := a2;
 end;
       
-function Tb2Jacobian.Compute(const x1, x2: TVector2; a1, a2: Float): Float;
+function Tb2Jacobian.Compute(const x1, x2: TVector2; a1, a2: PhysicsFloat): PhysicsFloat;
 begin
    Result := b2Dot(linearA, x1) + angularA * a1 + b2Dot(linearB, x2) + angularB * a2;
 end;  
@@ -9300,7 +9300,7 @@ begin
       def.Free;
 end;
 
-function Tb2Body.CreateFixture(shape: Tb2Shape; density: Float;
+function Tb2Body.CreateFixture(shape: Tb2Shape; density: PhysicsFloat;
    AutoFreeShape: Boolean = True; AutoResetMassData: Boolean = True): Tb2Fixture;
 var
    def: Tb2FixtureDef;
@@ -9482,7 +9482,7 @@ begin
    Result := True;
 end;
 
-procedure Tb2Body.Advance(alpha: Float);
+procedure Tb2Body.Advance(alpha: PhysicsFloat);
 begin
    // Advance to the new safe time.
    {$IFDEF OP_OVERLOAD}
@@ -9495,7 +9495,7 @@ begin
    SynchronizeTransform;
 end;
 
-procedure Tb2Body.SetTransform(const position: TVector2; angle: Float);
+procedure Tb2Body.SetTransform(const position: TVector2; angle: PhysicsFloat);
 var
    f: Tb2Fixture;
 begin
@@ -9540,7 +9540,7 @@ begin
    m_linearVelocity := v;
 end;
 
-procedure Tb2Body.SetAngularVelocity(omega: Float);
+procedure Tb2Body.SetAngularVelocity(omega: PhysicsFloat);
 begin
    if m_type = b2_staticBody then
       Exit;
@@ -9566,7 +9566,7 @@ begin
    {$ENDIF}
 end;
 
-procedure Tb2Body.ApplyTorque(torque: Float);
+procedure Tb2Body.ApplyTorque(torque: PhysicsFloat);
 begin
    if m_type <> b2_dynamicBody then
       Exit;
@@ -9592,7 +9592,7 @@ begin
    {$ENDIF}
 end;
 
-procedure Tb2Body.ApplyAngularImpulse(impulse: Float);
+procedure Tb2Body.ApplyAngularImpulse(impulse: PhysicsFloat);
 begin
    if m_type <> b2_dynamicBody then
       Exit;
@@ -10041,8 +10041,8 @@ var
    i: Integer;
    c, cLocal, v1, v2, faceCenter: TVector2;
    normalIndex: Int32;
-   _separation, radius: Float;
-   s, u1, u2: Float;
+   _separation, radius: PhysicsFloat;
+   s, u1, u2: PhysicsFloat;
 begin
    if ABfixture then
    begin
@@ -10185,7 +10185,7 @@ var
    edgeA: Tb2EdgeShape;
    circleB: Tb2CircleShape;
    Q, pA, pB, e, P, d, n: TVector2;
-   u, v, radius, dd, den: Float;
+   u, v, radius, dd, den: PhysicsFloat;
    cf: Tb2ContactFeature;
 begin
    if ABfixture then
@@ -10350,7 +10350,7 @@ type
    Tb2EPAxis = record
       AxisType: Byte;
       index: Int32;
-      separation: Float;
+      separation: PhysicsFloat;
    end;
 
    Tb2FatEdge = record
@@ -10387,7 +10387,7 @@ type
       m_normal0, m_normal2,
       m_limit11, m_limit12,
       m_limit21, m_limit22: TVector2;
-      m_radius: Float;
+      m_radius: PhysicsFloat;
 
       procedure Initialize(edgeA: Tb2EdgeShape; polygonB: Tb2PolygonShape;
          const xfA, xfB: Tb2Transform);
@@ -10405,7 +10405,7 @@ var
    i: Integer;
    index, i1, i2: Int32;
    normal1: TVector2;
-   minDot, dot: Float;
+   minDot, dot: PhysicsFloat;
 begin
    //b2Assert(0 <= edge1 && edge1 < poly1.m_vertexCount);
 
@@ -10453,9 +10453,9 @@ end;
 
 /// Clipping for contact manifolds.
 function b2ClipSegmentToLine(var vOut: Tb2ClipVertices; const vIn: Tb2ClipVertices;
-   const normal: TVector2; offset: Float; vertexIndexA: Int32): Int32;
+   const normal: TVector2; offset: PhysicsFloat; vertexIndexA: Int32): Int32;
 var
-   distance0, distance1, interp: Float;
+   distance0, distance1, interp: PhysicsFloat;
 begin
    Result := 0; // Start with no output points
 
@@ -10585,7 +10585,7 @@ var
    edge1, count1, iv1, iv2, np, pointCount: Int32;
    vertices1: Pb2PolyVertices;
    v11, v12, tangent, normal, planePoint: TVector2;
-   frontOffset, sideOffset1, sideOffset2, separation: Float;
+   frontOffset, sideOffset1, sideOffset2, separation: PhysicsFloat;
    clipV: Pb2ClipVertex;
 begin
    manifold.pointCount := 0;
@@ -10885,7 +10885,7 @@ var
    normals: array[0..1] of TVector2;
    n: TVector2;
    valid1, valid2: Boolean;
-   s: Float;
+   s: PhysicsFloat;
 begin
    // EdgeA separation
    bestAxis.AxisType := e_ep_unknown;
@@ -10943,7 +10943,7 @@ var
    axis: Tb2EPAxis;
    n: TVector2;
    valid1, valid2: Boolean;
-   s1, s2, s: Float;
+   s1, s2, s: PhysicsFloat;
 begin
    axis.AxisType := e_ep_unknown;
    axis.index := -1;
@@ -10997,7 +10997,7 @@ var
    index, i1, i2: Int32;
    normal1: TVector2;
    normals1, normals2, vertices2: Pb2PolyVertices;
-   minDot, dot: Float;
+   minDot, dot: PhysicsFloat;
 begin
    normals1 := @proxy1^.normals;
 
@@ -11113,11 +11113,11 @@ end;
 
 // Find the separation between poly1 and poly2 for a give edge normal on poly1.
 function b2EdgeSeparation(poly1, poly2: Tb2PolygonShape; const xf1,
-   xf2: Tb2Transform; edge1: Int32): Float;
+   xf2: Tb2Transform; edge1: Int32): PhysicsFloat;
 var
    i: Integer;
    index: Int32;
-   minDot, dot: Float;
+   minDot, dot: PhysicsFloat;
    normal1World, normal1: TVector2;
    v1, v2: TVector2;
 begin
@@ -11152,12 +11152,12 @@ end;
 
 // Find the max separation between poly1 and poly2 using edge normals from poly1.
 function b2FindMaxSeparation(var edgeIndex: Int32;
-   poly1, poly2: Tb2PolygonShape; const xf1, xf2: Tb2Transform): Float;
+   poly1, poly2: Tb2PolygonShape; const xf1, xf2: Tb2Transform): PhysicsFloat;
 var
    i: Integer;
    edge, prevEdge, nextEdge, bestEdge, increment: Int32;
    d, dLocal1: TVector2;
-   maxDot, dot, s, sPrev, sNext, bestSeparation: Float;
+   maxDot, dot, s, sPrev, sNext, bestSeparation: PhysicsFloat;
 begin
    // Vector pointing from the centroid of poly1 to the centroid of poly2.
    {$IFDEF OP_OVERLOAD}
@@ -11256,7 +11256,7 @@ var
    i: Integer;
    index, i1, i2: Int32;
    normal1: TVector2;
-   minDot, dot: Float;
+   minDot, dot: PhysicsFloat;
 begin
    //b2Assert(0 <= edge1 && edge1 < poly1.m_vertexCount);
 
@@ -11316,13 +11316,13 @@ var
    edge1: Int32; // reference edge
    iv1, iv2: Int32;
    flip: UInt8;
-   totalRadius, separationA, separationB: Float;
+   totalRadius, separationA, separationB: PhysicsFloat;
    poly1, poly2: Tb2PolygonShape; // reference poly and incident poly
    xf1, xf2: Tb2Transform;
-   k_relativeTol, k_absoluteTol: Float;
+   k_relativeTol, k_absoluteTol: PhysicsFloat;
    incidentEdge, clipPoints1, clipPoints2: Tb2ClipVertices;
    v11, v12, localTangent, localNormal, planePoint, tangent, normal: TVector2;
-   frontOffset, sideOffset1, sideOffset2: Float;
+   frontOffset, sideOffset1, sideOffset2: PhysicsFloat;
    np: Int32; // Clip incident edge against extruded edge1 side edges.
    pointCount: Int32;
    cfSwap: Tb2ContactFeature;
@@ -11498,7 +11498,7 @@ function Tb2CircleShape.RayCast(var output: Tb2RayCastOutput;
    childIndex: Int32): Boolean;
 var
    s, r: TVector2;
-   b, c, rr, sigma, a: Float;
+   b, c, rr, sigma, a: PhysicsFloat;
 begin
    //B2_NOT_USED(childIndex);
    {$IFDEF OP_OVERLOAD}
@@ -11565,7 +11565,7 @@ begin
    SetValue(aabb.upperBound, p.x + m_radius, p.y + m_radius);
 end;
 
-procedure Tb2CircleShape.ComputeMass(var massData: Tb2MassData; density: Float);
+procedure Tb2CircleShape.ComputeMass(var massData: Tb2MassData; density: PhysicsFloat);
 begin
    m_baseMass.mass := Pi * m_radius * m_radius;
    m_baseMass.center := m_p;
@@ -11576,11 +11576,11 @@ begin
    massData.I := density * m_baseMass.I;
 end;
 
-function Tb2CircleShape.ComputeSubmergedArea(const normal: TVector2; offset: Float;
-   const xf: Tb2Transform; var c: TVector2): Float;
+function Tb2CircleShape.ComputeSubmergedArea(const normal: TVector2; offset: PhysicsFloat;
+   const xf: Tb2Transform; var c: TVector2): PhysicsFloat;
 var
    p: TVector2;
-   l, r2, l2, com: Float;
+   l, r2, l2, com: PhysicsFloat;
 begin
    p := b2Mul(xf, m_p);
    l := -(b2Dot(normal, p) - offset);
@@ -11692,7 +11692,7 @@ var
    i: Integer;
    index: Int32;
    p1, p2, d, q, r: TVector2;
-   numerator, denominator, t, rr, s, lower, upper: Float;
+   numerator, denominator, t, rr, s, lower, upper: PhysicsFloat;
 begin
    //B2_NOT_USED(childIndex);
    // Put the ray into the polygon's frame of reference.
@@ -11805,16 +11805,16 @@ begin
    {$ENDIF}
 end;
 
-procedure Tb2PolygonShape.ComputeMass(var massData: Tb2MassData; density: Float);
+procedure Tb2PolygonShape.ComputeMass(var massData: Tb2MassData; density: PhysicsFloat);
 const
    k_inv3 = 1.0 / 3.0;
 var
    i: Integer;
    center, pRef, p1, p2, p3, e1, e2: TVector2;
-   area, inertia: Float;
-   D, triangleArea: Float;
-   px, py, ex1, ey1, ex2, ey2: Float;
-   intx2, inty2: Float;
+   area, inertia: PhysicsFloat;
+   D, triangleArea: PhysicsFloat;
+   px, py, ex1, ey1, ex2, ey2: PhysicsFloat;
+   intx2, inty2: PhysicsFloat;
 begin
    // Polygon mass, centroid, and inertia.
    // Let rho be the polygon density in mass per unit area.
@@ -11915,15 +11915,15 @@ begin
    massData.I := density * inertia;
 end;
 
-function Tb2PolygonShape.ComputeSubmergedArea(const normal: TVector2; offset: Float;
-   const xf: Tb2Transform; var c: TVector2): Float;
+function Tb2PolygonShape.ComputeSubmergedArea(const normal: TVector2; offset: PhysicsFloat;
+   const xf: Tb2Transform; var c: TVector2): PhysicsFloat;
 var
    i: Integer;
    normalL, intoVec, outoVec, center, p2, p3: TVector2;
-   offsetL, intoLamdda, outoLamdda, triangleArea: Float;
+   offsetL, intoLamdda, outoLamdda, triangleArea: PhysicsFloat;
    diveCount, intoIndex, outoIndex, intoIndex2, outoIndex2: Int32;
    lastSubmerged, isSubmerged: Boolean;
-   depths: array[0..b2_maxPolygonVertices - 1] of Float;
+   depths: array[0..b2_maxPolygonVertices - 1] of PhysicsFloat;
 begin
    // Transform plane into shape co-ordinates
    normalL := b2MulT(xf.R, normal);
@@ -12068,7 +12068,7 @@ begin
    m_centroid := ComputeCentroid(m_vertices, m_vertexCount);
 end;
 
-procedure Tb2PolygonShape.SetAsBox(hx, hy: Float);
+procedure Tb2PolygonShape.SetAsBox(hx, hy: PhysicsFloat);
 begin
    m_vertexCount := 4;
    SetValue(m_vertices[0], -hx, -hy);
@@ -12082,7 +12082,7 @@ begin
    m_centroid := b2Vec2_Zero;
 end;
 
-procedure Tb2PolygonShape.SetAsBox(hx, hy: Float; const center: TVector2; angle: Float);
+procedure Tb2PolygonShape.SetAsBox(hx, hy: PhysicsFloat; const center: TVector2; angle: PhysicsFloat);
 var
    i: Integer;
    xf: Tb2Transform;
@@ -12173,7 +12173,7 @@ function Tb2EdgeShape.RayCast(var output: Tb2RayCastOutput;
    childIndex: Int32): Boolean;
 var
    p1, p2, d, e, normal, q: TVector2;
-   numerator, denominator, t, rr, s: Float;
+   numerator, denominator, t, rr, s: PhysicsFloat;
 begin
    //B2_NOT_USED(childIndex);
    {$IFDEF OP_OVERLOAD}
@@ -12284,9 +12284,9 @@ begin
    {$ENDIF}
 end;
 
-procedure Tb2EdgeShape.ComputeMass(var massData: Tb2MassData; density: Float);
+procedure Tb2EdgeShape.ComputeMass(var massData: Tb2MassData; density: PhysicsFloat);
 var
-   area: Float;
+   area: PhysicsFloat;
 begin
    massData.center := b2MiddlePoint(m_vertex1, m_vertex2);
 
@@ -12308,7 +12308,7 @@ begin
 end;
 
 function Tb2EdgeShape.ComputeSubmergedArea(const normal: TVector2;
-   offset: Float; const xf: Tb2Transform; var c: TVector2): Float;
+   offset: PhysicsFloat; const xf: Tb2Transform; var c: TVector2): PhysicsFloat;
 begin
    Result := 0.0;
 end;
@@ -12421,7 +12421,7 @@ begin
    aabb.upperBound := b2Max(v1, v2);
 end;
 
-procedure Tb2LoopShape.ComputeMass(var massData: Tb2MassData; density: Float);
+procedure Tb2LoopShape.ComputeMass(var massData: Tb2MassData; density: PhysicsFloat);
 begin
    //B2_NOT_USED(density);
    massData.mass := 0.0;
@@ -12430,7 +12430,7 @@ begin
 end;
 
 function Tb2LoopShape.ComputeSubmergedArea(const normal: TVector2;
-   offset: Float; const xf: Tb2Transform; var c: TVector2): Float;
+   offset: PhysicsFloat; const xf: Tb2Transform; var c: TVector2): PhysicsFloat;
 begin
    Result := 0.0;
 end;
@@ -12502,7 +12502,7 @@ begin
    Result := m_bodyB.GetWorldPoint(m_localAnchor2);
 end;
 
-function Tb2DistanceJoint.GetReactionForce(inv_dt: Float): TVector2;
+function Tb2DistanceJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
 begin
    {$IFDEF OP_OVERLOAD}
    Result := (inv_dt * m_impulse) * m_u;
@@ -12511,7 +12511,7 @@ begin
    {$ENDIF}
 end;
 
-function Tb2DistanceJoint.GetReactionTorque(inv_dt: Float): Float;
+function Tb2DistanceJoint.GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat;
 begin
    Result := 0.0;
 end;
@@ -12519,8 +12519,8 @@ end;
 procedure Tb2DistanceJoint.InitVelocityConstraints(const step: Tb2TimeStep);
 var
    r1, r2, P: TVector2;
-   length, cr1u, cr2u, invMass: Float;
-   C, omega, d, k: Float;
+   length, cr1u, cr2u, invMass: PhysicsFloat;
+   C, omega, d, k: PhysicsFloat;
 begin
    // Compute the effective mass matrix.
    {$IFDEF OP_OVERLOAD}
@@ -12602,7 +12602,7 @@ end;
 procedure Tb2DistanceJoint.SolveVelocityConstraints(const step: Tb2TimeStep);
 var
    r1, r2, v1, v2, P: TVector2;
-   Cdot, impulse: Float;
+   Cdot, impulse: PhysicsFloat;
 begin
    {$IFDEF OP_OVERLOAD}
    r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
@@ -12638,10 +12638,10 @@ begin
    m_bodyB.m_angularVelocity := m_bodyB.m_angularVelocity + m_bodyB.m_invI * b2Cross(r2, P);
 end;
 
-function Tb2DistanceJoint.SolvePositionConstraints(baumgarte: Float): Boolean;
+function Tb2DistanceJoint.SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean;
 var
    r1, r2, d, P: TVector2;
-   C, impulse: Float;
+   C, impulse: PhysicsFloat;
 begin
    if m_frequencyHz > 0.0 then
    begin
@@ -12820,7 +12820,7 @@ begin
    Result := m_bodyB.GetWorldPoint(m_localAnchor2);
 end;
 
-function Tb2PrismaticJoint.GetReactionForce(inv_dt: Float): TVector2;
+function Tb2PrismaticJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
 begin
    {$IFDEF OP_OVERLOAD}
    Result := inv_dt * (m_impulse.x * m_perp + (m_motorImpulse + m_impulse.z) * m_axis);
@@ -12830,7 +12830,7 @@ begin
    {$ENDIF}
 end;
 
-function Tb2PrismaticJoint.GetReactionTorque(inv_dt: Float): Float;
+function Tb2PrismaticJoint.GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat;
 begin
    Result := inv_dt * m_impulse.y;
 end;
@@ -12838,7 +12838,7 @@ end;
 procedure Tb2PrismaticJoint.InitVelocityConstraints(const step: Tb2TimeStep);
 var
   r1, r2, d, P: TVector2;
-  m1, m2, i1, i2, k11, k12, k13, k22, k23, k33, jointTranslation, L1, L2: Float;
+  m1, m2, i1, i2, k11, k12, k13, k22, k23, k33, jointTranslation, L1, L2: PhysicsFloat;
 begin
    m_localCenterA := m_bodyA.GetLocalCenter;
    m_localCenterB := m_bodyB.GetLocalCenter;
@@ -12982,7 +12982,7 @@ end;
 procedure Tb2PrismaticJoint.SolveVelocityConstraints(const step: Tb2TimeStep);
 var
    v1, v2, P, Cdot1, b, f2r, df: TVector2;
-   w1, w2, fCdot, Cdot2, impulse, oldImpulse, maxImpulse, L1, L2: Float;
+   w1, w2, fCdot, Cdot2, impulse, oldImpulse, maxImpulse, L1, L2: PhysicsFloat;
    Cdot, f1, df3: TVector3;
 begin
    v1 := m_bodyA.m_linearVelocity;
@@ -13121,11 +13121,11 @@ begin
    m_bodyB.m_angularVelocity := w2;
 end;
 
-function Tb2PrismaticJoint.SolvePositionConstraints(baumgarte: Float): Boolean;
+function Tb2PrismaticJoint.SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean;
 var
    r1, r2, d, c1, c2, _C1, impulse1, P: TVector2;
    a1, a2, linearError, angularError, _C2, translation,
-   m1, i1, m2, i2, k11, k12, k13, k22, k23, k33, L1, L2: Float;
+   m1, i1, m2, i2, k11, k12, k13, k22, k23, k33, L1, L2: PhysicsFloat;
    active: Boolean;
    _R1, _R2: TMatrix22;
    impulse, C: TVector3;
@@ -13296,7 +13296,7 @@ begin
 	 Result := (linearError <= b2_linearSlop) and (angularError <= b2_angularSlop);
 end;
 
-function Tb2PrismaticJoint.GetJointTranslation: Float;
+function Tb2PrismaticJoint.GetJointTranslation: PhysicsFloat;
 var
    d, axis: TVector2;
 begin
@@ -13323,10 +13323,10 @@ begin
 	 m_enableMotor := flag;
 end;
 
-function Tb2PrismaticJoint.GetJointSpeed: Float;
+function Tb2PrismaticJoint.GetJointSpeed: PhysicsFloat;
 var
    r1, r2, d, axis: TVector2;
-   w1: Float;
+   w1: PhysicsFloat;
 begin
    {$IFDEF OP_OVERLOAD}
    r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
@@ -13352,12 +13352,12 @@ begin
    {$ENDIF}
 end;
 
-function Tb2PrismaticJoint.GetMotorForce(inv_dt: Float): Float;
+function Tb2PrismaticJoint.GetMotorForce(inv_dt: PhysicsFloat): PhysicsFloat;
 begin
    Result := inv_dt * m_motorImpulse;
 end;
 
-procedure Tb2PrismaticJoint.SetLimits(lower, upper: Float);
+procedure Tb2PrismaticJoint.SetLimits(lower, upper: PhysicsFloat);
 begin
    //b2Assert(lower <= upper);
    m_bodyA.SetAwake(True);
@@ -13366,14 +13366,14 @@ begin
 	 m_upperTranslation := upper;
 end;
 
-procedure Tb2PrismaticJoint.SetMotorSpeed(speed: Float);
+procedure Tb2PrismaticJoint.SetMotorSpeed(speed: PhysicsFloat);
 begin
    m_bodyA.SetAwake(True);
    m_bodyB.SetAwake(True);
 	 m_motorSpeed := speed;
 end;
 
-procedure Tb2PrismaticJoint.SetMaxMotorForce(force: Float);
+procedure Tb2PrismaticJoint.SetMaxMotorForce(force: PhysicsFloat);
 begin
    m_bodyA.SetAwake(True);
    m_bodyB.SetAwake(True);
@@ -13433,7 +13433,7 @@ begin
    Result := m_bodyB.GetWorldPoint(m_localAnchor);
 end;
 
-function Tb2MouseJoint.GetReactionForce(inv_dt: Float): TVector2;
+function Tb2MouseJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
 begin
    {$IFDEF OP_OVERLOAD}
    Result := inv_dt * m_impulse;
@@ -13442,7 +13442,7 @@ begin
    {$ENDIF}
 end;
 
-function Tb2MouseJoint.GetReactionTorque(inv_dt: Float): Float;
+function Tb2MouseJoint.GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat;
 begin
    Result := 0.0;
 end;
@@ -13450,7 +13450,7 @@ end;
 procedure Tb2MouseJoint.InitVelocityConstraints(const step: Tb2TimeStep);
 var
    r: TVector2;
-   invMass, invI, omega, d, _k: Float;
+   invMass, invI, omega, d, _k: PhysicsFloat;
    K1, K2, K: TMatrix22;
 begin
    // Frequency
@@ -13526,7 +13526,7 @@ end;
 procedure Tb2MouseJoint.SolveVelocityConstraints(const step: Tb2TimeStep);
 var
    r, Cdot, impulse, oldImpulse: TVector2;
-   maxImpulse: Float;
+   maxImpulse: PhysicsFloat;
 begin
    oldImpulse := m_impulse;
    // Cdot := v + cross(w, r)
@@ -13558,7 +13558,7 @@ begin
       m_bodyB.m_invI * b2Cross(r, impulse);
 end;
 
-function Tb2MouseJoint.SolvePositionConstraints(baumgarte: Float): Boolean;
+function Tb2MouseJoint.SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean;
 begin
    Result := True;
 end;
@@ -13616,9 +13616,9 @@ begin
 end;
 
 procedure Tb2PulleyJointDef.Initialize(bodyA, bodyB: Tb2Body; const groundAnchorA,
-   groundAnchorB, anchorA, anchorB: TVector2; ratio: Float);
+   groundAnchorB, anchorA, anchorB: TVector2; ratio: PhysicsFloat);
 var
-   C: Float;
+   C: PhysicsFloat;
 begin
    Self.bodyA := bodyA;
    Self.bodyB := bodyB;
@@ -13672,7 +13672,7 @@ begin
    Result := m_bodyB.GetWorldPoint(m_localAnchor2);
 end;
 
-function Tb2PulleyJoint.GetReactionForce(inv_dt: Float): TVector2;
+function Tb2PulleyJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
 begin
    {$IFDEF OP_OVERLOAD}
    Result := (m_impulse * inv_dt) * m_u2;
@@ -13681,7 +13681,7 @@ begin
    {$ENDIF}
 end;
 
-function Tb2PulleyJoint.GetReactionTorque(inv_dt: Float): Float;
+function Tb2PulleyJoint.GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat;
 begin
    Result := 0.0;
 end;
@@ -13689,7 +13689,7 @@ end;
 procedure Tb2PulleyJoint.InitVelocityConstraints(const step: Tb2TimeStep);
 var
    r1, r2, P1, P2: TVector2;
-   lengthA, lengthB, C, cr1u1, cr2u2: Float;
+   lengthA, lengthB, C, cr1u1, cr2u2: PhysicsFloat;
 begin
    {$IFDEF OP_OVERLOAD}
    r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
@@ -13805,7 +13805,7 @@ end;
 procedure Tb2PulleyJoint.SolveVelocityConstraints(const step: Tb2TimeStep);
 var
    r1, r2, v1, v2, P1, P2: TVector2;
-   Cdot, impulse, oldImpulse: Float;
+   Cdot, impulse, oldImpulse: PhysicsFloat;
 begin
    {$IFDEF OP_OVERLOAD}
    r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
@@ -13895,10 +13895,10 @@ begin
    end;
 end;
 
-function Tb2PulleyJoint.SolvePositionConstraints(baumgarte: Float): Boolean;
+function Tb2PulleyJoint.SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean;
 var
    s1, s2, r1, r2, P1, P2: TVector2;
-   linearError, lengthA, lengthB, C, impulse: Float;
+   linearError, lengthA, lengthB, C, impulse: PhysicsFloat;
 begin
    s1 := m_groundAnchor1;
 	 s2 := m_groundAnchor2;
@@ -14064,7 +14064,7 @@ begin
    Result := linearError < b2_linearSlop;
 end;
 
-function Tb2PulleyJoint.GetLength1: Float;
+function Tb2PulleyJoint.GetLength1: PhysicsFloat;
 begin
    {$IFDEF OP_OVERLOAD}
    Result := (m_bodyA.GetWorldPoint(m_localAnchor1) - m_groundAnchor1).Length;
@@ -14073,7 +14073,7 @@ begin
    {$ENDIF}
 end;
 
-function Tb2PulleyJoint.GetLength2: Float;
+function Tb2PulleyJoint.GetLength2: PhysicsFloat;
 begin
    {$IFDEF OP_OVERLOAD}
    Result := (m_bodyB.GetWorldPoint(m_localAnchor2) - m_groundAnchor2).Length;
@@ -14164,13 +14164,13 @@ begin
    Result := m_bodyB.GetWorldPoint(m_localAnchor2);
 end;
 
-function Tb2RevoluteJoint.GetReactionForce(inv_dt: Float): TVector2;
+function Tb2RevoluteJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
 begin
    Result.x := m_impulse.x * inv_dt;
    Result.y := m_impulse.y * inv_dt;
 end;
 
-function Tb2RevoluteJoint.GetReactionTorque(inv_dt: Float): Float;
+function Tb2RevoluteJoint.GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat;
 begin
    Result := inv_dt * m_impulse.z;
 end;
@@ -14178,7 +14178,7 @@ end;
 procedure Tb2RevoluteJoint.InitVelocityConstraints(const step: Tb2TimeStep);
 var
    r1, r2, P: TVector2;
-   m1, m2, i1, i2, jointAngle: Float;
+   m1, m2, i1, i2, jointAngle: PhysicsFloat;
 begin
    if m_enableMotor or m_enableLimit then
    begin
@@ -14296,7 +14296,7 @@ procedure Tb2RevoluteJoint.SolveVelocityConstraints(const step: Tb2TimeStep);
 var
    Cdot, impulse: TVector3;
    v1, v2, r1, r2, Cdot1, reduced, P, Cdot2, impulse2: TVector2;
-   w1, w2, m1, m2, i1, i2, fCdot, fimpulse, oldImpulse, maxImpulse, newImpulse: Float;
+   w1, w2, m1, m2, i1, i2, fCdot, fimpulse, oldImpulse, maxImpulse, newImpulse: PhysicsFloat;
 begin
    v1 := m_bodyA.m_linearVelocity;
    w1 := m_bodyA.m_angularVelocity;
@@ -14458,13 +14458,13 @@ begin
    m_bodyB.m_angularVelocity := w2;
 end;
 
-function Tb2RevoluteJoint.SolvePositionConstraints(baumgarte: Float): Boolean;
+function Tb2RevoluteJoint.SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean;
 const
    k_allowedStretch = 10.0 * b2_linearSlop;
    k_beta = 0.5;
 var
    angularError, positionError, angle, limitImpulse, C,
-   invMass1, invMass2, invI1, invI2, m: Float;
+   invMass1, invMass2, invI1, invI2, m: PhysicsFloat;
    r1, r2, CV, u, impulse: TVector2;
    K1, K2, K3, K: TMatrix22;
 begin
@@ -14600,17 +14600,17 @@ begin
    Result := (positionError <= b2_linearSlop) and (angularError <= b2_angularSlop);
 end;
 
-function Tb2RevoluteJoint.GetJointAngle: Float;
+function Tb2RevoluteJoint.GetJointAngle: PhysicsFloat;
 begin
 	 Result := m_bodyB.m_sweep.a - m_bodyA.m_sweep.a - m_referenceAngle;
 end;
 
-function Tb2RevoluteJoint.GetJointSpeed: Float;
+function Tb2RevoluteJoint.GetJointSpeed: PhysicsFloat;
 begin
 	 Result := m_bodyB.m_angularVelocity - m_bodyA.m_angularVelocity;
 end;
 
-function Tb2RevoluteJoint.GetMotorTorque(inv_dt: Float): Float;
+function Tb2RevoluteJoint.GetMotorTorque(inv_dt: PhysicsFloat): PhysicsFloat;
 begin
    Result := inv_dt * m_motorImpulse;
 end;
@@ -14622,7 +14622,7 @@ begin
 	 m_enableLimit := flag;
 end;
 
-procedure Tb2RevoluteJoint.SetLimits(lower, upper: Float);
+procedure Tb2RevoluteJoint.SetLimits(lower, upper: PhysicsFloat);
 begin
    //b2Assert(lower <= upper);
 	 m_bodyA.SetAwake(True);
@@ -14638,14 +14638,14 @@ begin
 	 m_enableMotor := flag;
 end;
 
-procedure Tb2RevoluteJoint.SetMotorSpeed(speed: Float);
+procedure Tb2RevoluteJoint.SetMotorSpeed(speed: PhysicsFloat);
 begin
 	 m_bodyA.SetAwake(True);
 	 m_bodyB.SetAwake(True);
 	 m_motorSpeed := speed;
 end;
 
-procedure Tb2RevoluteJoint.SetMaxMotorTorque(torque: Float);
+procedure Tb2RevoluteJoint.SetMaxMotorTorque(torque: PhysicsFloat);
 begin
 	 m_bodyA.SetAwake(True);
 	 m_bodyB.SetAwake(True);
@@ -14688,7 +14688,7 @@ end;
 constructor Tb2GearJoint.Create(def: Tb2GearJointDef);
 var
    type1, type2: Tb2JointType;
-   coordinate1, coordinate2: Float;
+   coordinate1, coordinate2: PhysicsFloat;
 begin
    inherited Create(def);
    type1 := def.joint1.m_type;
@@ -14753,7 +14753,7 @@ begin
    Result := m_bodyB.GetWorldPoint(m_localAnchor2);
 end;
 
-function Tb2GearJoint.GetReactionForce(inv_dt: Float): TVector2;
+function Tb2GearJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
 begin
    // TODO_ERIN not tested
    {$IFDEF OP_OVERLOAD}
@@ -14763,7 +14763,7 @@ begin
    {$ENDIF}
 end;
 
-function Tb2GearJoint.GetReactionTorque(inv_dt: Float): Float;
+function Tb2GearJoint.GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat;
 var
    r, P: TVector2;
 begin
@@ -14780,7 +14780,7 @@ end;
 
 procedure Tb2GearJoint.InitVelocityConstraints(const step: Tb2TimeStep);
 var
-   K, crug: Float;
+   K, crug: PhysicsFloat;
    ug, r: TVector2;
 begin
    K := 0.0;
@@ -14856,7 +14856,7 @@ end;
 
 procedure Tb2GearJoint.SolveVelocityConstraints(const step: Tb2TimeStep);
 var
-   Cdot, impulse: Float;
+   Cdot, impulse: PhysicsFloat;
 begin
    {$IFDEF OP_OVERLOAD}
    Cdot := m_J.Compute(m_bodyA.m_linearVelocity, m_bodyB.m_linearVelocity,
@@ -14880,9 +14880,9 @@ begin
    m_bodyB.m_angularVelocity := m_bodyB.m_angularVelocity + m_bodyB.m_invI * impulse * m_J.angularB;
 end;
 
-function Tb2GearJoint.SolvePositionConstraints(baumgarte: Float): Boolean;
+function Tb2GearJoint.SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean;
 var
-   linearError, coordinate1, coordinate2, C, impulse: Float;
+   linearError, coordinate1, coordinate2, C, impulse: PhysicsFloat;
 begin
    linearError := 0.0;
 
@@ -14973,7 +14973,7 @@ begin
    Result  := m_bodyB.GetWorldPoint(m_localAnchorB);
 end;
 
-function Tb2FrictionJoint.GetReactionForce(inv_dt: Float): TVector2;
+function Tb2FrictionJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
 begin
    {$IFDEF OP_OVERLOAD}
    Result := inv_dt * m_linearImpulse;
@@ -14982,7 +14982,7 @@ begin
    {$ENDIF}
 end;
 
-function Tb2FrictionJoint.GetReactionTorque(inv_dt: Float): Float;
+function Tb2FrictionJoint.GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat;
 begin
    Result := inv_dt * m_angularImpulse;
 end;
@@ -14990,7 +14990,7 @@ end;
 procedure Tb2FrictionJoint.InitVelocityConstraints(const step: Tb2TimeStep);
 var
    rA, rB: TVector2;
-   mA, mB, iA, iB: Float;
+   mA, mB, iA, iB: PhysicsFloat;
    K1, K2, K3, K: TMatrix22;
 begin
    // Compute the effective mass matrix.
@@ -15076,7 +15076,7 @@ end;
 procedure Tb2FrictionJoint.SolveVelocityConstraints(const step: Tb2TimeStep);
 var
    vA, vB, rA, rB, Cdot, impulse, oldImpulse: TVector2;
-   wA, wB, fCdot, impulsef, oldImpulsef, maxImpulse: Float;
+   wA, wB, fCdot, impulsef, oldImpulsef, maxImpulse: PhysicsFloat;
 begin
    //B2_NOT_USED(step);
 
@@ -15162,7 +15162,7 @@ begin
    m_bodyB.m_angularVelocity := wB;
 end;
 
-function Tb2FrictionJoint.SolvePositionConstraints(baumgarte: Float): Boolean;
+function Tb2FrictionJoint.SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean;
 begin
 	 //B2_NOT_USED(baumgarte);
    Result := True;
@@ -15290,7 +15290,7 @@ begin
    Result := m_bodyB.GetWorldPoint(m_localAnchor2);
 end;
 
-function Tb2LineJoint.GetReactionForce(inv_dt: Float): TVector2;
+function Tb2LineJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
 begin
    {$IFDEF OP_OVERLOAD}
    Result := inv_dt * (m_impulse.x * m_perp + (m_motorImpulse + m_impulse.y) * m_axis);
@@ -15299,13 +15299,13 @@ begin
    {$ENDIF}
 end;
 
-function Tb2LineJoint.GetReactionTorque(inv_dt: Float): Float;
+function Tb2LineJoint.GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat;
 begin
 	 //B2_NOT_USED(inv_dt);
 	 Result := 0.0;
 end;
 
-function Tb2LineJoint.GetJointSpeed: Float;
+function Tb2LineJoint.GetJointSpeed: PhysicsFloat;
 var
    r1, r2, d, axis: TVector2;
 begin
@@ -15332,7 +15332,7 @@ begin
    {$ENDIF}
 end;
 
-function Tb2LineJoint.GetJointTranslation: Float;
+function Tb2LineJoint.GetJointTranslation: PhysicsFloat;
 begin
    {$IFDEF OP_OVERLOAD}
    Result := b2Dot(m_bodyB.GetWorldPoint(m_localAnchor2) -
@@ -15343,7 +15343,7 @@ begin
    {$ENDIF}
 end;
 
-function Tb2LineJoint.GetMotorForce(inv_dt: Float): Float;
+function Tb2LineJoint.GetMotorForce(inv_dt: PhysicsFloat): PhysicsFloat;
 begin
    Result := inv_dt * m_motorImpulse;
 end;
@@ -15351,7 +15351,7 @@ end;
 procedure Tb2LineJoint.InitVelocityConstraints(const step: Tb2TimeStep);
 var
    r1, r2, d, P: TVector2;
-   k11, k12, k22, jointTranslation, L1, L2: Float;
+   k11, k12, k22, jointTranslation, L1, L2: PhysicsFloat;
 begin
    // Compute the effective masses.
    {$IFDEF OP_OVERLOAD}
@@ -15485,7 +15485,7 @@ procedure Tb2LineJoint.SolveVelocityConstraints(const step: Tb2TimeStep);
 var
    v1, v2, P, Cdot, f1, dfv: TVector2;
    w1, w2, Cdotf, Cdot2, impulse, oldImpulse, maxImpulse, L1, L2,
-   b, f2r, df: Float;
+   b, f2r, df: PhysicsFloat;
 begin
    v1 := m_bodyA.m_linearVelocity;
    w1 := m_bodyA.m_angularVelocity;
@@ -15626,11 +15626,11 @@ begin
    m_bodyB.m_angularVelocity := w2;
 end;
 
-function Tb2LineJoint.SolvePositionConstraints(baumgarte: Float): Boolean;
+function Tb2LineJoint.SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean;
 var
    c1, c2, r1, r2, d, impulse, C, P: TVector2;
    a1, a2, linearError, angularError, _C1, _C2, translation,
-   k11, k12, k22, L1, L2: Float;
+   k11, k12, k22, L1, L2: PhysicsFloat;
    active: Boolean;
    _R1, _R2: TMatrix22;
 begin
@@ -15783,7 +15783,7 @@ begin
    m_enableLimit := flag;
 end;
 
-procedure Tb2LineJoint.SetLimits(lower, upper: Float);
+procedure Tb2LineJoint.SetLimits(lower, upper: PhysicsFloat);
 begin
    //b2Assert(lower <= upper);
    m_bodyA.SetAwake(True);
@@ -15799,14 +15799,14 @@ begin
    m_enableMotor := flag;
 end;
 
-procedure Tb2LineJoint.SetMotorSpeed(speed: Float);
+procedure Tb2LineJoint.SetMotorSpeed(speed: PhysicsFloat);
 begin
    m_bodyA.SetAwake(True);
    m_bodyB.SetAwake(True);
    m_motorSpeed := speed;
 end;
 
-procedure Tb2LineJoint.SetMaxMotorForce(force: Float);
+procedure Tb2LineJoint.SetMaxMotorForce(force: PhysicsFloat);
 begin
    m_bodyA.SetAwake(True);
    m_bodyB.SetAwake(True);
@@ -15868,13 +15868,13 @@ begin
    Result := m_bodyB.GetWorldPoint(m_localAnchorB);
 end;
 
-function Tb2WeldJoint.GetReactionForce(inv_dt: Float): TVector2;
+function Tb2WeldJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
 begin
    Result.x := inv_dt * m_impulse.x;
    Result.y := inv_dt * m_impulse.y;
 end;
 
-function Tb2WeldJoint.GetReactionTorque(inv_dt: Float): Float;
+function Tb2WeldJoint.GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat;
 begin
    Result := inv_dt * m_impulse.z;
 end;
@@ -15882,7 +15882,7 @@ end;
 procedure Tb2WeldJoint.InitVelocityConstraints(const step: Tb2TimeStep);
 var
    rA, rB, P: TVector2;
-   mA, mB, iA, iB: Float;
+   mA, mB, iA, iB: PhysicsFloat;
 begin
    // Compute the effective mass matrix.
    {$IFDEF OP_OVERLOAD}
@@ -15947,7 +15947,7 @@ end;
 procedure Tb2WeldJoint.SolveVelocityConstraints(const step: Tb2TimeStep);
 var
    vA, vB, rA, rB, Cdot1, P: TVector2;
-   wA, wB: Float;
+   wA, wB: PhysicsFloat;
    Cdot, impulse: TVector3;
 begin
    //B2_NOT_USED(step);
@@ -16003,11 +16003,11 @@ begin
    m_bodyB.m_angularVelocity := wB;
 end;
 
-function Tb2WeldJoint.SolvePositionConstraints(baumgarte: Float): Boolean;
+function Tb2WeldJoint.SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean;
 const
    k_allowedStretch = 10.0 * b2_linearSlop;
 var
-   mA, mB, iA, iB, C2, positionError, angularError: Float;
+   mA, mB, iA, iB, C2, positionError, angularError: PhysicsFloat;
    rA, rB, C1, P: TVector2;
    C, impulse: TVector3;
 begin
@@ -16119,7 +16119,7 @@ end;
 
 procedure Tb2FixedJoint.CalculateMC;
 var
-   invM12, invI1, a, b, c, d, e, f, c1, c2, c3, den: Float;
+   invM12, invI1, a, b, c, d, e, f, c1, c2, c3, den: PhysicsFloat;
 begin
    UPhysics2DTypes.SinCos(m_bodyA.m_sweep.a, m_s, m_c);
 
@@ -16163,7 +16163,7 @@ begin
 	 Result := m_bodyB.GetWorldCenter;
 end;
 
-function Tb2FixedJoint.GetReactionForce(inv_dt: Float): TVector2;
+function Tb2FixedJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
 begin
    {$IFDEF OP_OVERLOAD}
    Result := m_inv_dt * MakeVector(m_lambda[0], m_lambda[1]);
@@ -16172,7 +16172,7 @@ begin
    {$ENDIF}
 end;
 
-function Tb2FixedJoint.GetReactionTorque(inv_dt: Float): Float;
+function Tb2FixedJoint.GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat;
 begin
    Result := m_inv_dt * m_lambda[2];
 end;
@@ -16220,7 +16220,7 @@ end;
 procedure Tb2FixedJoint.SolveVelocityConstraints(const step: Tb2TimeStep);
 var
    i: Integer;
-   Cdot, lambda: array[0..2] of Float;
+   Cdot, lambda: array[0..2] of PhysicsFloat;
 begin
    // Assert that angle is still the same so the effective joint mass is still valid
    //assert(m_bodyA.m_sweep.a == m_a1);
@@ -16253,10 +16253,10 @@ begin
      m_lambda[i] := m_lambda[i] + lambda[i];
 end;
 
-function Tb2FixedJoint.SolvePositionConstraints(baumgarte: Float): Boolean;
+function Tb2FixedJoint.SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean;
 var
    i: Integer;
-   C, lambda: array[0..2] of Float;
+   C, lambda: array[0..2] of PhysicsFloat;
 begin
    // Recalculate effective constraint mass if angle changed enough
    if Abs(m_bodyA.m_sweep.a - m_a1) > 1e-3 then
@@ -16329,8 +16329,8 @@ end;
 
 procedure Tb2RopeJoint.InitVelocityConstraints(const step: Tb2TimeStep);
 var
-   C: Float;
-   crA, crB, invMass: Float;
+   C: PhysicsFloat;
+   crA, crB, invMass: PhysicsFloat;
    P: TVector2;
 begin
    {$IFDEF OP_OVERLOAD}
@@ -16405,7 +16405,7 @@ end;
 procedure Tb2RopeJoint.SolveVelocityConstraints(const step: Tb2TimeStep);
 var
    vA, vB, P: TVector2;
-   C, Cdot, impulse, oldImpulse: Float;
+   C, Cdot, impulse, oldImpulse: PhysicsFloat;
 begin
    //B2_NOT_USED(step);
 
@@ -16443,10 +16443,10 @@ begin
    m_bodyB.m_angularVelocity := m_bodyB.m_angularVelocity + m_bodyB.m_invI * b2Cross(m_rB, P);
 end;
 
-function Tb2RopeJoint.SolvePositionConstraints(baumgarte: Float): Boolean;
+function Tb2RopeJoint.SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean;
 var
    rA, rB, u, P: TVector2;
-   length, C, impulse: Float;
+   length, C, impulse: PhysicsFloat;
 begin
    //B2_NOT_USED(baumgarte);
 
@@ -16497,7 +16497,7 @@ begin
    Result := m_bodyB.GetWorldPoint(m_localAnchorB);
 end;
 
-function Tb2RopeJoint.GetReactionForce(inv_dt: Float): TVector2;
+function Tb2RopeJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
 begin
    {$IFDEF OP_OVERLOAD}
    Result := (inv_dt * m_impulse) * m_u;
@@ -16506,7 +16506,7 @@ begin
    {$ENDIF}
 end;
 
-function Tb2RopeJoint.GetReactionTorque(inv_dt: Float): Float;
+function Tb2RopeJoint.GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat;
 begin
 	 //B2_NOT_USED(inv_dt);
 	 Result := 0.0;

@@ -53,7 +53,7 @@ unit UPhysics2DHelper;
 
   Translator: Qianyuan Wang(ÍõÇ¬Ôª)
   Contact me: http://hi.baidu.com/wqyfavor
-              wqyfavor@163.com
+              wqyfavor@qq.com
               QQ: 466798985
 }
 

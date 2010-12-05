@@ -15,7 +15,7 @@ type
       m_bodies: array[0..e_count - 1] of Tb2Body;
 
       constructor Create; override;
-      procedure Step(var settings: TSettings; timeStep: Float); override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
    end;
 
 implementation
@@ -53,7 +53,7 @@ begin
    bd.Free;
 end;
 
-procedure TSphereStack.Step(var settings: TSettings; timeStep: Float);
+procedure TSphereStack.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
 end;
@@ -62,3 +62,4 @@ initialization
    RegisterTestEntry('Sphere Stack', TSphereStack);
 
 end.
+
