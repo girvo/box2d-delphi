@@ -72,14 +72,14 @@ procedure TRevolute.Keyboard(key: Byte);
 begin
    case key of
       Ord('L'): m_joint.EnableLimit(not m_joint.IsLimitEnabled);
-      Ord('S'): m_joint.EnableMotor(False);
+      Ord('M'): m_joint.EnableMotor(not m_joint.IsMotorEnabled);
    end;
 end;
 
 procedure TRevolute.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
-   DrawText('Keys: (l) limits, (a) left, (s) off, (d) right');
+   DrawText('Keys: (l) limits, (m) motor');
 end;
 
 initialization

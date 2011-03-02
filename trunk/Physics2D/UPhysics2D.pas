@@ -567,6 +567,26 @@ type
       /// Is this contact touching?
       function IsTouching: Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
+      /// Override the default friction mixture. You can call this in b2ContactListener::PreSolve.
+      /// This value persists until set or reset.
+      //procedure SetFriction(friction: PhysicsFloat);
+
+      /// Get the friction.
+      //function GetFriction: PhysicsFloat;
+
+      /// Reset the friction mixture to the default value.
+      //procedure ResetFriction;
+
+      /// Override the default restitution mixture. You can call this in b2ContactListener::PreSolve.
+      /// The value persists until you set or reset.
+      //procedure SetRestitution(restitution: PhysicsFloat);
+
+      /// Get the restitution.
+      //function GetRestitution: PhysicsFloat;
+
+      /// Reset the restitution to the default value.
+      //procedure ResetRestitution;
+
       /// Enable/disable this contact. This can be used inside the pre-solve
       /// contact listener. The contact is only disabled for the current
       /// time step (or sub-step in continuous collisions).
@@ -889,6 +909,9 @@ type
       /// call UpdatePairs to finalized the proxy pairs (for your time step).
       procedure MoveProxy(proxyId: Int32; const aabb: Tb2AABB; const displacement: TVector2); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
+	    /// Call to trigger a re-processing of it's pairs on the next call to UpdatePairs.
+      procedure TouchProxy(proxyId: Int32); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+
       /// Get the fat AABB for a proxy.
       function GetFatAABB(proxyId: Int32): Pb2AABB; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
@@ -1068,6 +1091,7 @@ type
       /// Set the contact filtering data. This will not update contacts until the next time
       /// step when either parent body is active and awake.
       procedure SetFilterData(const filter: Tb2Filter);
+      procedure Refilter;
       function GetFilterData: Pb2Filter; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
       /// Test a point for containment in this fixture.
@@ -1706,7 +1730,7 @@ type
    /// this as a massless, rigid rod.
    Tb2DistanceJoint = class(Tb2Joint)
    protected
-      m_localAnchor1, m_localAnchor2, m_u: TVector2;
+      m_localAnchorA, m_localAnchorB, m_u: TVector2;
       m_frequencyHz, m_dampingRatio: PhysicsFloat;
       m_gamma, m_bias, m_impulse,
       m_mass,
@@ -1767,7 +1791,7 @@ type
    /// drive the motion or to model joint friction.
    Tb2PrismaticJoint = class(Tb2Joint)
    protected
-      m_localAnchor1, m_localAnchor2, m_localXAxis1, m_localYAxis1: TVector2;
+      m_localAnchorA, m_localAnchorB, m_localXAxisA, m_localYAxisA: TVector2;
       m_refAngle: PhysicsFloat;
 
       m_axis, m_perp: TVector2;
@@ -1910,7 +1934,7 @@ type
    /// useful to prevent one side of the pulley hitting the top.
    Tb2PulleyJoint = class(Tb2Joint)
    protected
-      m_groundAnchor1, m_groundAnchor2, m_localAnchor1, m_localAnchor2: TVector2;
+      m_groundAnchorA, m_groundAnchorB, m_localAnchorA, m_localAnchorB: TVector2;
       m_u1, m_u2: TVector2;
 
       m_constant, m_ratio: PhysicsFloat;
@@ -1982,7 +2006,7 @@ type
    /// is provided so that infinite forces are not generated.
    Tb2RevoluteJoint = class(Tb2Joint)
    protected
-      m_localAnchor1, m_localAnchor2: TVector2; // relative
+      m_localAnchorA, m_localAnchorB: TVector2; // relative
 
 	    m_impulse: TVector3;
 	    m_motorImpulse: PhysicsFloat;
@@ -2060,18 +2084,18 @@ type
    /// fixed bodies (which must be bodyA on those joints).
    Tb2GearJoint = class(Tb2Joint)
    protected
-      m_ground1, m_ground2: Tb2Body;
+      m_groundA, m_groundB: Tb2Body;
 
       // One of these is nil.
-      m_revolute1: Tb2RevoluteJoint;
-      m_prismatic1: Tb2PrismaticJoint;
+      m_revoluteA: Tb2RevoluteJoint;
+      m_prismaticA: Tb2PrismaticJoint;
 
       // One of these is nil.
-      m_revolute2: Tb2RevoluteJoint;
-      m_prismatic2: Tb2PrismaticJoint;
+      m_revoluteB: Tb2RevoluteJoint;
+      m_prismaticB: Tb2PrismaticJoint;
 
-      m_groundAnchor1, m_groundAnchor2 :TVector2;
-      m_localAnchor1, m_localAnchor2: TVector2;
+      m_groundAnchorA, m_groundAnchorB :TVector2;
+      m_localAnchorA, m_localAnchorB: TVector2;
 
       m_J: Tb2Jacobian;
 
@@ -2150,15 +2174,13 @@ type
       localAnchorA: TVector2; /// The local anchor point relative to body1's origin.
       localAnchorB: TVector2; /// The local anchor point relative to body2's origin.
       localAxisA: TVector2; /// The local translation axis in body1.
-      enableLimit: Boolean; /// Enable/disable the joint limit.
-
-      lowerTranslation: PhysicsFloat; /// The lower translation limit, usually in meters.
-      upperTranslation: PhysicsFloat; /// The upper translation limit, usually in meters.
 
       enableMotor: Boolean; /// Enable/disable the joint motor.
-      maxMotorForce: PhysicsFloat; /// The maximum motor torque, usually in N-m.
-
+      maxMotorTorque: PhysicsFloat; /// The maximum motor torque, usually in N-m.
       motorSpeed: PhysicsFloat; /// The desired motor speed in radians per second.
+
+	    frequencyHz: PhysicsFloat; /// Suspension frequency, zero indicates no suspension
+	    dampingRatio: PhysicsFloat; /// Suspension damping ratio, one indicates critical damping
 
       constructor Create;
       /// Initialize the bodies, anchors, axis, and reference angle using the world
@@ -2169,32 +2191,34 @@ type
    /// A line joint. This joint provides two degrees of freedom: translation
    /// along an axis fixed in body1 and rotation in the plane. You can use a
    /// joint limit to restrict the range of motion and a joint motor to drive
-   /// the motion or to model joint friction.
+   /// the rotation or to model rotational friction.
+   /// This joint is designed for vehicle suspensions.
    Tb2LineJoint = class(Tb2Joint)
    protected
-      m_localAnchor1,
-      m_localAnchor2,
-      m_localXAxis1,
-      m_localYAxis1: TVector2;
+      m_localAnchorA,
+      m_localAnchorB,
+      m_localXAxisA,
+      m_localYAxisA: TVector2;
 
-      m_axis, m_perp:  TVector2;
-      m_s1, m_s2,
-      m_a1, m_a2: PhysicsFloat;
+      m_ax, m_ay:  TVector2;
+      m_sAx, m_sBx,
+      m_sAy, m_sBy: PhysicsFloat;
 
-      m_K: TMatrix22;
-      m_impulse: TVector2;
-
-      m_motorMass: PhysicsFloat;			// effective mass for motor/limit translational constraint.
+      m_mass: PhysicsFloat;
+      m_impulse: PhysicsFloat;
+      m_motorMass: PhysicsFloat;
       m_motorImpulse: PhysicsFloat;
+      m_springMass: PhysicsFloat;
+      m_springImpulse: PhysicsFloat;
 
-      m_lowerTranslation,
-      m_upperTranslation,
-      m_maxMotorForce,
+      m_maxMotorTorque: PhysicsFloat;
       m_motorSpeed: PhysicsFloat;
+      m_frequencyHz: PhysicsFloat;
+      m_dampingRatio: PhysicsFloat;
+      m_bias: PhysicsFloat;
+      m_gamma: PhysicsFloat;
 
-      m_enableLimit: Boolean;
       m_enableMotor: Boolean;
-      m_limitState: Tb2LimitState;
 
       procedure InitVelocityConstraints(const step: Tb2TimeStep); override;
       procedure SolveVelocityConstraints(const step: Tb2TimeStep); override;
@@ -2215,22 +2239,22 @@ type
       /// Get the current joint translation speed, usually in meters per second.
       function GetJointSpeed: PhysicsFloat;
 
-      /// Get the current motor force given the inverse time step, usually in N.
-      function GetMotorForce(inv_dt: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-
-      procedure EnableLimit(flag: Boolean); /// Enable/disable the joint limit.
-      procedure SetLimits(lower, upper: PhysicsFloat); /// Set the joint limits, usually in meters.
+      /// Get the current motor torque given the inverse time step, usually in N-m.
+      function GetMotorTorque(inv_dt: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
       procedure EnableMotor(flag: Boolean); /// Enable/disable the joint motor.
-      procedure SetMotorSpeed(speed: PhysicsFloat); /// Set the motor speed, usually in meters per second.
-      procedure SetMaxMotorForce(force: PhysicsFloat); /// Set the maximum motor force, usually in N.
+      procedure SetMotorSpeed(speed: PhysicsFloat); /// Set the motor speed, usually in radians per second.
+      procedure SetMaxMotorTorque(torque: PhysicsFloat); /// Set/Get the maximum motor force, usually in N-m.
 
-      property IsLimitEnabled: Boolean read m_enableLimit; /// Is the joint limit enabled?
-      property GetLowerLimit: PhysicsFloat read m_lowerTranslation; /// Get the lower joint limit, usually in meters.
-      property GetUpperLimit: PhysicsFloat read m_upperTranslation; /// Get the upper joint limit, usually in meters.
       property IsMotorEnabled: Boolean read m_enableMotor; /// Is the joint motor enabled?
-      property GetMotorSpeed: PhysicsFloat read m_motorSpeed; /// Get the motor speed, usually in meters per second.
-      property GetMaxMotorForce: PhysicsFloat read m_maxMotorForce;
+      property GetMotorSpeed: PhysicsFloat read m_motorSpeed; /// Get the motor speed, usually in radians per second.
+      property GetMaxMotorTorque: PhysicsFloat read m_maxMotorTorque;
+
+      /// Get/Set the spring frequency in hertz. Setting the frequency to zero disables the spring.
+      property SpringFrequencyH: PhysicsFloat read m_frequencyHz write m_frequencyHz;
+
+      /// Get/Set the spring damping ratio
+      property SpringDampingRatio: PhysicsFloat read m_dampingRatio write m_dampingRatio;
    end;
 
    /// Weld joint definition. You need to specify local anchor points
@@ -5094,7 +5118,6 @@ begin
             Continue;
          end;
 
-         alpha := 1.0;
          if (c.m_flags and e_contact_toiFlag) <> 0  then
             alpha := c.m_toi // This contact has a valid cached TOI.
          else
@@ -5658,6 +5681,7 @@ begin
                begin
                   v2 := b2Mul(xf, m_vertices[i]);
                   m_debugDraw.DrawSegment(v1, v2, color);
+                  m_debugDraw.DrawCircle(v1, 0.05, color);
                   v1 := v2;
                end;
             end;
@@ -7204,8 +7228,8 @@ begin
    with c^ do
    begin
       // Contact creation may swap fixtures.
-      indexA := m_indexA;
-      indexB := m_indexB;
+      //indexA := m_indexA;
+      //indexB := m_indexB;
       bodyA := m_fixtureA.m_body;
       bodyB := m_fixtureB.m_body;
 
@@ -8279,7 +8303,7 @@ function Tb2DynamicTree.CreateProxy(const _aabb: Tb2AABB;
 const
    _r: TVector2 = (X: b2_aabbExtension; Y: b2_aabbExtension);
 var
-   proxyId, iterationCount, tryCount, height: Int32;
+   proxyId: Int32;
 begin
    proxyId := AllocateNode;
 
@@ -8680,6 +8704,11 @@ begin
       BufferMove(proxyId);
 end;
 
+procedure Tb2BroadPhase.TouchProxy(proxyId: Int32);
+begin
+   BufferMove(proxyId);
+end;
+
 function Tb2BroadPhase.GetFatAABB(proxyId: Int32): Pb2AABB;
 begin
    Result := m_tree.GetFatAABB(proxyId);
@@ -8924,11 +8953,17 @@ begin
 end;
 
 procedure Tb2Fixture.SetFilterData(const filter: Tb2Filter);
-var
-   edge: Pb2ContactEdge;
 begin
    m_filter := filter;
+   Refilter;
+end;
 
+procedure Tb2Fixture.Refilter;
+var
+   edge: Pb2ContactEdge;
+   broadPhase: Tb2BroadPhase;
+   i: Integer;
+begin
    if not Assigned(m_body) then
       Exit;
 
@@ -8945,6 +8980,14 @@ begin
             {$ENDIF}
          edge := next;
       end;
+
+   if m_body.m_world = nil then
+      Exit;
+
+   // Touch each proxy so that new pairs may be created
+   broadPhase := m_body.m_world.m_contactManager.m_broadPhase;
+   for i := 0 to m_proxyCount - 1 do
+      broadPhase.TouchProxy(m_proxies[i].proxyId);
 end;
 
 function Tb2Fixture.GetFilterData: Pb2Filter;
@@ -9746,7 +9789,7 @@ end;
 
 procedure Tb2Body.SetType(atype: Tb2BodyType);
 var
-   ce: Pb2ContactEdge;
+   f: Tb2Fixture;
 begin
    if m_type = atype then
       Exit;
@@ -9765,15 +9808,11 @@ begin
    m_torque := 0.0;
 
    // Since the body type changed, we need to flag contacts for filtering.
-   ce := m_contactList;
-   while Assigned(ce) do
+   f := m_fixtureList;
+   while Assigned(f) do
    begin
-      {$IFDEF OP_OVERLOAD}
-      ce^.contact^.FlagForFiltering;
-      {$ELSE}
-      FlagForFiltering(ce^.contact^);
-      {$ENDIF}
-      ce := ce^.next;
+      f.Refilter;
+      f := f.m_next;
    end;
 end;
 
@@ -12482,8 +12521,8 @@ end;
 constructor Tb2DistanceJoint.Create(def: Tb2DistanceJointDef);
 begin
    inherited Create(def);
-   m_localAnchor1 := def.localAnchorA;
-   m_localAnchor2 := def.localAnchorB;
+   m_localAnchorA := def.localAnchorA;
+   m_localAnchorB := def.localAnchorB;
    m_length := def.length;
    m_frequencyHz := def.frequencyHz;
    m_dampingRatio := def.dampingRatio;
@@ -12494,12 +12533,12 @@ end;
 
 function Tb2DistanceJoint.GetAnchorA: TVector2;
 begin
-   Result := m_bodyA.GetWorldPoint(m_localAnchor1);
+   Result := m_bodyA.GetWorldPoint(m_localAnchorA);
 end;
 
 function Tb2DistanceJoint.GetAnchorB: TVector2;
 begin
-   Result := m_bodyB.GetWorldPoint(m_localAnchor2);
+   Result := m_bodyB.GetWorldPoint(m_localAnchorB);
 end;
 
 function Tb2DistanceJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
@@ -12524,12 +12563,12 @@ var
 begin
    // Compute the effective mass matrix.
    {$IFDEF OP_OVERLOAD}
-   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
-   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchor2 - m_bodyB.GetLocalCenter);
+   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
+   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
    m_u := m_bodyB.m_sweep.c + r2 - m_bodyA.m_sweep.c - r1;
    {$ELSE}
-   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchor1, m_bodyA.GetLocalCenter));
-   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchor2, m_bodyB.GetLocalCenter));
+   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
+   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
    m_u := Subtract(r2, r1);
    AddBy(m_u, m_bodyB.m_sweep.c);
    SubtractBy(m_u, m_bodyA.m_sweep.c);
@@ -12605,16 +12644,16 @@ var
    Cdot, impulse: PhysicsFloat;
 begin
    {$IFDEF OP_OVERLOAD}
-   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
-   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchor2 - m_bodyB.GetLocalCenter);
+   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
+   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
 
    // Cdot = dot(u, v + cross(w, r))
    v1 := m_bodyA.m_linearVelocity + b2Cross(m_bodyA.m_angularVelocity, r1);
    v2 := m_bodyB.m_linearVelocity + b2Cross(m_bodyB.m_angularVelocity, r2);
    Cdot := b2Dot(m_u, v2 - v1);
    {$ELSE}
-   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchor1, m_bodyA.GetLocalCenter));
-   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchor2, m_bodyB.GetLocalCenter));
+   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
+   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
 
    // Cdot = dot(u, v + cross(w, r))
    v1 := Add(m_bodyA.m_linearVelocity, b2Cross(m_bodyA.m_angularVelocity, r1));
@@ -12651,13 +12690,13 @@ begin
    end;
 
    {$IFDEF OP_OVERLOAD}
-   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
-   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchor2 - m_bodyB.GetLocalCenter);
+   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
+   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
    d := m_bodyB.m_sweep.c + r2 - m_bodyA.m_sweep.c - r1;
    C := d.Normalize - m_length;
    {$ELSE}
-   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchor1, m_bodyA.GetLocalCenter));
-   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchor2, m_bodyB.GetLocalCenter));
+   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
+   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
    d := Subtract(r2, r1);
    AddBy(d, m_bodyB.m_sweep.c);
    SubtractBy(d, m_bodyA.m_sweep.c);
@@ -12788,10 +12827,10 @@ end;
 constructor Tb2PrismaticJoint.Create(def: Tb2PrismaticJointDef);
 begin
    inherited Create(def);
-   m_localAnchor1 := def.localAnchorA;
-   m_localAnchor2 := def.localAnchorB;
-   m_localXAxis1 := def.localAxis1;
-   m_localYAxis1 := b2Cross(1.0, m_localXAxis1);
+   m_localAnchorA := def.localAnchorA;
+   m_localAnchorB := def.localAnchorB;
+   m_localXAxisA := def.localAxis1;
+   m_localYAxisA := b2Cross(1.0, m_localXAxisA);
    m_refAngle := def.referenceAngle;
 
    m_impulse := b2Vec3_Zero;
@@ -12812,12 +12851,12 @@ end;
 
 function Tb2PrismaticJoint.GetAnchorA: TVector2;
 begin
-   Result := m_bodyA.GetWorldPoint(m_localAnchor1);
+   Result := m_bodyA.GetWorldPoint(m_localAnchorA);
 end;
 
 function Tb2PrismaticJoint.GetAnchorB: TVector2;
 begin
-   Result := m_bodyB.GetWorldPoint(m_localAnchor2);
+   Result := m_bodyB.GetWorldPoint(m_localAnchorB);
 end;
 
 function Tb2PrismaticJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
@@ -12845,12 +12884,12 @@ begin
 
    // Compute the effective masses.
    {$IFDEF OP_OVERLOAD}
-   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_localCenterA);
-   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchor2 - m_localCenterB);
+   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_localCenterA);
+   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_localCenterB);
    d := m_bodyB.m_sweep.c + r2 - m_bodyA.m_sweep.c - r1;
    {$ELSE}
-   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchor1, m_localCenterA));
-   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchor2, m_localCenterB));
+   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_localCenterA));
+   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_localCenterB));
    d := Subtract(Add(m_bodyB.m_sweep.c, r2), Add(m_bodyA.m_sweep.c, r1));
    {$ENDIF}
 
@@ -12861,7 +12900,7 @@ begin
 
    // Compute motor Jacobian and effective mass.
    begin
-      m_axis := b2Mul(m_bodyA.m_xf.R, m_localXAxis1);
+      m_axis := b2Mul(m_bodyA.m_xf.R, m_localXAxisA);
       {$IFDEF OP_OVERLOAD}
       m_a1 := b2Cross(d + r1, m_axis);
       {$ELSE}
@@ -12876,7 +12915,7 @@ begin
 
    // Prismatic constraint.
    begin
-      m_perp := b2Mul(m_bodyA.m_xf.R, m_localYAxis1);
+      m_perp := b2Mul(m_bodyA.m_xf.R, m_localYAxisA);
 
       {$IFDEF OP_OVERLOAD}
       m_s1 := b2Cross(d + r1, m_perp);
@@ -13145,20 +13184,20 @@ begin
    {$IFDEF OP_OVERLOAD}
    _R1.SetValue(a1);
    _R2.SetValue(a2);
-   r1 := b2Mul(_R1, m_localAnchor1 - m_localCenterA);
-   r2 := b2Mul(_R2, m_localAnchor2 - m_localCenterB);
+   r1 := b2Mul(_R1, m_localAnchorA - m_localCenterA);
+   r2 := b2Mul(_R2, m_localAnchorB - m_localCenterB);
    d := c2 + r2 - c1 - r1;
    {$ELSE}
    SetValue(_R1, a1);
    SetValue(_R2, a2);
-   r1 := b2Mul(_R1, Subtract(m_localAnchor1, m_localCenterA));
-   r2 := b2Mul(_R2, Subtract(m_localAnchor2, m_localCenterB));
+   r1 := b2Mul(_R1, Subtract(m_localAnchorA, m_localCenterA));
+   r2 := b2Mul(_R2, Subtract(m_localAnchorB, m_localCenterB));
    d := Subtract(Add(c2, r2), Add(c1, r1));
    {$ENDIF}
 
    if m_enableLimit then
    begin
-      m_axis := b2Mul(_R1, m_localXAxis1);
+      m_axis := b2Mul(_R1, m_localXAxisA);
 
       {$IFDEF OP_OVERLOAD}
       m_a1 := b2Cross(d + r1, m_axis);
@@ -13191,7 +13230,7 @@ begin
       end;
    end;
 
-   m_perp := b2Mul(_R1, m_localYAxis1);
+   m_perp := b2Mul(_R1, m_localYAxisA);
 
    {$IFDEF OP_OVERLOAD}
    m_s1 := b2Cross(d + r1, m_perp);
@@ -13301,11 +13340,11 @@ var
    d, axis: TVector2;
 begin
    {$IFDEF OP_OVERLOAD}
-   d := m_bodyB.GetWorldPoint(m_localAnchor2) - m_bodyA.GetWorldPoint(m_localAnchor1);
+   d := m_bodyB.GetWorldPoint(m_localAnchorB) - m_bodyA.GetWorldPoint(m_localAnchorA);
    {$ELSE}
-   d := Subtract(m_bodyB.GetWorldPoint(m_localAnchor2), m_bodyA.GetWorldPoint(m_localAnchor1));
+   d := Subtract(m_bodyB.GetWorldPoint(m_localAnchorB), m_bodyA.GetWorldPoint(m_localAnchorA));
    {$ENDIF}
-   axis := m_bodyA.GetWorldVector(m_localXAxis1);
+   axis := m_bodyA.GetWorldVector(m_localXAxisA);
    Result := b2Dot(d, axis);
 end;
 
@@ -13329,15 +13368,15 @@ var
    w1: PhysicsFloat;
 begin
    {$IFDEF OP_OVERLOAD}
-   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
-   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchor2 - m_bodyB.GetLocalCenter);
+   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
+   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
    d := (m_bodyB.m_sweep.c + r2) - (m_bodyA.m_sweep.c + r1);
    {$ELSE}
-   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchor1, m_bodyA.GetLocalCenter));
-   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchor2, m_bodyB.GetLocalCenter));
+   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
+   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
    d := Subtract(Add(m_bodyB.m_sweep.c, r2), Add(m_bodyA.m_sweep.c, r1));
    {$ENDIF}
-   axis := m_bodyA.GetWorldVector(m_localXAxis1);
+   axis := m_bodyA.GetWorldVector(m_localXAxisA);
 
    w1 := m_bodyA.m_angularVelocity;
 
@@ -13645,10 +13684,10 @@ end;
 constructor Tb2PulleyJoint.Create(def: Tb2PulleyJointDef);
 begin
    inherited Create(def);
-   m_groundAnchor1 := def.groundAnchorA;
-   m_groundAnchor2 := def.groundAnchorB;
-   m_localAnchor1 := def.localAnchorA;
-   m_localAnchor2 := def.localAnchorB;
+   m_groundAnchorA := def.groundAnchorA;
+   m_groundAnchorB := def.groundAnchorB;
+   m_localAnchorA := def.localAnchorA;
+   m_localAnchorB := def.localAnchorB;
 
    //b2Assert(def.ratio != 0.0);
    m_ratio := def.ratio;
@@ -13664,12 +13703,12 @@ end;
 
 function Tb2PulleyJoint.GetAnchorA: TVector2;
 begin
-   Result := m_bodyA.GetWorldPoint(m_localAnchor1);
+   Result := m_bodyA.GetWorldPoint(m_localAnchorA);
 end;
 
 function Tb2PulleyJoint.GetAnchorB: TVector2;
 begin
-   Result := m_bodyB.GetWorldPoint(m_localAnchor2);
+   Result := m_bodyB.GetWorldPoint(m_localAnchorB);
 end;
 
 function Tb2PulleyJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
@@ -13692,12 +13731,12 @@ var
    lengthA, lengthB, C, cr1u1, cr2u2: PhysicsFloat;
 begin
    {$IFDEF OP_OVERLOAD}
-   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
-   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchor2 - m_bodyB.GetLocalCenter);
+   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
+   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
 
    // Get the pulley axes.
-   m_u1 := m_bodyA.m_sweep.c + r1 - m_groundAnchor1;
-   m_u2 := m_bodyB.m_sweep.c + r2 - m_groundAnchor2;
+   m_u1 := m_bodyA.m_sweep.c + r1 - m_groundAnchorA;
+   m_u2 := m_bodyB.m_sweep.c + r2 - m_groundAnchorB;
 
    lengthA := m_u1.Length;
    lengthB := m_u2.Length;
@@ -13712,12 +13751,12 @@ begin
    else
       m_u2 := b2Vec2_Zero;
    {$ELSE}
-   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchor1, m_bodyA.GetLocalCenter));
-   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchor2, m_bodyB.GetLocalCenter));
+   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
+   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
 
    // Get the pulley axes.
-   m_u1 := Subtract(Add(m_bodyA.m_sweep.c, r1), m_groundAnchor1);
-   m_u2 := Subtract(Add(m_bodyB.m_sweep.c, r2), m_groundAnchor2);
+   m_u1 := Subtract(Add(m_bodyA.m_sweep.c, r1), m_groundAnchorA);
+   m_u2 := Subtract(Add(m_bodyB.m_sweep.c, r2), m_groundAnchorB);
 
    lengthA := LengthVec(m_u1);
    lengthB := LengthVec(m_u2);
@@ -13808,11 +13847,11 @@ var
    Cdot, impulse, oldImpulse: PhysicsFloat;
 begin
    {$IFDEF OP_OVERLOAD}
-   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
-   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchor2 - m_bodyB.GetLocalCenter);
+   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
+   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
    {$ELSE}
-   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchor1, m_bodyA.GetLocalCenter));
-   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchor2, m_bodyB.GetLocalCenter));
+   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
+   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
    {$ENDIF}
 
    if m_state = e_atUpperLimit then
@@ -13900,16 +13939,16 @@ var
    s1, s2, r1, r2, P1, P2: TVector2;
    linearError, lengthA, lengthB, C, impulse: PhysicsFloat;
 begin
-   s1 := m_groundAnchor1;
-	 s2 := m_groundAnchor2;
+   s1 := m_groundAnchorA;
+	 s2 := m_groundAnchorB;
 
    linearError := 0.0;
 
    if m_state = e_atUpperLimit then
    begin
       {$IFDEF OP_OVERLOAD}
-      r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
-      r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchor2 - m_bodyB.GetLocalCenter);
+      r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
+      r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
 
       // Get the pulley axes.
       m_u1 := m_bodyA.m_sweep.c + r1 - s1;
@@ -13928,8 +13967,8 @@ begin
       else
          m_u2 := b2Vec2_Zero;
       {$ELSE}
-      r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchor1, m_bodyA.GetLocalCenter));
-      r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchor2, m_bodyB.GetLocalCenter));
+      r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
+      r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
 
       // Get the pulley axes.
       m_u1 := Subtract(Add(m_bodyA.m_sweep.c, r1), s1);
@@ -13978,7 +14017,7 @@ begin
    if m_limitState1 = e_atUpperLimit then
    begin
       {$IFDEF OP_OVERLOAD}
-      r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
+      r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
       p1 := m_bodyA.m_sweep.c + r1;
 
       m_u1 := p1 - s1;
@@ -13989,7 +14028,7 @@ begin
       else
          m_u1 := b2Vec2_Zero;
       {$ELSE}
-      r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchor1, m_bodyA.GetLocalCenter));
+      r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
       p1 := Add(m_bodyA.m_sweep.c, r1);
 
       m_u1 := Subtract(p1, s1);
@@ -14021,7 +14060,7 @@ begin
    if m_limitState2 = e_atUpperLimit then
    begin
       {$IFDEF OP_OVERLOAD}
-      r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchor2 - m_bodyB.GetLocalCenter);
+      r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
       p2 := m_bodyB.m_sweep.c + r2;
 
       m_u2 := p2 - s2;
@@ -14032,7 +14071,7 @@ begin
       else
          m_u2 := b2Vec2_Zero;
       {$ELSE}
-      r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchor2, m_bodyB.GetLocalCenter));
+      r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
       p2 := Add(m_bodyB.m_sweep.c, r2);
 
       m_u2 := Subtract(p2, s2);
@@ -14067,29 +14106,29 @@ end;
 function Tb2PulleyJoint.GetLength1: PhysicsFloat;
 begin
    {$IFDEF OP_OVERLOAD}
-   Result := (m_bodyA.GetWorldPoint(m_localAnchor1) - m_groundAnchor1).Length;
+   Result := (m_bodyA.GetWorldPoint(m_localAnchorA) - m_groundAnchorA).Length;
    {$ELSE}
-   Result := LengthVec(Subtract(m_bodyA.GetWorldPoint(m_localAnchor1), m_groundAnchor1));
+   Result := LengthVec(Subtract(m_bodyA.GetWorldPoint(m_localAnchorA), m_groundAnchorA));
    {$ENDIF}
 end;
 
 function Tb2PulleyJoint.GetLength2: PhysicsFloat;
 begin
    {$IFDEF OP_OVERLOAD}
-   Result := (m_bodyB.GetWorldPoint(m_localAnchor2) - m_groundAnchor2).Length;
+   Result := (m_bodyB.GetWorldPoint(m_localAnchorB) - m_groundAnchorB).Length;
    {$ELSE}
-   Result := LengthVec(Subtract(m_bodyB.GetWorldPoint(m_localAnchor2), m_groundAnchor2));
+   Result := LengthVec(Subtract(m_bodyB.GetWorldPoint(m_localAnchorB), m_groundAnchorB));
    {$ENDIF}
 end;
 
 function Tb2PulleyJoint.GetGroundAnchorA: TVector2;
 begin
-   Result := m_groundAnchor1;
+   Result := m_groundAnchorA;
 end;
 
 function Tb2PulleyJoint.GetGroundAnchorB: TVector2;
 begin
-   Result := m_groundAnchor2;
+   Result := m_groundAnchorB;
 end;
 
 { Tb2RevoluteJointDef }
@@ -14137,8 +14176,8 @@ end;
 constructor Tb2RevoluteJoint.Create(def: Tb2RevoluteJointDef);
 begin
    inherited Create(def);
-   m_localAnchor1 := def.localAnchorA;
-   m_localAnchor2 := def.localAnchorB;
+   m_localAnchorA := def.localAnchorA;
+   m_localAnchorB := def.localAnchorB;
    m_referenceAngle := def.referenceAngle;
 
    m_impulse := b2Vec3_Zero;
@@ -14156,12 +14195,12 @@ end;
 
 function Tb2RevoluteJoint.GetAnchorA: TVector2;
 begin
-   Result := m_bodyA.GetWorldPoint(m_localAnchor1);
+   Result := m_bodyA.GetWorldPoint(m_localAnchorA);
 end;
 
 function Tb2RevoluteJoint.GetAnchorB: TVector2;
 begin
-   Result := m_bodyB.GetWorldPoint(m_localAnchor2);
+   Result := m_bodyB.GetWorldPoint(m_localAnchorB);
 end;
 
 function Tb2RevoluteJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
@@ -14189,11 +14228,11 @@ begin
 
    // Compute the effective mass matrix.
    {$IFDEF OP_OVERLOAD}
-   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
-   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchor2 - m_bodyB.GetLocalCenter);
+   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
+   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
    {$ELSE}
-   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchor1, m_bodyA.GetLocalCenter));
-   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchor2, m_bodyB.GetLocalCenter));
+   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
+   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
    {$ENDIF}
 
    // J := [-I -r1_skew I r2_skew]
@@ -14338,11 +14377,11 @@ begin
    if m_enableLimit and (m_limitState <> e_inactiveLimit) then
    begin
       {$IFDEF OP_OVERLOAD}
-      r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
-      r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchor2 - m_bodyB.GetLocalCenter);
+      r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
+      r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
       {$ELSE}
-      r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchor1, m_bodyA.GetLocalCenter));
-      r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchor2, m_bodyB.GetLocalCenter));
+      r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
+      r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
       {$ENDIF}
 
       // Solve point-to-point constraint
@@ -14421,11 +14460,11 @@ begin
    else
    begin
       {$IFDEF OP_OVERLOAD}
-      r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
-      r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchor2 - m_bodyB.GetLocalCenter);
+      r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
+      r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
       {$ELSE}
-      r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchor1, m_bodyA.GetLocalCenter));
-      r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchor2, m_bodyB.GetLocalCenter));
+      r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
+      r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
       {$ENDIF}
 
       // Solve point-to-point constraint
@@ -14516,14 +14555,14 @@ begin
    // Solve point-to-point constraint.
    begin
       {$IFDEF OP_OVERLOAD}
-      r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
-      r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchor2 - m_bodyB.GetLocalCenter);
+      r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
+      r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
 
       CV := m_bodyB.m_sweep.c + r2 - m_bodyA.m_sweep.c - r1;
       positionError := CV.Length;
       {$ELSE}
-      r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchor1, m_bodyA.GetLocalCenter));
-      r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchor2, m_bodyB.GetLocalCenter));
+      r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
+      r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
 
       CV := Subtract(Add(m_bodyB.m_sweep.c, r2), Add(m_bodyA.m_sweep.c, r1));
       positionError := LengthVec(CV);
@@ -14699,43 +14738,43 @@ begin
 	 //b2Assert(def->joint1->m_bodyA()->m_type() == b2_staticBody);
 	 //b2Assert(def->joint2->m_bodyA()->m_type() == b2_staticBody);
 
-   m_revolute1 := nil;
-   m_prismatic1 := nil;
-   m_revolute2 := nil;
-   m_prismatic2 := nil;
+   m_revoluteA := nil;
+   m_prismaticA := nil;
+   m_revoluteB := nil;
+   m_prismaticB := nil;
 
-   m_ground1 := def.joint1.m_bodyA;
+   m_groundA := def.joint1.m_bodyA;
    m_bodyA := def.joint1.m_bodyB;
    if type1 = e_revoluteJoint then
    begin
-      m_revolute1 := Tb2RevoluteJoint(def.joint1);
-      m_groundAnchor1 := m_revolute1.m_localAnchor1;
-      m_localAnchor1 := m_revolute1.m_localAnchor2;
-      coordinate1 := m_revolute1.GetJointAngle;
+      m_revoluteA := Tb2RevoluteJoint(def.joint1);
+      m_groundAnchorA := m_revoluteA.m_localAnchorA;
+      m_localAnchorA := m_revoluteA.m_localAnchorB;
+      coordinate1 := m_revoluteA.GetJointAngle;
    end
    else
    begin
-      m_prismatic1 := Tb2PrismaticJoint(def.joint1);
-      m_groundAnchor1 := m_prismatic1.m_localAnchor1;
-      m_localAnchor1 := m_prismatic1.m_localAnchor2;
-      coordinate1 := m_prismatic1.GetJointTranslation;
+      m_prismaticA := Tb2PrismaticJoint(def.joint1);
+      m_groundAnchorA := m_prismaticA.m_localAnchorA;
+      m_localAnchorA := m_prismaticA.m_localAnchorB;
+      coordinate1 := m_prismaticA.GetJointTranslation;
    end;
 
-   m_ground2 := def.joint2.m_bodyA;
+   m_groundB := def.joint2.m_bodyA;
    m_bodyB := def.joint2.m_bodyB;
    if type2 = e_revoluteJoint then
    begin
-      m_revolute2 := Tb2RevoluteJoint(def.joint2);
-      m_groundAnchor2 := m_revolute2.m_localAnchor1;
-      m_localAnchor2 := m_revolute2.m_localAnchor2;
-      coordinate2 := m_revolute2.GetJointAngle;
+      m_revoluteB := Tb2RevoluteJoint(def.joint2);
+      m_groundAnchorB := m_revoluteB.m_localAnchorA;
+      m_localAnchorB := m_revoluteB.m_localAnchorB;
+      coordinate2 := m_revoluteB.GetJointAngle;
    end
    else
    begin
-      m_prismatic2 := Tb2PrismaticJoint(def.joint2);
-      m_groundAnchor2 := m_prismatic2.m_localAnchor1;
-      m_localAnchor2 := m_prismatic2.m_localAnchor2;
-      coordinate2 := m_prismatic2.GetJointTranslation;
+      m_prismaticB := Tb2PrismaticJoint(def.joint2);
+      m_groundAnchorB := m_prismaticB.m_localAnchorA;
+      m_localAnchorB := m_prismaticB.m_localAnchorB;
+      coordinate2 := m_prismaticB.GetJointTranslation;
    end;
 
    m_ratio := def.ratio;
@@ -14745,12 +14784,12 @@ end;
 
 function Tb2GearJoint.GetAnchorA: TVector2;
 begin
-   Result := m_bodyA.GetWorldPoint(m_localAnchor1);
+   Result := m_bodyA.GetWorldPoint(m_localAnchorA);
 end;
 
 function Tb2GearJoint.GetAnchorB: TVector2;
 begin
-   Result := m_bodyB.GetWorldPoint(m_localAnchor2);
+   Result := m_bodyB.GetWorldPoint(m_localAnchorB);
 end;
 
 function Tb2GearJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
@@ -14769,10 +14808,10 @@ var
 begin
    // TODO_ERIN not tested
    {$IFDEF OP_OVERLOAD}
-   r := b2Mul(m_bodyB.m_xf.R, m_localAnchor2 - m_bodyB.GetLocalCenter);
+   r := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
    P := m_impulse * m_J.linearB;
    {$ELSE}
-   r := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchor2, m_bodyB.GetLocalCenter));
+   r := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
    P := Multiply(m_J.linearB, m_impulse);
    {$ENDIF}
    Result := inv_dt * m_impulse * m_J.angularB - b2Cross(r, P);
@@ -14790,19 +14829,19 @@ begin
    SetZero(m_J);
    {$ENDIF}
 
-   if Assigned(m_revolute1) then
+   if Assigned(m_revoluteA) then
    begin
       m_J.angularA := -1.0;
       K := K + m_bodyA.m_invI;
    end
    else
    begin
-      ug := b2Mul(m_ground1.m_xf.R, m_prismatic1.m_localXAxis1);
+      ug := b2Mul(m_groundA.m_xf.R, m_prismaticA.m_localXAxisA);
       {$IFDEF OP_OVERLOAD}
-      r := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
+      r := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
       m_J.linearA := -ug;
       {$ELSE}
-      r := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchor1, m_bodyA.GetLocalCenter));
+      r := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
       m_J.linearA := Negative(ug);
       {$ENDIF}
       crug := b2Cross(r, ug);
@@ -14810,19 +14849,19 @@ begin
       K := K + m_bodyA.m_invMass + m_bodyA.m_invI * crug * crug;
    end;
 
-   if Assigned(m_revolute2) then
+   if Assigned(m_revoluteB) then
    begin
       m_J.angularB := -m_ratio;
       K := K + m_ratio * m_ratio * m_bodyB.m_invI;
    end
    else
    begin
-      ug := b2Mul(m_ground2.m_xf.R, m_prismatic2.m_localXAxis1);
+      ug := b2Mul(m_groundB.m_xf.R, m_prismaticB.m_localXAxisA);
       {$IFDEF OP_OVERLOAD}
-      r := b2Mul(m_bodyB.m_xf.R, m_localAnchor2 - m_bodyB.GetLocalCenter);
+      r := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
       m_J.linearB := -m_ratio * ug;
       {$ELSE}
-      r := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchor2, m_bodyB.GetLocalCenter));
+      r := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
       m_J.linearB := Multiply(ug, -m_ratio);
       {$ENDIF}
       crug := b2Cross(r, ug);
@@ -14886,15 +14925,15 @@ var
 begin
    linearError := 0.0;
 
-   if Assigned(m_revolute1) then
-      coordinate1 := m_revolute1.GetJointAngle
+   if Assigned(m_revoluteA) then
+      coordinate1 := m_revoluteA.GetJointAngle
    else
-      coordinate1 := m_prismatic1.GetJointTranslation;
+      coordinate1 := m_prismaticA.GetJointTranslation;
 
-   if Assigned(m_revolute2) then
-      coordinate2 := m_revolute2.GetJointAngle
+   if Assigned(m_revoluteB) then
+      coordinate2 := m_revoluteB.GetJointAngle
    else
-      coordinate2 := m_prismatic2.GetJointTranslation;
+      coordinate2 := m_prismaticB.GetJointTranslation;
 
    C := m_constant - (coordinate1 + m_ratio * coordinate2);
    impulse := m_mass * (-C);
@@ -15171,64 +15210,20 @@ end;
 { Tb2LineJointDef }
 
 // Linear constraint (point-to-line)
-// d = p2 - p1 = x2 + r2 - x1 - r1
-// C = dot(perp, d)
-// Cdot = dot(d, cross(w1, perp)) + dot(perp, v2 + cross(w2, r2) - v1 - cross(w1, r1))
-//      = -dot(perp, v1) - dot(cross(d + r1, perp), w1) + dot(perp, v2) + dot(cross(r2, perp), v2)
-// J = [-perp, -cross(d + r1, perp), perp, cross(r2,perp)]
-//
-// K = J * invM * JT
-//
-// J = [-a -s1 a s2]
-// a = perp
-// s1 = cross(d + r1, a) = cross(p2 - x1, a)
-// s2 = cross(r2, a) = cross(p2 - x2, a)
+// d = pB - pA = xB + rB - xA - rA
+// C = dot(ay, d)
+// Cdot = dot(d, cross(wA, ay)) + dot(ay, vB + cross(wB, rB) - vA - cross(wA, rA))
+//      = -dot(ay, vA) - dot(cross(d + rA, ay), wA) + dot(ay, vB) + dot(cross(rB, ay), vB)
+// J = [-ay, -cross(d + rA, ay), ay, cross(rB, ay)]
 
+// Spring linear constraint
+// C = dot(ax, d)
+// Cdot = = -dot(ax, vA) - dot(cross(d + rA, ax), wA) + dot(ax, vB) + dot(cross(rB, ax), vB)
+// J = [-ax -cross(d+rA, ax) ax cross(rB, ax)]
 
-// Motor/Limit linear constraint
-// C = dot(ax1, d)
-// Cdot = = -dot(ax1, v1) - dot(cross(d + r1, ax1), w1) + dot(ax1, v2) + dot(cross(r2, ax1), v2)
-// J = [-ax1 -cross(d+r1,ax1) ax1 cross(r2,ax1)]
-
-// Block Solver
-// We develop a block solver that includes the joint limit. This makes the limit stiff (inelastic) even
-// when the mass has poor distribution (leading to large torques about the joint anchor points).
-//
-// The Jacobian has 3 rows:
-// J = [-uT -s1 uT s2] // linear
-//     [-vT -a1 vT a2] // limit
-//
-// u = perp
-// v = axis
-// s1 = cross(d + r1, u), s2 = cross(r2, u)
-// a1 = cross(d + r1, v), a2 = cross(r2, v)
-
-// M * (v2 - v1) = JT * df
-// J * v2 = bias
-//
-// v2 = v1 + invM * JT * df
-// J * (v1 + invM * JT * df) = bias
-// K * df = bias - J * v1 = -Cdot
-// K = J * invM * JT
-// Cdot = J * v1 - bias
-//
-// Now solve for f2.
-// df = f2 - f1
-// K * (f2 - f1) = -Cdot
-// f2 = invK * (-Cdot) + f1
-//
-// Clamp accumulated limit impulse.
-// lower: f2(2) = max(f2(2), 0)
-// upper: f2(2) = min(f2(2), 0)
-//
-// Solve for correct f2(1)
-// K(1,1) * f2(1) = -Cdot(1) - K(1,2) * f2(2) + K(1,1:2) * f1
-//                = -Cdot(1) - K(1,2) * f2(2) + K(1,1) * f1(1) + K(1,2) * f1(2)
-// K(1,1) * f2(1) = -Cdot(1) - K(1,2) * (f2(2) - f1(2)) + K(1,1) * f1(1)
-// f2(1) = invK(1,1) * (-Cdot(1) - K(1,2) * (f2(2) - f1(2))) + f1(1)
-//
-// Now compute impulse to be applied:
-// df = f2 - f1
+// Motor rotational constraint
+// Cdot = wB - wA
+// J = [0 0 -1 0 0 1]
 
 constructor Tb2LineJointDef.Create;
 begin
@@ -15237,12 +15232,12 @@ begin
    localAnchorA := b2Vec2_Zero;
    localAnchorB := b2Vec2_Zero;
    SetValue(localAxisA, 1.0, 0.0);
-   enableLimit := False;
-   lowerTranslation := 0.0;
-   upperTranslation := 0.0;
+
    enableMotor := False;
-   maxMotorForce := 0.0;
+   maxMotorTorque := 0.0;
    motorSpeed := 0.0;
+   frequencyHz := 2.0;
+   dampingRatio := 0.7;
 end;
 
 procedure Tb2LineJointDef.Initialize(bodyA, bodyB: Tb2Body; const anchor, axis: TVector2);
@@ -15259,109 +15254,45 @@ end;
 constructor Tb2LineJoint.Create(def: Tb2LineJointDef);
 begin
    inherited Create(def);
-   m_localAnchor1 := def.localAnchorA;
-   m_localAnchor2 := def.localAnchorB;
-   m_localXAxis1 := def.localAxisA;
-   m_localYAxis1 := b2Cross(1.0, m_localXAxis1);
+   m_localAnchorA := def.localAnchorA;
+   m_localAnchorB := def.localAnchorB;
+   m_localXAxisA := def.localAxisA;
+   m_localYAxisA := b2Cross(1.0, m_localXAxisA);
 
-   m_impulse := b2Vec2_Zero;
+   m_mass := 0.0;
+	 m_impulse := 0.0;
    m_motorMass := 0.0;
    m_motorImpulse := 0.0;
+   m_springMass := 0.0;
+   m_springImpulse := 0.0;
 
-   m_lowerTranslation := def.lowerTranslation;
-   m_upperTranslation := def.upperTranslation;
-   m_maxMotorForce := def.maxMotorForce;
+   m_maxMotorTorque := def.maxMotorTorque;
    m_motorSpeed := def.motorSpeed;
-   m_enableLimit := def.enableLimit;
    m_enableMotor := def.enableMotor;
-   m_limitState := e_inactiveLimit;
 
-   m_axis := b2Vec2_Zero;
-   m_perp := b2Vec2_Zero;
-end;
+ 	 m_frequencyHz := def.frequencyHz;
+	 m_dampingRatio := def.dampingRatio;
+	 m_bias := 0.0;
+	 m_gamma := 0.0;
 
-function Tb2LineJoint.GetAnchorA: TVector2;
-begin
-   Result := m_bodyA.GetWorldPoint(m_localAnchor1);
-end;
-
-function Tb2LineJoint.GetAnchorB: TVector2;
-begin
-   Result := m_bodyB.GetWorldPoint(m_localAnchor2);
-end;
-
-function Tb2LineJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
-begin
-   {$IFDEF OP_OVERLOAD}
-   Result := inv_dt * (m_impulse.x * m_perp + (m_motorImpulse + m_impulse.y) * m_axis);
-   {$ELSE}
-   Result := Multiply(Add(Multiply(m_perp, m_impulse.x), Multiply(m_axis, m_motorImpulse + m_impulse.y)), inv_dt);
-   {$ENDIF}
-end;
-
-function Tb2LineJoint.GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat;
-begin
-	 //B2_NOT_USED(inv_dt);
-	 Result := 0.0;
-end;
-
-function Tb2LineJoint.GetJointSpeed: PhysicsFloat;
-var
-   r1, r2, d, axis: TVector2;
-begin
-   {$IFDEF OP_OVERLOAD}
-   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
-   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchor2 - m_bodyB.GetLocalCenter);
-   d := (m_bodyB.m_sweep.c + r2) - (m_bodyA.m_sweep.c + r1);
-   {$ELSE}
-   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchor1, m_bodyA.GetLocalCenter));
-   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchor2, m_bodyB.GetLocalCenter));
-   d := Subtract(Add(m_bodyB.m_sweep.c, r2), Add(m_bodyA.m_sweep.c, r1));
-   {$ENDIF}
-   axis := m_bodyA.GetWorldVector(m_localXAxis1);
-
-   {$IFDEF OP_OVERLOAD}
-   Result := b2Dot(d, b2Cross(m_bodyA.m_angularVelocity, axis)) +
-      b2Dot(axis, m_bodyB.m_linearVelocity + b2Cross(m_bodyB.m_angularVelocity, r2) -
-      m_bodyA.m_linearVelocity - b2Cross(m_bodyA.m_angularVelocity, r1));
-   {$ELSE}
-   Result := b2Dot(d, b2Cross(m_bodyA.m_angularVelocity, axis)) +
-      b2Dot(axis, Subtract(Add(m_bodyB.m_linearVelocity,
-      b2Cross(m_bodyB.m_angularVelocity, r2)), Add(m_bodyA.m_linearVelocity,
-      b2Cross(m_bodyA.m_angularVelocity, r1))));
-   {$ENDIF}
-end;
-
-function Tb2LineJoint.GetJointTranslation: PhysicsFloat;
-begin
-   {$IFDEF OP_OVERLOAD}
-   Result := b2Dot(m_bodyB.GetWorldPoint(m_localAnchor2) -
-      m_bodyA.GetWorldPoint(m_localAnchor1), m_bodyA.GetWorldVector(m_localXAxis1));
-   {$ELSE}
-   Result := b2Dot(Subtract(m_bodyB.GetWorldPoint(m_localAnchor2),
-      m_bodyA.GetWorldPoint(m_localAnchor1)), m_bodyA.GetWorldVector(m_localXAxis1));
-   {$ENDIF}
-end;
-
-function Tb2LineJoint.GetMotorForce(inv_dt: PhysicsFloat): PhysicsFloat;
-begin
-   Result := inv_dt * m_motorImpulse;
+   m_ax := b2Vec2_Zero;
+   m_ay := b2Vec2_Zero;
 end;
 
 procedure Tb2LineJoint.InitVelocityConstraints(const step: Tb2TimeStep);
 var
-   r1, r2, d, P: TVector2;
-   k11, k12, k22, jointTranslation, L1, L2: PhysicsFloat;
+   rA, rB, P, d: TVector2;
+   invMass, C, omega, k, LA, LB, dampCof: PhysicsFloat;
 begin
    // Compute the effective masses.
    {$IFDEF OP_OVERLOAD}
-   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchor1 - m_bodyA.GetLocalCenter);
-   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchor2 - m_bodyB.GetLocalCenter);
-   d := m_bodyB.m_sweep.c + r2 - m_bodyA.m_sweep.c - r1;
+   rA := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
+   rB := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
+   d := m_bodyB.m_sweep.c + rB - m_bodyA.m_sweep.c - rA;
    {$ELSE}
-   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchor1, m_bodyA.GetLocalCenter));
-   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchor2, m_bodyB.GetLocalCenter));
-   d := Subtract(Add(m_bodyB.m_sweep.c, r2), Add(m_bodyA.m_sweep.c, r1));
+   rA := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
+   rB := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
+   d := Subtract(Add(m_bodyB.m_sweep.c, rB), Add(m_bodyA.m_sweep.c, rA));
    {$ENDIF}
 
    m_invMassA := m_bodyA.m_invMass;
@@ -15371,97 +15302,94 @@ begin
 
    // Compute motor Jacobian and effective mass.
    begin
-      m_axis := b2Mul(m_bodyA.m_xf.R, m_localXAxis1);
+      m_ax := b2Mul(m_bodyA.m_xf.R, m_localXAxisA);
       {$IFDEF OP_OVERLOAD}
-      m_a1 := b2Cross(d + r1, m_axis);
+      m_sAy := b2Cross(d + rA, m_ax);
       {$ELSE}
-      m_a1 := b2Cross(Add(d, r1), m_axis);
+      m_sAy := b2Cross(Add(d, rA), m_ax);
       {$ENDIF}
-      m_a2 := b2Cross(r2, m_axis);
+      m_sBy := b2Cross(rB, m_ax);
 
-      m_motorMass := m_invMassA + m_invMassB +
-         m_invIA * m_a1 * m_a1 + m_invIB * m_a2 * m_a2;
-      if m_motorMass > FLT_epsilon then
-         m_motorMass := 1.0 / m_motorMass
-      else
-         m_motorMass := 0.0;
+      m_mass := m_invMassA + m_invMassB +
+         m_invIA * m_sAy * m_sAy + m_invIB * m_sBy * m_sBy;
+      if m_mass > 0.0 then
+         m_mass := 1.0 / m_mass;
    end;
 
-   // Prismatic constraint.
+	 // Spring constraint
+	 m_springMass := 0.0;
+   if m_frequencyHz > 0.0 then
    begin
-      m_perp := b2Mul(m_bodyA.m_xf.R, m_localYAxis1);
-
+      m_ax := b2Mul(m_bodyA.m_xf.R, m_localXAxisA);
       {$IFDEF OP_OVERLOAD}
-      m_s1 := b2Cross(d + r1, m_perp);
+      m_sAx := b2Cross(d + rA, m_ax);
       {$ELSE}
-      m_s1 := b2Cross(Add(d, r1), m_perp);
+      m_sAx := b2Cross(Add(d, rA), m_ax);
       {$ENDIF}
-      m_s2 := b2Cross(r2, m_perp);
+      m_sBx := b2Cross(rB, m_ax);
 
-      k11 := m_invMassA + m_invMassB + m_invIA * m_s1 * m_s1 + m_invIB * m_s2 * m_s2;
-      k12 := m_invIA * m_s1 * m_a1 + m_invIB * m_s2 * m_a2;
-      k22 := m_invMassA + m_invMassB + m_invIA * m_a1 * m_a1 + m_invIB * m_a2 * m_a2;
+      invMass := m_invMassA + m_invMassB + m_invIA * m_sAx * m_sAx + m_invIB * m_sBx * m_sBx;
 
-      {$IFDEF OP_OVERLOAD}
-      m_K.col1.SetValue(k11, k12);
-      m_K.col2.SetValue(k12, k22);
-      {$ELSE}
-      SetValue(m_K.col1, k11, k12);
-      SetValue(m_K.col2, k12, k22);
-      {$ENDIF}
-   end;
+      if invMass > 0.0 then
+      begin
+         m_springMass := 1.0 / invMass;
 
-   // Compute motor and limit terms.
-   if m_enableLimit then
-   begin
-      jointTranslation := b2Dot(m_axis, d);
-      if Abs(m_upperTranslation - m_lowerTranslation) < 2.0 * b2_linearSlop then
-         m_limitState := e_equalLimits
-      else if jointTranslation <= m_lowerTranslation then
-      begin
-        if m_limitState <> e_atLowerLimit then
-        begin
-           m_limitState := e_atLowerLimit;
-           m_impulse.y := 0.0;
-        end;
-      end
-      else if jointTranslation >= m_upperTranslation then
-      begin
-         if m_limitState <> e_atUpperLimit then
-         begin
-            m_limitState := e_atUpperLimit;
-            m_impulse.y := 0.0;
-         end;
-      end
-      else
-      begin
-         m_limitState := e_inactiveLimit;
-         m_impulse.y := 0.0;
+         C := b2Dot(d, m_ax);
+
+         // Frequency
+         omega := 2.0 * Pi * m_frequencyHz;
+
+         // Damping coefficient
+         dampCof := 2.0 * m_springMass * m_dampingRatio * omega;
+
+         // Spring stiffness
+         k := m_springMass * omega * omega;
+
+         // magic formulas
+         m_gamma := step.dt * (dampCof + step.dt * k);
+         if m_gamma > 0.0 then
+            m_gamma := 1.0 / m_gamma;
+
+         m_bias := C * step.dt * k * m_gamma;
+
+         m_springMass := invMass + m_gamma;
+         if m_springMass > 0.0 then
+            m_springMass := 1.0 / m_springMass;
       end;
    end
    else
-      m_limitState := e_inactiveLimit;
+   begin
+		  m_springImpulse := 0.0;
+		  m_springMass := 0.0;
+   end;
 
-   if not m_enableMotor then
+   // Rotational motor
+   if m_enableMotor then
+   begin
+      m_motorMass := m_invIA + m_invIB;
+      if m_motorMass > 0.0 then
+         m_motorMass := 1.0 / m_motorMass;
+   end
+   else
+   begin
+      m_motorMass := 0.0;
       m_motorImpulse := 0.0;
+   end;
 
    if step.warmStarting then
    begin
       // Account for variable time step.
-      {$IFDEF OP_OVERLOAD}
-      m_impulse.MultiplyBy(step.dtRatio);
-      {$ELSE}
-      MultiplyBy(m_impulse, step.dtRatio);
-      {$ENDIF}
+      m_impulse := m_impulse * step.dtRatio;
+      m_springImpulse := m_springImpulse * step.dtRatio;
       m_motorImpulse := m_motorImpulse * step.dtRatio;
 
       {$IFDEF OP_OVERLOAD}
-      P := m_impulse.x * m_perp + (m_motorImpulse + m_impulse.y) * m_axis;
+      P := m_impulse * m_ay + m_springImpulse * m_ax;
       {$ELSE}
-      P := Add(Multiply(m_perp, m_impulse.x), Multiply(m_axis, m_motorImpulse + m_impulse.y));
+      P := Add(Multiply(m_ay, m_impulse), Multiply(m_ax, m_springImpulse));
       {$ENDIF}
-      L1 := m_impulse.x * m_s1 + (m_motorImpulse + m_impulse.y) * m_a1;
-      L2 := m_impulse.x * m_s2 + (m_motorImpulse + m_impulse.y) * m_a2;
+      LA := m_impulse * m_sAy + m_springImpulse * m_sAx + m_motorImpulse;
+      LB := m_impulse * m_sBy + m_springImpulse * m_sBx + m_motorImpulse;
 
       {$IFDEF OP_OVERLOAD}
       m_bodyA.m_linearVelocity.SubtractBy(m_invMassA * P);
@@ -15471,325 +15399,246 @@ begin
       AddBy(m_bodyB.m_linearVelocity, Multiply(P, m_invMassB));
       {$ENDIF}
 
-      m_bodyA.m_angularVelocity := m_bodyA.m_angularVelocity - m_bodyA.m_invI * L1;
-      m_bodyB.m_angularVelocity := m_bodyB.m_angularVelocity + m_bodyB.m_invI * L2;
+      m_bodyA.m_angularVelocity := m_bodyA.m_angularVelocity - m_invIA * LA;
+      m_bodyB.m_angularVelocity := m_bodyB.m_angularVelocity + m_invIB * LB;
    end
    else
    begin
-      m_impulse := b2Vec2_Zero;
+      m_impulse := 0.0;
+      m_springImpulse := 0.0;
       m_motorImpulse := 0.0;
    end;
 end;
 
 procedure Tb2LineJoint.SolveVelocityConstraints(const step: Tb2TimeStep);
 var
-   v1, v2, P, Cdot, f1, dfv: TVector2;
-   w1, w2, Cdotf, Cdot2, impulse, oldImpulse, maxImpulse, L1, L2,
-   b, f2r, df: PhysicsFloat;
+   vA, vB, P: TVector2;
+   wA, wB, Cdot, impulse, LA, LB, oldImpulse, maxImpulse: PhysicsFloat;
 begin
-   v1 := m_bodyA.m_linearVelocity;
-   w1 := m_bodyA.m_angularVelocity;
-   v2 := m_bodyB.m_linearVelocity;
-   w2 := m_bodyB.m_angularVelocity;
+   vA := m_bodyA.m_linearVelocity;
+   wA := m_bodyA.m_angularVelocity;
+   vB := m_bodyB.m_linearVelocity;
+   wB := m_bodyB.m_angularVelocity;
 
-   // Solve linear motor constraint.
-   if m_enableMotor and (m_limitState <> e_equalLimits) then
+   // Solve sprint constraint.
    begin
       {$IFDEF OP_OVERLOAD}
-      Cdotf := b2Dot(m_axis, v2 - v1) + m_a2 * w2 - m_a1 * w1;
+      Cdot := b2Dot(m_ax, vB - vA) + m_sBx * wB - m_sAx * wA;
       {$ELSE}
-      Cdotf := b2Dot(m_axis, Subtract(v2, v1)) + m_a2 * w2 - m_a1 * w1;
+      Cdot := b2Dot(m_ax, Subtract(vB, vA)) + m_sBx * wB - m_sAx * wA;
       {$ENDIF}
-      impulse := m_motorMass * (m_motorSpeed - Cdotf);
+
+      impulse := -m_springMass * (Cdot + m_bias + m_gamma * m_springImpulse);
+      m_springImpulse := m_springImpulse + impulse;
+
+      {$IFDEF OP_OVERLOAD}
+      P := impulse * m_ax;
+      {$ELSE}
+      P := Multiply(m_ax, impulse);
+      {$ENDIF}
+      LA := impulse * m_sAx;
+      LB := impulse * m_sBx;
+
+      {$IFDEF OP_OVERLOAD}
+	   	vA.SubtractBy(m_invMassA * P);
+   		vB.AddBy(m_invMassB * P);
+      {$ELSE}
+	   	SubtractBy(vA, Multiply(P, m_invMassA));
+   		AddBy(vB, Multiply(P, m_invMassB));
+      {$ENDIF}
+
+      wA := wA - m_invIA * LA;
+   		wB := wB + m_invIB * LB;
+   end;
+
+   // Solve rotational motor constraint
+   begin
+      Cdot := wB - wA - m_motorSpeed;
+      impulse := -m_motorMass * Cdot;
+
       oldImpulse := m_motorImpulse;
-      maxImpulse := step.dt * m_maxMotorForce;
+      maxImpulse := step.dt * m_maxMotorTorque;
       m_motorImpulse := b2Clamp(m_motorImpulse + impulse, -maxImpulse, maxImpulse);
       impulse := m_motorImpulse - oldImpulse;
 
-      {$IFDEF OP_OVERLOAD}
-      P := impulse * m_axis;
-      {$ELSE}
-      P := Multiply(m_axis, impulse);
-      {$ENDIF}
-      L1 := impulse * m_a1;
-      L2 := impulse * m_a2;
-
-      {$IFDEF OP_OVERLOAD}
-	   	v1.SubtractBy(m_invMassA * P);
-   		v2.AddBy(m_invMassB * P);
-      {$ELSE}
-	   	SubtractBy(v1, Multiply(P, m_invMassA));
-   		AddBy(v2, Multiply(P, m_invMassB));
-      {$ENDIF}
-
-      w1 := w1 - m_invIA * L1;
-   		w2 := w2 + m_invIB * L2;
+      wA := wA - m_invIA * impulse;
+      wB := wB + m_invIB * impulse;
    end;
 
-   {$IFDEF OP_OVERLOAD}
-   Cdotf := b2Dot(m_perp, v2 - v1) + m_s2 * w2 - m_s1 * w1;
-   {$ELSE}
-   Cdotf := b2Dot(m_perp, Subtract(v2, v1)) + m_s2 * w2 - m_s1 * w1;
-   {$ENDIF}
-
-   if m_enableLimit and (m_limitState <> e_inactiveLimit) then
+   // Solve point to line constraint
    begin
-      // Solve prismatic and limit constraint in block form.
       {$IFDEF OP_OVERLOAD}
-      Cdot2 := b2Dot(m_axis, v2 - v1) + m_a2 * w2 - m_a1 * w1;
+		  Cdot := b2Dot(m_ay, vB - vA) + m_sBy * wB - m_sAy * wA;
       {$ELSE}
-      Cdot2 := b2Dot(m_axis, Subtract(v2, v1)) + m_a2 * w2 - m_a1 * w1;
+      Cdot := b2Dot(m_ay, Subtract(vB, vA)) + m_sBy * wB - m_sAy * wA;
       {$ENDIF}
-      Cdot.x := Cdotf;
-      Cdot.y := Cdot2;
-
-      f1 := m_impulse;
-      {$IFDEF OP_OVERLOAD}
-      m_impulse.AddBy(m_K.Solve(-Cdot));
-      {$ELSE}
-      AddBy(m_impulse, Solve(m_K, Negative(Cdot)));
-      {$ENDIF}
-
-      if m_limitState = e_atLowerLimit then
-         m_impulse.y := b2Max(m_impulse.y, 0.0)
-      else if m_limitState = e_atUpperLimit then
-         m_impulse.y := b2Min(m_impulse.y, 0.0);
-
-      // f2(1) := invK(1,1) * (-Cdot(1) - K(1,2) * (f2(2) - f1(2))) + f1(1)
-      b := -Cdotf - (m_impulse.y - f1.y) * m_K.col2.x;
-      if m_K.col1.x <> 0.0 then
-         f2r := b / m_K.col1.x + f1.x
-      else
-         f2r := f1.x;
-
-      m_impulse.x := f2r;
-      {$IFDEF OP_OVERLOAD}
-      dfv := m_impulse - f1;
-      {$ELSE}
-      dfv := Subtract(m_impulse, f1);
-      {$ENDIF}
-
-      with dfv do
-      begin
-         {$IFDEF OP_OVERLOAD}
-         P := x * m_perp + y * m_axis;
-         {$ELSE}
-         P := Add(Multiply(m_perp, x), Multiply(m_axis, y));
-         {$ENDIF}
-         L1 := x * m_s1 + y * m_a1;
-         L2 := x * m_s2 + y * m_a2;
-      end;
+		  impulse := m_mass * (-Cdot);
+      m_impulse := m_impulse + impulse;
 
       {$IFDEF OP_OVERLOAD}
-      v1.SubtractBy(m_invMassA * P);
-      v2.AddBy(m_invMassB * P);
+      P := impulse * m_ay;
       {$ELSE}
-      SubtractBy(v1, Multiply(P, m_invMassA));
-      AddBy(v2, Multiply(P, m_invMassB));
+      P := Multiply(m_ay, impulse);
       {$ENDIF}
-
-      w1 := w1 - m_invIA * L1;
-      w2 := w2 + m_invIB * L2;
-   end
-   else
-   begin
-      // Limit is inactive, just solve the prismatic constraint in block form.
-      if m_K.col1.x <> 0.0 then
-         df := -Cdotf / m_K.col1.x
-      else
-         df := 0.0;
-      m_impulse.x := m_impulse.x + df;
+      LA := impulse * m_sAy;
+      LB := impulse * m_sBy;
 
       {$IFDEF OP_OVERLOAD}
-      P := df * m_perp;
+      vA.SubtractBy(m_invMassA * P);
+      vB.AddBy(m_invMassB * P);
       {$ELSE}
-      P := Multiply(m_perp, df);
-      {$ENDIF}
-      L1 := df * m_s1;
-      L2 := df * m_s2;
-
-      {$IFDEF OP_OVERLOAD}
-      v1.SubtractBy(m_invMassA * P);
-      v2.AddBy(m_invMassB * P);
-      {$ELSE}
-      SubtractBy(v1, Multiply(P, m_invMassA));
-      AddBy(v2, Multiply(P, m_invMassB));
+      SubtractBy(vA, Multiply(P, m_invMassA));
+      AddBy(vB, Multiply(P, m_invMassB));
       {$ENDIF}
 
-      w1 := w1 - m_invIA * L1;
-      w2 := w2 + m_invIB * L2;
+      wA := wA - m_invIA * LA;
+      wB := wB + m_invIB * LB;
    end;
 
-   m_bodyA.m_linearVelocity := v1;
-   m_bodyA.m_angularVelocity := w1;
-   m_bodyB.m_linearVelocity := v2;
-   m_bodyB.m_angularVelocity := w2;
+   m_bodyA.m_linearVelocity := vA;
+   m_bodyA.m_angularVelocity := wA;
+   m_bodyB.m_linearVelocity := vB;
+   m_bodyB.m_angularVelocity := wB;
 end;
 
 function Tb2LineJoint.SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean;
 var
-   c1, c2, r1, r2, d, impulse, C, P: TVector2;
-   a1, a2, linearError, angularError, _C1, _C2, translation,
-   k11, k12, k22, L1, L2: PhysicsFloat;
-   active: Boolean;
-   _R1, _R2: TMatrix22;
+   xA, xB, rA, rB, d, ay, P: TVector2;
+   angleA, angleB, sAy, sBy, C, k, impulse, LA, LB: PhysicsFloat;
+   _RA, _RB: TMatrix22;
 begin
    //B2_NOT_USED(baumgarte);
 
-   c1 := m_bodyA.m_sweep.c;
-   a1 := m_bodyA.m_sweep.a;
-   c2 := m_bodyB.m_sweep.c;
-   a2 := m_bodyB.m_sweep.a;
-
-   // Solve linear limit constraint.
-   linearError := 0.0;
-   //angularError := 0.0;
-   active := False;
-   _C2 := 0.0;
+   xA := m_bodyA.m_sweep.c;
+   angleA := m_bodyA.m_sweep.a;
+   xB := m_bodyB.m_sweep.c;
+   angleB := m_bodyB.m_sweep.a;
 
    {$IFDEF OP_OVERLOAD}
-   _R1.SetValue(a1);
-   _R2.SetValue(a2);
+   _RA.SetValue(angleA);
+   _RB.SetValue(angleB);
 
-   r1 := b2Mul(_R1, m_localAnchor1 - m_localCenterA);
-   r2 := b2Mul(_R2, m_localAnchor2 - m_localCenterB);
-   d := c2 + r2 - c1 - r1;
+   rA := b2Mul(_RA, m_localAnchorA - m_localCenterA);
+   rB := b2Mul(_RB, m_localAnchorB - m_localCenterB);
+   d := xB + rB - xA - rA;
    {$ELSE}
-   SetValue(_R1, a1);
-   SetValue(_R2, a2);
+   SetValue(_RA, angleA);
+   SetValue(_RB, angleB);
 
-   r1 := b2Mul(_R1, Subtract(m_localAnchor1, m_localCenterA));
-   r2 := b2Mul(_R2, Subtract(m_localAnchor2, m_localCenterB));
-   d := Subtract(Add(c2, r2), Add(c1, r1));
+   rA := b2Mul(_RA, Subtract(m_localAnchorA, m_localCenterA));
+   rB := b2Mul(_RB, Subtract(m_localAnchorB, m_localCenterB));
+   d := Subtract(Add(xB, rB), Add(xA, rA));
    {$ENDIF}
 
-   if m_enableLimit then
-   begin
-      m_axis := b2Mul(_R1, m_localXAxis1);
-
-      {$IFDEF OP_OVERLOAD}
-      m_a1 := b2Cross(d + r1, m_axis);
-      {$ELSE}
-      m_a1 := b2Cross(Add(d, r1), m_axis);
-      {$ENDIF}
-      m_a2 := b2Cross(r2, m_axis);
-
-      translation := b2Dot(m_axis, d);
-      if Abs(m_upperTranslation - m_lowerTranslation) < 2.0 * b2_linearSlop then
-      begin
-         // Prevent large angular corrections
-         _C2 := b2Clamp(translation, -b2_maxLinearCorrection, b2_maxLinearCorrection);
-         linearError := Abs(translation);
-         active := True;
-      end
-      else if translation <= m_lowerTranslation then
-      begin
-         // Prevent large linear corrections and allow some slop.
-         _C2 := b2Clamp(translation - m_lowerTranslation + b2_linearSlop, -b2_maxLinearCorrection, 0.0);
-         linearError := m_lowerTranslation - translation;
-         active := True;
-      end
-      else if translation >= m_upperTranslation then
-      begin
-         // Prevent large linear corrections and allow some slop.
-         _C2 := b2Clamp(translation - m_upperTranslation - b2_linearSlop, 0.0, b2_maxLinearCorrection);
-         linearError := translation - m_upperTranslation;
-         active := True;
-      end;
-   end;
-
-   m_perp := b2Mul(_R1, m_localYAxis1);
-
+   ay := b2Mul(_RA, m_localYAxisA);
    {$IFDEF OP_OVERLOAD}
-   m_s1 := b2Cross(d + r1, m_perp);
+   sAy := b2Cross(d + rA, ay);
    {$ELSE}
-   m_s1 := b2Cross(Add(d, r1), m_perp);
+   sAy := b2Cross(Add(d, rA), ay);
    {$ENDIF}
-   m_s2 := b2Cross(r2, m_perp);
-
-   _C1 := b2Dot(m_perp, d);
-
-   linearError := b2Max(linearError, Abs(_C1));
-   angularError := 0.0;
-
-   if active then
-   begin
-      k11 := m_invMassA + m_invMassB + m_invIA * m_s1 * m_s1 + m_invIB * m_s2 * m_s2;
-      k12 := m_invIA * m_s1 * m_a1 + m_invIB * m_s2 * m_a2;
-      k22 := m_invMassA + m_invMassB + m_invIA * m_a1 * m_a1 + m_invIB * m_a2 * m_a2;
-
-      {$IFDEF OP_OVERLOAD}
-      m_K.col1.SetValue(k11, k12);
-      m_K.col2.SetValue(k12, k22);
-      {$ELSE}
-      SetValue(m_K.col1, k11, k12);
-      SetValue(m_K.col2, k12, k22);
-      {$ENDIF}
-
-      C.x := _C1;
-      C.y := _C2;
-
-      {$IFDEF OP_OVERLOAD}
-      impulse := m_K.Solve(-C);
-      {$ELSE}
-      impulse := Solve(m_K, Negative(C));
-      {$ENDIF}
-   end
+	 sBy := b2Cross(rB, ay);
+	 C := b2Dot(d, ay);
+   k := m_invMassA + m_invMassB + m_invIA * m_sAy * m_sAy + m_invIB * m_sBy * m_sBy;
+   if k <> 0.0 then
+      impulse := - C / k
    else
-   begin
-      k11 := m_invMassA + m_invMassB + m_invIA * m_s1 * m_s1 + m_invIB * m_s2 * m_s2;
-
-      if k11 <> 0.0 then
-         impulse.x := - _C1 / k11
-      else
-         impulse.x := 0.0;
-      impulse.y := 0.0;
-   end;
+      impulse := 0.0;
 
    {$IFDEF OP_OVERLOAD}
-   P := impulse.x * m_perp + impulse.y * m_axis;
+   P := impulse * ay;
    {$ELSE}
-   P := Add(Multiply(m_perp, impulse.x), Multiply(m_axis, impulse.y));
+   P := Multiply(ay, impulse);
    {$ENDIF}
-   L1 := impulse.x * m_s1 + impulse.y * m_a1;
-   L2 := impulse.x * m_s2 + impulse.y * m_a2;
+   LA := impulse * sAy;
+   LB := impulse * sBy;
 
    {$IFDEF OP_OVERLOAD}
-   c1.SubtractBy(m_invMassA * P);
-   c2.AddBy(m_invMassB * P);
+   xA.SubtractBy(m_invMassA * P);
+   xB.AddBy(m_invMassB * P);
    {$ELSE}
-   SubtractBy(c1, Multiply(P, m_invMassA));
-   AddBy(c2, Multiply(P, m_invMassB));
+   SubtractBy(xA, Multiply(P, m_invMassA));
+   AddBy(xB, Multiply(P, m_invMassB));
    {$ENDIF}
 
-   a1 := a1 - m_invIA * L1;
-   a2 := a2 + m_invIB * L2;
+   angleA := angleA - m_invIA * LA;
+   angleB := angleB + m_invIB * LB;
 
    // TODO_ERIN remove need for this.
-   m_bodyA.m_sweep.c := c1;
-   m_bodyA.m_sweep.a := a1;
-   m_bodyB.m_sweep.c := c2;
-   m_bodyB.m_sweep.a := a2;
+   m_bodyA.m_sweep.c := xA;
+   m_bodyA.m_sweep.a := angleA;
+   m_bodyB.m_sweep.c := xB;
+   m_bodyB.m_sweep.a := angleB;
    m_bodyA.SynchronizeTransform;
    m_bodyB.SynchronizeTransform;
 
-   Result := (linearError <= b2_linearSlop) and (angularError <= b2_angularSlop);
+   Result := Abs(C) <= b2_linearSlop;
 end;
 
-procedure Tb2LineJoint.EnableLimit(flag: Boolean);
+function Tb2LineJoint.GetAnchorA: TVector2;
 begin
-   m_bodyA.SetAwake(True);
-   m_bodyB.SetAwake(True);
-   m_enableLimit := flag;
+   Result := m_bodyA.GetWorldPoint(m_localAnchorA);
 end;
 
-procedure Tb2LineJoint.SetLimits(lower, upper: PhysicsFloat);
+function Tb2LineJoint.GetAnchorB: TVector2;
 begin
-   //b2Assert(lower <= upper);
-   m_bodyA.SetAwake(True);
-   m_bodyB.SetAwake(True);
-   m_lowerTranslation := lower;
-   m_upperTranslation := upper;
+   Result := m_bodyB.GetWorldPoint(m_localAnchorB);
+end;
+
+function Tb2LineJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
+begin
+   {$IFDEF OP_OVERLOAD}
+   Result := inv_dt * (m_impulse * m_ay + m_springImpulse * m_ax);
+   {$ELSE}
+   Result := Multiply(Add(Multiply(m_ay, m_impulse), Multiply(m_ax, m_springImpulse)), inv_dt);
+   {$ENDIF}
+end;
+
+function Tb2LineJoint.GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat;
+begin
+	 Result := inv_dt * m_motorImpulse;
+end;
+
+function Tb2LineJoint.GetJointSpeed: PhysicsFloat;
+var
+   rA, rB, d, axis: TVector2;
+begin
+   {$IFDEF OP_OVERLOAD}
+   rA := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
+   rB := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
+   d := (m_bodyB.m_sweep.c + rB) - (m_bodyA.m_sweep.c + rA);
+   {$ELSE}
+   rA := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
+   rB := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
+   d := Subtract(Add(m_bodyB.m_sweep.c, rB), Add(m_bodyA.m_sweep.c, rA));
+   {$ENDIF}
+   axis := m_bodyA.GetWorldVector(m_localXAxisA);
+
+   {$IFDEF OP_OVERLOAD}
+   Result := b2Dot(d, b2Cross(m_bodyA.m_angularVelocity, axis)) +
+      b2Dot(axis, m_bodyB.m_linearVelocity + b2Cross(m_bodyB.m_angularVelocity, rB) -
+      m_bodyA.m_linearVelocity - b2Cross(m_bodyA.m_angularVelocity, rA));
+   {$ELSE}
+   Result := b2Dot(d, b2Cross(m_bodyA.m_angularVelocity, axis)) +
+      b2Dot(axis, Subtract(Add(m_bodyB.m_linearVelocity,
+      b2Cross(m_bodyB.m_angularVelocity, rB)), Add(m_bodyA.m_linearVelocity,
+      b2Cross(m_bodyA.m_angularVelocity, rA))));
+   {$ENDIF}
+end;
+
+function Tb2LineJoint.GetJointTranslation: PhysicsFloat;
+begin
+   {$IFDEF OP_OVERLOAD}
+   Result := b2Dot(m_bodyB.GetWorldPoint(m_localAnchorB) -
+      m_bodyA.GetWorldPoint(m_localAnchorA), m_bodyA.GetWorldVector(m_localXAxisA));
+   {$ELSE}
+   Result := b2Dot(Subtract(m_bodyB.GetWorldPoint(m_localAnchorB),
+      m_bodyA.GetWorldPoint(m_localAnchorA)), m_bodyA.GetWorldVector(m_localXAxisA));
+   {$ENDIF}
+end;
+
+function Tb2LineJoint.GetMotorTorque(inv_dt: PhysicsFloat): PhysicsFloat;
+begin
+   Result := inv_dt * m_motorImpulse;
 end;
 
 procedure Tb2LineJoint.EnableMotor(flag: Boolean);
@@ -15806,11 +15655,11 @@ begin
    m_motorSpeed := speed;
 end;
 
-procedure Tb2LineJoint.SetMaxMotorForce(force: PhysicsFloat);
+procedure Tb2LineJoint.SetMaxMotorTorque(torque: PhysicsFloat);
 begin
    m_bodyA.SetAwake(True);
    m_bodyB.SetAwake(True);
-   m_maxMotorForce := force;
+   m_maxMotorTorque := torque;
 end;
 
 { Tb2WeldJointDef }
@@ -16223,7 +16072,7 @@ var
    Cdot, lambda: array[0..2] of PhysicsFloat;
 begin
    // Assert that angle is still the same so the effective joint mass is still valid
-   //assert(m_bodyA.m_sweep.a == m_a1);
+   //assert(m_bodyA.m_sweep.a == m_sAy);
 
    // Calculate Cdot
    Cdot[0] := m_bodyB.m_linearVelocity.x - m_bodyA.m_linearVelocity.x - m_Ax * m_bodyA.m_angularVelocity;

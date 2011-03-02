@@ -54,12 +54,11 @@ begin
       Normalize(axis);
       {$ENDIF}
       jd.Initialize(ground, body, MakeVector(0.0, 8.5), axis);
-      jd.motorSpeed := 0.0;
-      jd.maxMotorForce := 100.0;
-      jd.enableMotor := True;
-      jd.lowerTranslation := -4.0;
-      jd.upperTranslation := 4.0;
-      jd.enableLimit := True;
+			jd.motorSpeed := 1.0;
+			jd.maxMotorTorque := 1000.0;
+			jd.enableMotor := True;
+			jd.frequencyHz := 1.0;
+			jd.dampingRatio := 0.2;
       m_world.CreateJoint(jd);
    end;
 end;
