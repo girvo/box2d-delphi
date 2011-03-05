@@ -66,8 +66,8 @@ begin
 
       jd := Tb2DistanceJointDef.Create;
 
-      jd.frequencyHz := 4.0;
-      jd.dampingRatio := 0.5;
+      jd.frequencyHz := 2.0;
+      jd.dampingRatio := 0.0;
 
       jd.bodyA := ground;
       jd.bodyB := m_bodies[0];

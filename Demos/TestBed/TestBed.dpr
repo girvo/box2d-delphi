@@ -58,7 +58,8 @@ uses
   UBulletTest in 'Tests\UBulletTest.pas',
   UPinBall in 'Tests\UPinBall.pas',
   URevolute in 'Tests\URevolute.pas',
-  URope in 'Tests\URope.pas';
+  URope in 'Tests\URope.pas',
+  UCar in 'Tests\UCar.pas';
 
 {$R *.res}
 

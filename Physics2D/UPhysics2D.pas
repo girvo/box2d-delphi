@@ -2251,7 +2251,7 @@ type
       property GetMaxMotorTorque: PhysicsFloat read m_maxMotorTorque;
 
       /// Get/Set the spring frequency in hertz. Setting the frequency to zero disables the spring.
-      property SpringFrequencyH: PhysicsFloat read m_frequencyHz write m_frequencyHz;
+      property SpringFrequencyHz: PhysicsFloat read m_frequencyHz write m_frequencyHz;
 
       /// Get/Set the spring damping ratio
       property SpringDampingRatio: PhysicsFloat read m_dampingRatio write m_dampingRatio;
@@ -15295,23 +15295,23 @@ begin
    d := Subtract(Add(m_bodyB.m_sweep.c, rB), Add(m_bodyA.m_sweep.c, rA));
    {$ENDIF}
 
+   // Compute the effective masses.
    m_invMassA := m_bodyA.m_invMass;
    m_invIA := m_bodyA.m_invI;
    m_invMassB := m_bodyB.m_invMass;
    m_invIB := m_bodyB.m_invI;
 
-   // Compute motor Jacobian and effective mass.
+   // Point to line constraint
    begin
-      m_ax := b2Mul(m_bodyA.m_xf.R, m_localXAxisA);
+      m_ay := b2Mul(m_bodyA.m_xf.R, m_localYAxisA);
       {$IFDEF OP_OVERLOAD}
-      m_sAy := b2Cross(d + rA, m_ax);
+      m_sAy := b2Cross(d + rA, m_ay);
       {$ELSE}
-      m_sAy := b2Cross(Add(d, rA), m_ax);
+      m_sAy := b2Cross(Add(d, rA), m_ay);
       {$ENDIF}
-      m_sBy := b2Cross(rB, m_ax);
+      m_sBy := b2Cross(rB, m_ay);
 
-      m_mass := m_invMassA + m_invMassB +
-         m_invIA * m_sAy * m_sAy + m_invIB * m_sBy * m_sBy;
+      m_mass := m_invMassA + m_invMassB + m_invIA * m_sAy * m_sAy + m_invIB * m_sBy * m_sBy;
       if m_mass > 0.0 then
          m_mass := 1.0 / m_mass;
    end;
@@ -15599,30 +15599,8 @@ begin
 end;
 
 function Tb2LineJoint.GetJointSpeed: PhysicsFloat;
-var
-   rA, rB, d, axis: TVector2;
 begin
-   {$IFDEF OP_OVERLOAD}
-   rA := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
-   rB := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
-   d := (m_bodyB.m_sweep.c + rB) - (m_bodyA.m_sweep.c + rA);
-   {$ELSE}
-   rA := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
-   rB := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
-   d := Subtract(Add(m_bodyB.m_sweep.c, rB), Add(m_bodyA.m_sweep.c, rA));
-   {$ENDIF}
-   axis := m_bodyA.GetWorldVector(m_localXAxisA);
-
-   {$IFDEF OP_OVERLOAD}
-   Result := b2Dot(d, b2Cross(m_bodyA.m_angularVelocity, axis)) +
-      b2Dot(axis, m_bodyB.m_linearVelocity + b2Cross(m_bodyB.m_angularVelocity, rB) -
-      m_bodyA.m_linearVelocity - b2Cross(m_bodyA.m_angularVelocity, rA));
-   {$ELSE}
-   Result := b2Dot(d, b2Cross(m_bodyA.m_angularVelocity, axis)) +
-      b2Dot(axis, Subtract(Add(m_bodyB.m_linearVelocity,
-      b2Cross(m_bodyB.m_angularVelocity, rB)), Add(m_bodyA.m_linearVelocity,
-      b2Cross(m_bodyA.m_angularVelocity, rA))));
-   {$ENDIF}
+   Result := m_bodyB.m_angularVelocity - m_bodyA.m_angularVelocity;
 end;
 
 function Tb2LineJoint.GetJointTranslation: PhysicsFloat;

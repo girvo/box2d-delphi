@@ -1138,3 +1138,4 @@ finalization
    _QueryCallback.Free;
 
 end.
+
