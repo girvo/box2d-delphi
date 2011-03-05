@@ -53,7 +53,6 @@ object frmMain: TfrmMain
       Style = csDropDownList
       DropDownCount = 100
       ImeName = 'Chinese (Simplified) - US Keyboard'
-      ItemHeight = 13
       TabOrder = 0
       OnChange = cboTestsChange
       OnCloseUp = cboTestsCloseUp
