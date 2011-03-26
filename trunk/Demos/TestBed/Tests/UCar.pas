@@ -186,8 +186,16 @@ begin
       body.CreateFixture(box, 0.5, False);
 
       SetValue(bd.position, 230.0, 2.5);
-      body := m_world.CreateBody(bd);
+      body := m_world.CreateBody(bd, False);
       body.CreateFixture(box, 0.5);
+
+      SetValue(bd.position, 230.0, 3.5);
+			body := m_world.CreateBody(bd, False);
+			body.CreateFixture(box, 0.5, False);
+
+			SetValue(bd.position, 230.0, 4.5);
+			body := m_world.CreateBody(bd);
+			body.CreateFixture(box, 0.5);
    end;
 
    // Car

@@ -103,6 +103,7 @@
 			<DCCReference Include="Tests\URevolute.pas"/>
 			<DCCReference Include="Tests\URope.pas"/>
 			<DCCReference Include="Tests\UCar.pas"/>
+			<DCCReference Include="Tests\URopeJoint.pas"/>
 			<None Include="..\..\OpenGL Canvas\OpenGLCanvas.inc"/>
 			<None Include="..\..\Physics2D\Physics2D.inc"/>
 			<None Include="..\..\Physics2D\delete.bat"/>

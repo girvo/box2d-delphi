@@ -59,7 +59,8 @@ uses
   UPinBall in 'Tests\UPinBall.pas',
   URevolute in 'Tests\URevolute.pas',
   URope in 'Tests\URope.pas',
-  UCar in 'Tests\UCar.pas';
+  UCar in 'Tests\UCar.pas',
+  URopeJoint in 'Tests\URopeJoint.pas';
 
 {$R *.res}
 
