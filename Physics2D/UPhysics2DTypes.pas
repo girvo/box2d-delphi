@@ -101,6 +101,9 @@ type
    Float64 = Double;
    Float80 = Extended;
 
+type
+   TPhysicsFloatArray = array of PhysicsFloat;
+
 const
    {$IFDEF EXTENDED_PRECISION}
    FLT_EPSILON = 1.084202172485504E-19;
@@ -129,6 +132,7 @@ type
       function Length: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       function SqrLength: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       function Normalize: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function Skew: TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Get the skew vector such that dot(skew_vec, other) == cross(vec, other)
       procedure SetZero; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       procedure SetNegative; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       procedure SetValue(x, y: PhysicsFloat); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
@@ -397,6 +401,7 @@ function LengthVec(const v: TVector2): PhysicsFloat; overload; {$IFDEF INLINE_AV
 
 function SqrLength(const v: TVector2): PhysicsFloat; overload;  {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function Normalize(var v: TVector2): PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function Skew(const v: TVector2): TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure SetNegative(var v: TVector2); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure SetLengthVec(var v: TVector2; value: PhysicsFloat); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
@@ -666,6 +671,12 @@ begin
       x := x / Result;
       y := y / Result;
    end;
+end;
+
+function Skew(const v: TVector2): TVector2;
+begin
+   Result.x := -v.y;
+   Result.y := v.x;
 end;
 
 procedure SetNegative(var v: TVector2);
@@ -1646,6 +1657,12 @@ begin
    end;
    x := x / Result;
    y := y / Result;
+end;
+
+function TVector2.Skew: TVector2;
+begin
+   Result.x := -y;
+   Result.y := x;
 end;
 
 procedure TVector2.SetZero;

@@ -41,7 +41,7 @@ type
    public
       m_circle: Tb2CircleShape;
       m_transform: Tb2Transform;
-      m_debugDraw: Tb2DebugDraw;
+      m_debugDraw: Tb2Draw;
       m_count: Int32;
 
       constructor Create;

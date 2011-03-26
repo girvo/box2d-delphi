@@ -84,7 +84,7 @@ type
 
       constructor Create;
       procedure Step(const step: Tb2TimeStep); override;
-      procedure Draw(debugDraw: Tb2DebugDraw); override;
+      procedure Draw(debugDraw: Tb2Draw); override;
    end;
 
    // Apply constant acceleration to a body. You can change A at any time.
@@ -285,7 +285,7 @@ begin
       end;
 end;
 
-procedure Tb2BuoyancyController.Draw(debugDraw: Tb2DebugDraw);
+procedure Tb2BuoyancyController.Draw(debugDraw: Tb2Draw);
 const
    color: RGBA = (0, 0, 0.8, 1.0);
 begin

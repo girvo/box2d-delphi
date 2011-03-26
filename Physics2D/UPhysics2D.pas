@@ -184,10 +184,10 @@ type
    /// -e_faceB: the clip point of polygonA
    /// This structure is stored across time steps, so we keep it small.
    /// Note: the impulses are used for internal caching and may not
-   /// provide reliable contact forces, especially for high speed collisions.     
+   /// provide reliable contact forces, especially for high speed collisions.
    Pb2ManifoldPoint = ^Tb2ManifoldPoint;
    Tb2ManifoldPoint = record
-      localPoint: TVector2;		///< usage depends on manifold type    
+      localPoint: TVector2;		///< usage depends on manifold type
       normalImpulse: PhysicsFloat; ///< the non-penetration impulse
       tangentImpulse: PhysicsFloat; ///< the friction impulse
       id: Tb2ContactID; ///< uniquely identifies a contact point between two shapes
@@ -243,7 +243,7 @@ type
 	 /// b2_removeState		///< point was removed in the update
    Tb2PointState = (b2_nullState, b2_addState, b2_persistState, b2_removeState);
    Tb2PointStateArray = array[0..b2_maxManifoldPoints - 1] of Tb2PointState;
-   
+
    /// Ray-cast input data.
    Tb2RayCastInput = record
       p1, p2: TVector2;
@@ -301,13 +301,13 @@ type
       procedure SayGoodbye(fixture: Tb2Fixture); overload; virtual; abstract;
    end;
 
-   Tb2DebugDrawBits = (e_shapeBit, e_jointBit, e_aabbBit, e_pairBit,
+   Tb2DrawBits = (e_shapeBit, e_jointBit, e_aabbBit, e_pairBit,
       e_centerOfMassBit{$IFDEF CONTROLLERS}, e_controllerBit{$ENDIF});
-   Tb2DebugDrawBitsSet = set of Tb2DebugDrawBits;
+   Tb2DrawBitsSet = set of Tb2DrawBits;
 
-   Tb2DebugDraw = class
+   Tb2Draw = class
    public
-      m_drawFlags: Tb2DebugDrawBitsSet;
+      m_drawFlags: Tb2DrawBitsSet;
       m_shapeColor_Inactive, m_shapeColor_Static, m_shapeColor_Kinematic,
       m_shapeColor_Sleeping, m_shapeColor_Normal,
       m_pairColor, m_aabbColor, m_world_aabbColor, m_coreColor, m_jointLineColor: RGBA;
@@ -357,7 +357,7 @@ type
       m_allowSleep: Boolean;
 
       m_destructionListener: Tb2DestructionListener;
-      m_debugDraw: Tb2DebugDraw;
+      m_debugDraw: Tb2Draw;
 
       m_inv_dt0: PhysicsFloat;  // This is used to compute the time step ratio to support a variable time step.
       m_warmStarting: Boolean;
@@ -472,7 +472,7 @@ type
 
       //////////////////////////////////////////////////////////////////////
       property DestructionListener: Tb2DestructionListener read m_destructionListener write m_destructionListener;
-      property DebugDraw: Tb2DebugDraw read m_debugDraw write m_debugDraw;
+      property Draw: Tb2Draw read m_debugDraw write m_debugDraw;
       property GetContactManager: Tb2ContactManager read m_contactManager;
 
       property Gravity: TVector2 read m_gravity;
@@ -965,7 +965,7 @@ type
       m_fixture: Tb2Fixture;
       m_destroyed: Boolean;
       m_baseMass: Tb2MassData; // Density = 1
-   public      
+   public
       m_radius: PhysicsFloat;
 
       constructor Create;
@@ -1125,7 +1125,7 @@ type
    end;
 
    //////////////////////////////////////////////////////////////
-   // Joints    
+   // Joints
    Tb2JointType = (e_unknownJoint, e_revoluteJoint, e_prismaticJoint,
       e_distanceJoint, e_pulleyJoint, e_mouseJoint, e_gearJoint, e_lineJoint,
       e_weldJoint, e_frictionJoint, e_fixedJoint, e_ropeJoint);
@@ -1139,7 +1139,7 @@ type
       procedure SetZero;
       procedure SetValue(const x1, x2: TVector2; a1, a2: PhysicsFloat);
       function Compute(const x1, x2: TVector2; a1, a2: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-      {$ENDIF}      
+      {$ENDIF}
    end;
 
    /// A joint edge is used to connect bodies and joints together
@@ -1156,7 +1156,7 @@ type
 
    /// Joint definitions are used to construct joints.
    Tb2JointDef = class
-   public            
+   public
       JointType: Tb2JointType; /// The joint type is set automatically for concrete joint types.
       userData: Pointer; /// Use this to attach application specific data to your joints.
 
@@ -1164,7 +1164,7 @@ type
       collideConnected: Boolean; /// Set this flag to True if the attached bodies should collide.
 
       constructor Create;
-   end;  
+   end;
 
    /// The base joint class. Joints are used to constraint two bodies together in
    /// various fashions. Some joints also feature limits and motors.
@@ -1248,7 +1248,7 @@ type
       procedure Step(const step: Tb2TimeStep); virtual; abstract;
 
       /// Controllers override this to provide debug drawing.
-      procedure Draw(debugDraw: Tb2DebugDraw); virtual;
+      procedure Draw(debugDraw: Tb2Draw); virtual;
 
       /// Adds a body to the controller list.
       procedure AddBody(body: Tb2Body); virtual;
@@ -2407,6 +2407,51 @@ type
       property LimitState: Tb2LimitState read m_state;
    end;
 
+   Tb2RopeDef = class
+   public
+      vertices: TVectorArray;
+      count: Int32;
+      masses: TPhysicsFloatArray;
+      gravity: TVector2;
+      damping: PhysicsFloat;
+      k2: PhysicsFloat; // Stretching stiffness
+      k3: PhysicsFloat; // Bending stiffness. Values above 0.5 can make the simulation blow up.
+
+      constructor Create;
+   end;
+
+   Tb2Rope = class
+   private
+      m_count: Int32;
+      m_ps: TVectorArray;
+      m_p0s: TVectorArray;
+      m_vs: TVectorArray;
+
+      m_ims: TPhysicsFloatArray;
+      m_Ls: TPhysicsFloatArray;
+      m_as: TPhysicsFloatArray;
+
+      m_gravity: TVector2;
+      m_damping: PhysicsFloat;
+
+      m_k2: PhysicsFloat;
+      m_k3: PhysicsFloat;
+
+      procedure	SolveC2;
+      procedure	SolveC3;
+
+   public
+      constructor Create(def: Tb2RopeDef; AutoFreeDef: Boolean = True);
+
+      procedure Step(timeStep: PhysicsFloat; iterations: Int32);
+
+      procedure Draw(draw: Tb2Draw);
+      procedure SetAngle(angle: PhysicsFloat);
+
+      property VertexCount: Int32 read m_count;
+      property Vertices: TVectorArray read m_ps;
+   end;
+
 //////////////////////////////////////////////////////////////////
 
 procedure b2GetPointStates(var state1, state2: Tb2PointStateArray;
@@ -2821,7 +2866,7 @@ begin
    with AABB do
    begin
       d := Subtract(upperBound, lowerBound);
-      Result := (d.x >= 0.0) and (d.y >= 0.0) and 
+      Result := (d.x >= 0.0) and (d.y >= 0.0) and
          UPhysics2DTypes.IsValid(upperBound) and UPhysics2DTypes.IsValid(lowerBound);
    end;
 end;
@@ -3016,22 +3061,22 @@ begin
       if i + 1 < count then
          p3 := vs[i + 1]
       else
-         p3 := vs[0];   
+         p3 := vs[0];
 
-      {$IFDEF OP_OVERLOAD}         
+      {$IFDEF OP_OVERLOAD}
       e1 := p2 - p1;
       e2 := p3 - p1;
-      {$ELSE}      
+      {$ELSE}
       e1 := Subtract(p2, p1);
       e2 := Subtract(p3, p1);
-      {$ENDIF}            
+      {$ENDIF}
 
       triangleArea := 0.5 * b2Cross(e1, e2);
       area := area + triangleArea;
 
-      // Area weighted centroid    
+      // Area weighted centroid
 
-      {$IFDEF OP_OVERLOAD}        
+      {$IFDEF OP_OVERLOAD}
       Result.AddBy(triangleArea * inv3 * (p1 + p2 + p3));
       {$ELSE}
       AddBy(Result, Multiply(Add(p1, p2, p3), triangleArea * inv3));
@@ -3040,11 +3085,11 @@ begin
 
    // Centroid
    //b2Assert(area > B2_FLT_EPSILON);
-   {$IFDEF OP_OVERLOAD}        
+   {$IFDEF OP_OVERLOAD}
    Result := Result / area;
-   {$ELSE}   
+   {$ELSE}
    DivideBy(Result, area);
-   {$ENDIF}  
+   {$ENDIF}
 end;
 
 { b2Distance.cpp }
@@ -4753,9 +4798,9 @@ end;
 
 {$ENDIF}
 
-{ Tb2DebugDraw }
+{ Tb2Draw }
 
-constructor Tb2DebugDraw.Create;
+constructor Tb2Draw.Create;
 begin
    m_drawFlags := [];
    m_shapeColor_Inactive := MakeColor(0.5, 0.5, 0.3);
@@ -7598,12 +7643,12 @@ begin
             Continue;
 
          // Integrate velocities.
-         {$IFDEF OP_OVERLOAD}         
+         {$IFDEF OP_OVERLOAD}
          m_linearVelocity.AddBy(step.dt * (gravity + m_invMass * m_force));
          {$ELSE}
          AddBy(m_linearVelocity, Multiply(UPhysics2DTypes.Add(gravity,
             Multiply(m_force, m_invMass)), step.dt));
-         {$ENDIF}                  
+         {$ENDIF}
          m_angularVelocity := m_angularVelocity + step.dt * m_invI * m_torque;
 
          // Apply damping.
@@ -8657,7 +8702,7 @@ begin
       begin
          m_moveBuffer[i] := e_nullProxy;
 			   Exit;
-      end;   
+      end;
 end;
 
 function Tb2BroadPhase.QueryCallback(proxyId: Int32): Boolean;
@@ -9018,7 +9063,7 @@ begin
 end;
 
 //////////////////////////////////////////////////////////////
-// Joints    
+// Joints
 
 { Tb2Jacobian }
 
@@ -9030,7 +9075,7 @@ begin
    angularA := 0.0;
    angularB := 0.0;
 end;
-      
+
 procedure Tb2Jacobian.SetValue(const x1, x2: TVector2; a1, a2: PhysicsFloat);
 begin
 	 linearA := x1;
@@ -9038,11 +9083,11 @@ begin
    angularA := a1;
    angularB := a2;
 end;
-      
+
 function Tb2Jacobian.Compute(const x1, x2: TVector2; a1, a2: PhysicsFloat): PhysicsFloat;
 begin
    Result := b2Dot(linearA, x1) + angularA * a1 + b2Dot(linearB, x2) + angularB * a2;
-end;  
+end;
 {$ENDIF}
 
 { Tb2JointDef }
@@ -9098,7 +9143,7 @@ begin
    inherited;
 end;
 
-procedure Tb2Controller.Draw(debugDraw: Tb2DebugDraw);
+procedure Tb2Controller.Draw(debugDraw: Tb2Draw);
 begin
 end;
 
@@ -10006,8 +10051,8 @@ begin
    // Detect persists and removes.
    for i := 0 to manifold1.pointCount - 1 do
    begin
-      key := manifold1.points[i].id.key; 
-      state1[i] := b2_removeState;            
+      key := manifold1.points[i].id.key;
+      state1[i] := b2_removeState;
       for j := 0 to manifold2.pointCount - 1 do
          if manifold2.points[j].id.key = key then
          begin
@@ -10019,14 +10064,14 @@ begin
    // Detect persists and adds.
    for i := 0 to manifold2.pointCount - 1 do
    begin
-      key := manifold2.points[i].id.key;  
-      state2[i] := b2_addState;  
+      key := manifold2.points[i].id.key;
+      state2[i] := b2_addState;
       for j := 0 to manifold1.pointCount - 1 do
          if manifold1.points[j].id.key = key then
          begin
             state2[i] := b2_persistState;
             Break;
-         end;         
+         end;
    end;
 end;
 
@@ -16339,6 +16384,278 @@ begin
 	 Result := 0.0;
 end;
 
+{ Tb2RopeDef }
+
+constructor Tb2RopeDef.Create;
+begin
+		count := 0;
+		gravity := b2Vec2_Zero;
+		damping := 0.1;
+		k2 := 0.9;
+		k3 := 0.1;
+end;
+
+{ Tb2Rope }
+
+constructor Tb2Rope.Create(def: Tb2RopeDef; AutoFreeDef: Boolean = True);
+var
+   i: Integer;
+   m: PhysicsFloat;
+   count2, count3: Int32;
+   d1, d2: TVector2;
+begin
+   //b2Assert(def.count >= 3);
+   m_count := def.count;
+   SetLength(m_ps, m_count);
+   SetLength(m_p0s, m_count);
+   SetLength(m_vs, m_count);
+   SetLength(m_ims, m_count);
+
+   for i := 0 to m_count - 1 do
+   begin
+      m_ps[i] := def.vertices[i];
+      m_p0s[i] := def.vertices[i];
+      m_vs[i] := b2Vec2_Zero;
+
+      m := def.masses[i];
+      if m > 0.0 then
+         m_ims[i] := 1.0 / m
+      else
+         m_ims[i] := 0.0;
+   end;
+
+   count2 := m_count - 1;
+   count3 := m_count - 2;
+   SetLength(m_Ls, count2);
+   SetLength(m_as, count3);
+
+   for i := 0 to count2 - 1 do
+      m_Ls[i] := UPhysics2DTypes.b2Distance(m_ps[i], m_ps[i+1]);
+
+   for i := 0 to count3 - 1 do
+   begin
+      {$IFDEF OP_OVERLOAD}
+      d1 := m_ps[i + 1] - m_ps[i];
+      d2 := m_ps[i + 2] - m_ps[i + 1];
+      {$ELSE}
+      d1 := Subtract(m_ps[i + 1], m_ps[i]);
+      d2 := Subtract(m_ps[i + 2], m_ps[i + 1]);
+      {$ENDIF}
+
+      m_as[i] := ArcTan2(b2Cross(d1, d2), b2Dot(d1, d2));
+   end;
+
+   m_gravity := def.gravity;
+   m_damping := def.damping;
+   m_k2 := def.k2;
+   m_k3 := def.k3;
+
+   if AutoFreeDef then
+      def.Free
+end;
+
+procedure Tb2Rope.SolveC2;
+var
+   i: Integer;
+   count2: Int32;
+   p1, p2, d: TVector2;
+   L, im1, im2, s1, s2: PhysicsFloat;
+begin
+   count2 := m_count - 1;
+
+   for i := 0 to count2 - 1 do
+   begin
+      p1 := m_ps[i];
+      p2 := m_ps[i + 1];
+
+      {$IFDEF OP_OVERLOAD}
+      d := p2 - p1;
+      L := d.Normalize;
+      {$ELSE}
+      d := Subtract(p2, p1);
+      L := Normalize(d);
+      {$ENDIF}
+
+      im1 := m_ims[i];
+      im2 := m_ims[i + 1];
+
+      if im1 + im2 = 0.0 then
+         Continue;
+
+      s1 := im1 / (im1 + im2);
+      s2 := im2 / (im1 + im2);
+
+      {$IFDEF OP_OVERLOAD}
+      p1.SubtractBy(m_k2 * s1 * (m_Ls[i] - L) * d);
+      p2.AddBy(m_k2 * s2 * (m_Ls[i] - L) * d);
+      {$ELSE}
+      SubtractBy(p1, Multiply(d, m_k2 * s1 * (m_Ls[i] - L)));
+      AddBy(p2, Multiply(d, m_k2 * s2 * (m_Ls[i] - L)));
+      {$ENDIF}
+
+      m_ps[i] := p1;
+      m_ps[i + 1] := p2;
+   end;
+end;
+
+procedure Tb2Rope.SolveC3;
+var
+   i: Integer;
+   count3: Int32;
+   p1, p2, p3, d1, d2, Jd1, Jd2, J1, J2, J3: TVector2;
+   m1, m2, m3, L1sqr, L2sqr, a, b, angle, mass, C, impulse: PhysicsFloat;
+   twoPi: PhysicsFloat;
+begin
+   count3 := m_count - 2;
+   twoPi := 2.0 * Pi;
+
+   for i := 0 to count3 - 1 do
+   begin
+      p1 := m_ps[i];
+      p2 := m_ps[i + 1];
+      p3 := m_ps[i + 2];
+
+      m1 := m_ims[i];
+      m2 := m_ims[i + 1];
+      m3 := m_ims[i + 2];
+
+      {$IFDEF OP_OVERLOAD}
+      d1 := p2 - p1;
+      d2 := p3 - p2;
+      L1sqr := d1.SqrLength;
+      L2sqr := d2.SqrLength;
+      {$ELSE}
+      d1 := Subtract(p2, p1);
+      d2 := Subtract(p3, p2);
+      L1sqr := SqrLength(d1);
+      L2sqr := SqrLength(d2);
+      {$ENDIF}
+
+      if L1sqr * L2sqr = 0.0 then
+         Continue;
+
+      a := b2Cross(d1, d2);
+      b := b2Dot(d1, d2);
+
+      angle := ArcTan2(a, b);
+
+      {$IFDEF OP_OVERLOAD}
+      Jd1 := (-1.0 / L1sqr) * d1.Skew;
+      Jd2 := (1.0 / L2sqr) * d2.Skew;
+      J1 := -Jd1;
+      J2 := Jd1 - Jd2;
+      {$ELSE}
+      Jd1 := Multiply(Skew(d1), -1.0 / L1sqr);
+      Jd2 := Multiply(Skew(d2), 1.0 / L2sqr);
+      J1 := Negative(Jd1);
+      J2 := Subtract(Jd1, Jd2);
+      {$ENDIF}
+
+      J3 := Jd2;
+
+      mass := m1 * b2Dot(J1, J1) + m2 * b2Dot(J2, J2) + m3 * b2Dot(J3, J3);
+      if mass = 0.0 then
+         Continue;
+
+      mass := 1.0 / mass;
+
+      C := angle - m_as[i];
+
+      while (C > Pi) do
+      begin
+         angle := angle - twoPi;
+         C := angle - m_as[i];
+      end;
+
+      while (C < -Pi) do
+      begin
+         angle := angle + twoPi;
+         C := angle - m_as[i];
+      end;
+
+      impulse := - m_k3 * mass * C;
+
+      {$IFDEF OP_OVERLOAD}
+      p1.AddBy((m1 * impulse) * J1);
+      p2.AddBy((m2 * impulse) * J2);
+      p3.AddBy((m3 * impulse) * J3);
+      {$ELSE}
+      AddBy(p1, Multiply(J1, m1 * impulse));
+      AddBy(p2, Multiply(J2, m2 * impulse));
+      AddBy(p3, Multiply(J3, m3 * impulse));
+      {$ENDIF}
+
+      m_ps[i] := p1;
+      m_ps[i + 1] := p2;
+      m_ps[i + 2] := p3;
+   end;
+end;
+
+procedure Tb2Rope.Step(timeStep: PhysicsFloat; iterations: Int32);
+var
+   i: Integer;
+   d, inv_time: PhysicsFloat;
+begin
+   if timeStep = 0.0 then
+      Exit;
+
+   d := Exp(-timeStep * m_damping);
+
+   for i := 0 to m_count - 1 do
+   begin
+      m_p0s[i] := m_ps[i];
+      {$IFDEF OP_OVERLOAD}
+      if m_ims[i] > 0.0 then
+         m_vs[i].AddBy(timeStep * m_gravity);
+
+      m_vs[i].MultiplyBy(d);
+      m_ps[i].AddBy(timeStep * m_vs[i]);
+      {$ELSE}
+      if m_ims[i] > 0.0 then
+         AddBy(m_vs[i], Multiply(m_gravity, timeStep));
+
+      MultiplyBy(m_vs[i], d);
+      AddBy(m_ps[i], Multiply(m_vs[i], timeStep));
+      {$ENDIF}
+   end;
+
+   for i := 0 to iterations - 1 do
+   begin
+      SolveC2;
+      SolveC3;
+      SolveC2;
+   end;
+
+   inv_time := 1.0 / timeStep;
+   for i := 0 to m_count - 1 do
+      {$IFDEF OP_OVERLOAD}
+      m_vs[i] := inv_time * (m_ps[i] - m_p0s[i]);
+      {$ELSE}
+      m_vs[i] := Multiply(Subtract(m_ps[i], m_p0s[i]), inv_time);
+      {$ENDIF}
+end;
+
+procedure Tb2Rope.Draw(draw: Tb2Draw);
+var
+   i: Integer;
+   c: RGBA;
+begin
+   c := MakeColor(0.4, 0.5, 0.7);
+
+   for i := 0 to m_count - 2 do
+      draw.DrawSegment(m_ps[i], m_ps[i+1], c);
+end;
+
+procedure Tb2Rope.SetAngle(angle: PhysicsFloat);
+var
+   i: Integer;
+   count3: Int32;
+begin
+   count3 := m_count - 2;
+   for i := 0 to count3 - 1 do
+      m_as[i] := angle;
+end;
+
 initialization
    b2_defaultFilter := Tb2ContactFilter.Create;
    b2_defaultListener := Tb2ContactListener.Create;
@@ -16380,4 +16697,3 @@ finalization
    ep_collieder.Free;
 
 end.
-

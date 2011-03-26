@@ -81,7 +81,7 @@ type
 
   TTester = class;
 
-  TDrawer = class(Tb2DebugDraw)
+  TDrawer = class(Tb2Draw)
   public
       Canvas: TGLCanvas;
 
@@ -268,7 +268,7 @@ begin
    if cboTests.ItemIndex = -1 then
       ActiveEntry := nil
    else
-      ActiveEntry := @TestEntries[cboTests.ItemIndex];   
+      ActiveEntry := @TestEntries[cboTests.ItemIndex];
    if Assigned(ActiveEntry) then
    begin
       if Assigned(Test) then
@@ -294,7 +294,7 @@ procedure TfrmMain.chklstVisibilityClickCheck(Sender: TObject);
 type
    TSettingArray = array[0..SizeOf(TSettings) div SizeOf(Boolean) - 1] of Boolean;
 var
-   flag: Tb2DebugDrawBitsSet;
+   flag: Tb2DrawBitsSet;
    i: Integer;
 begin
    for i := 0 to High(TSettingArray) - 7 do
@@ -736,7 +736,7 @@ begin
    m_world.SetContactListener(Self);
 
    m_debugDraw := Drawer;
-   m_world.DebugDraw := m_debugDraw;
+   m_world.Draw := m_debugDraw;
 
    m_bombSpawning := False;
 	 m_stepCount := 0;
@@ -1138,4 +1138,5 @@ finalization
    _QueryCallback.Free;
 
 end.
+
 

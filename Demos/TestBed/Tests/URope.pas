@@ -7,19 +7,10 @@ uses
    UMain, UPhysics2DTypes, UPhysics2D, SysUtils;
 
 type
-   /// This test shows how a rope joint can be used to stabilize a chain of
-   /// bodies with a heavy payload. Notice that the rope joint just prevents
-   /// excessive stretching and has no other effect.
-   /// By disabling the rope joint you can see that the Box2D solver has trouble
-   /// supporting heavy bodies with light bodies. Try playing around with the
-   /// densities, time step, and iterations to see how they affect stability.
-   /// This test also shows how to use contact filtering. Filtering is configured
-   /// so that the payload does not collide with the chain.
-
    TRope = class(TTester)
    public
-    	m_ropeDef: Tb2RopeJointDef;
-	    m_rope: Tb2Joint;
+     	m_rope: Tb2Rope;
+	    m_angle: PhysicsFloat;
 
       constructor Create; override;
       destructor Destroy; override;
@@ -34,121 +25,74 @@ implementation
 { TRope }
 
 constructor TRope.Create;
-const N = 10;
-const y = 15.0;
+const N = 40;
 
 var
    i: Integer;
-   ground, prevBody, body: Tb2Body;
-   bd: Tb2BodyDef;
-   eshape: Tb2EdgeShape;
-   shape: Tb2PolygonShape;
-   fd: Tb2FixtureDef;
-   jd: Tb2RevoluteJointDef;
-   anchor: TVector2;
-   extraLength: PhysicsFloat;
+   vertices: TVectorArray;
+   masses: TPhysicsFloatArray;
+   def: Tb2RopeDef;
 begin
    inherited;
 
-   m_ropeDef := Tb2RopeJointDef.Create;
+   SetLength(vertices, N);
+   SetLength(masses, N);
 
+   for i := 0 to N - 1 do
    begin
-      bd := Tb2BodyDef.Create;
-      ground := m_world.CreateBody(bd);
-
-      eshape := Tb2EdgeShape.Create;
-      eshape.SetVertices(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
-      ground.CreateFixture(eshape, 0.0);
+      SetValue(vertices[i], 0.0, 20.0 - 0.25 * i);
+			masses[i] := 1.0;
    end;
 
-   begin
-      shape := Tb2PolygonShape.Create;
-      shape.SetAsBox(0.5, 0.125);
+   masses[0] := 0.0;
+   masses[1] := 0.0;
 
-      fd := Tb2FixtureDef.Create;
-      fd.shape := shape;
-      fd.density := 20.0;
-      fd.friction := 0.2;
-      fd.filter.categoryBits := $0001;
-      fd.filter.maskBits := $FFFF and (not $0002);
+   def := Tb2RopeDef.Create;
+   def.vertices := vertices;
+   def.count := N;
+   SetValue(def.gravity, 0.0, -10.0);
+   def.masses := masses;
+   def.damping := 0.1;
+   def.k2 := 1.0;
+   def.k3 := 0.5;
 
-      jd := Tb2RevoluteJointDef.Create;
-      jd.collideConnected := False;
+   m_rope := Tb2Rope.Create(def);
 
-      SetValue(m_ropeDef.localAnchorA, 0.0, y);
-
-      prevBody := ground;
-      bd := Tb2BodyDef.Create;
-      for i := 0 to N - 1 do
-      begin
-         bd.bodyType := b2_dynamicBody;
-         SetValue(bd.position, 0.5 + 1.0 * i, y);
-         if i = N - 1 then
-         begin
-            shape.SetAsBox(1.5, 1.5);
-            fd.density := 100.0;
-            fd.filter.categoryBits := $0002;
-            SetValue(bd.position, 1.0 * i, y);
-            bd.angularDamping := 0.4;
-         end;
-
-         body := m_world.CreateBody(bd, False);
-         body.CreateFixture(fd, False, False);
-
-         anchor.x := i;
-         anchor.y := y;
-         jd.Initialize(prevBody, body, anchor);
-         m_world.CreateJoint(jd, False);
-
-         prevBody := body;
-      end;
-      bd.Free;
-      fd.Free;
-      jd.Free;
-      shape.Free;
-
-      extraLength := 0.01;
-      m_ropeDef.localAnchorB := b2Vec2_Zero;
-      m_ropeDef.maxLength := N - 1.0 + extraLength;
-      m_ropeDef.bodyB := prevBody;
-   end;
-
-   m_ropeDef.bodyA := ground;
-   m_rope := m_world.CreateJoint(m_ropeDef, False);
+   m_angle := 0.05 * Pi;
+   m_rope.SetAngle(m_angle);
 end;
 
 destructor TRope.Destroy;
 begin
-   m_ropeDef.Free;
+   m_rope.Free;
    inherited;
 end;
 
 procedure TRope.Keyboard(key: Byte);
 begin
-   if key = Ord('J') then
+   if key = Ord('Q') then
    begin
-      if Assigned(m_rope) then
-      begin
-			  	m_world.DestroyJoint(m_rope);
-			  	m_rope := nil;
-      end
-      else
-         m_rope := m_world.CreateJoint(m_ropeDef, False);
+      m_angle := b2Max(-Pi, m_angle - 0.05 * Pi);
+			m_rope.SetAngle(m_angle);
+   end
+   else if key = Ord('E') then
+   begin
+			m_angle := b2Min(Pi, m_angle + 0.05 * Pi);
+			m_rope.SetAngle(m_angle);
    end;
 end;
 
 procedure TRope.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
+   m_rope.Step(timeStep, 1);
    inherited;
-   DrawText('Press (j) to toggle the rope joint.');
-   if Assigned(m_rope) then
-      DrawText('Rope ON')
-   else
-      DrawText('Rope OFF');
+
+   m_rope.Draw(m_debugDraw);
+   DrawText('Press (q, e) to adjust target angle');
+   DrawText(Format('Target angle = %g degrees', [m_angle * 180.0 / Pi]));
 end;
 
 initialization
-   RegisterTestEntry('Rope Joint', TRope);
+   RegisterTestEntry('Free Rope', TRope);
 
 end.
-
