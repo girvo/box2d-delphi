@@ -9,6 +9,9 @@ uses
 type
    TTiles = class(TTester)
    public
+      m_fixtureCount: Int32;
+      m_createTime: Float64;
+
       constructor Create; override;
       procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
    end;
@@ -34,6 +37,7 @@ var
    position, x, y: TVector2;
 begin
    inherited;
+   m_fixtureCount := 0;
    bd := Tb2BodyDef.Create;
    bd.position.y := -a;
    ground := m_world.CreateBody(bd);
@@ -47,6 +51,7 @@ begin
       begin
          shape.SetAsBox(a, a, position, 0.0);
          ground.CreateFixture(shape, 0.0, False);
+         Inc(m_fixtureCount);
          position.x := position.x + 2.0 * a;
       end;
       position.y := position.y - 2.0 * a;
@@ -67,6 +72,7 @@ begin
          bd.position := y;
          body := m_world.CreateBody(bd, False);
          body.CreateFixture(shape, 5.0, False);
+         Inc(m_fixtureCount);
          {$IFDEF OP_OVERLOAD}
          y.AddBy(deltaY);
          {$ELSE}
@@ -81,6 +87,8 @@ begin
    end;
    bd.Free;
    shape.Free;
+
+   m_createTime := GetRawReferenceTime;
 end;
 
 procedure TTiles.Step(var settings: TSettings; timeStep: PhysicsFloat);
@@ -97,6 +105,7 @@ begin
    DrawText('Test of dynamic tree performance in worse case scenario.');
    DrawText('I know this is slow. I hope to address this in a future update.');
    DrawText(Format('dynamic tree height := %d, min := %d', [height, Trunc(minimumHeight)]));
+   DrawText(Format('create time = %6.2f ms, fixture count = %d', [m_createTime, m_fixtureCount]));
    inherited;
 end;
 

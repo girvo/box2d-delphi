@@ -532,7 +532,10 @@ begin
       Test.DrawText(ActiveEntry^.Name);
       Test.NextLine; // A space line
       {$IFDEF COMPUTE_PHYSICSTIME}
-      Test.DrawText(Format('Delta Time: %.4fs     Physics Time: %.5fs', [deltaTime, Test.m_world.PhysicsTime]));
+      Test.DrawText(Format('Delta Time: %.4fs  Physics Time: %.5fs', [deltaTime, Test.m_world.Profile.step]));
+      Test.DrawText(Format('Collide Time: %.4fs  Solve Time: %.5fs  SolveTOI Time: %.5fs',
+         [Test.m_world.Profile.collide, Test.m_world.Profile.solve, Test.m_world.Profile.solveTOI]));
+      Test.DrawText('');
       {$ELSE}
       Test.DrawText(Format('Delta Time: %.4fs', [deltaTime]));
       {$ENDIF}
