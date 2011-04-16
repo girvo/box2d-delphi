@@ -97,6 +97,15 @@ type
    Tb2Controller = class;
    {$ENDIF}
 
+   /// Profiling data. Times are in milliseconds.
+   Pb2Profile = ^Tb2Profile;
+   Tb2Profile = record
+      step: Float64;
+      collide: Float64;
+      solve: Float64;
+      solveTOI: Float64;
+   end;
+
    /// The features that intersect to form the contact point
    /// This must be 4 bytes or less.
    Tb2ContactFeature = record
@@ -336,9 +345,6 @@ type
    Tb2World = class
    private
       m_flags: UInt16;
-      {$IFDEF COMPUTE_PHYSICSTIME}
-      m_physicsTime: Double;
-      {$ENDIF}
 
       m_contactManager: Tb2ContactManager;
 
@@ -366,6 +372,10 @@ type
 	    m_subStepping: Boolean;
 	    m_stepComplete: Boolean;
 
+      {$IFDEF COMPUTE_PHYSICSTIME}
+      m_profile: Tb2Profile;
+      {$ENDIF}
+
       procedure Solve(const step: Tb2TimeStep);
 
       { Sequentially solve TOIs for each body. We bring each body to the time
@@ -375,6 +385,9 @@ type
       procedure DrawShape(fixture: Tb2Fixture; const xf: Tb2Transform; const color: RGBA);
       procedure DrawJoint(joint: Tb2Joint);
 
+      {$IFDEF COMPUTE_PHYSICSTIME}
+      function FGetProfile: Pb2Profile;
+      {$ENDIF}
    public
       /// Construct a world object.
       /// @param gravity the world gravity vector.
@@ -487,7 +500,7 @@ type
       property SubStepping: Boolean read m_subStepping write m_subStepping;
 
       {$IFDEF COMPUTE_PHYSICSTIME}
-      property PhysicsTime: Double read m_physicsTime;
+      property Profile: Pb2Profile read FGetProfile;
       {$ENDIF}
    end;
 
@@ -2521,6 +2534,8 @@ function Compute(var jb: Tb2Jacobian; const x1, x2: TVector2; a1, a2: PhysicsFlo
 /// Tb2DynamicTreeNode
 function IsLeaf(const node: Tb2DynamicTreeNode): Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 {$ENDIF}
+
+function GetRawReferenceTime: Double;
 
 /////////////////// Color functions //////
 function MakeColor(r, g, b: Single; a: Single = 1.0): RGBA;
@@ -5763,6 +5778,13 @@ begin
    end;
 end;
 
+{$IFDEF COMPUTE_PHYSICSTIME}
+function Tb2World.FGetProfile: Pb2Profile;
+begin
+   Result := @m_profile;
+end;
+{$ENDIF}
+
 function Tb2World.CreateBody(def: Tb2BodyDef; AutoFreeBodyDef: Boolean = True): Tb2Body;
 begin
    //b2Assert(IsLocked() == false);
@@ -6062,7 +6084,6 @@ begin
 end;
 {$ENDIF}
 
-{$IFDEF COMPUTE_PHYSICSTIME}
 function GetRawReferenceTime: Double;
 var
    counter: Int64;
@@ -6070,16 +6091,16 @@ begin
    QueryPerformanceCounter(counter);
    Result := counter / vCounterFrequency;
 end;
-{$ENDIF}
 
 procedure Tb2World.Step(timeStep: PhysicsFloat; velocityIterations,
    positionIterations: Int32; Draw: Boolean = False);
 var
    step: Tb2TimeStep;
-   {$IFDEF COMPUTE_PHYSICSTIME}old_physicsTime: Double;{$ENDIF}
+   {$IFDEF COMPUTE_PHYSICSTIME}startTime, tmpTime: Double;{$ENDIF}
 begin
    {$IFDEF COMPUTE_PHYSICSTIME}
-   old_physicsTime := GetRawReferenceTime;
+   FillChar(m_profile, SizeOf(m_profile), 0);
+   startTime := GetRawReferenceTime;
    {$ENDIF}
 
    // If new fixtures were added, we need to find the new contacts.
@@ -6103,17 +6124,39 @@ begin
    step.warmStarting := m_warmStarting;
 
    // Update contacts. This is where some contacts are destroyed.
+   {$IFDEF COMPUTE_PHYSICSTIME}
+   tmpTime := GetRawReferenceTime;
    m_contactManager.Collide;
+   m_profile.collide := GetRawReferenceTime - tmpTime;
+   {$ELSE}
+   m_contactManager.Collide;
+   {$ENDIF}
 
    // Integrate velocities, solve velocity constraints, and integrate positions.
    if timeStep > 0.0 then
    begin
       if m_stepComplete then
+      begin
+         {$IFDEF COMPUTE_PHYSICSTIME}
+         tmpTime := GetRawReferenceTime;
          Solve(step);
+         m_profile.solve := GetRawReferenceTime - tmpTime;
+         {$ELSE}
+         Solve(step);
+         {$ENDIF}
+      end;
 
       // Handle TOI events.
       if m_continuousPhysics then
+      begin
+         {$IFDEF COMPUTE_PHYSICSTIME}
+         tmpTime := GetRawReferenceTime;
          SolveTOI(step);
+         m_profile.solveTOI := GetRawReferenceTime - tmpTime;
+         {$ELSE}
+         SolveTOI(step);
+         {$ENDIF}
+      end;
 
       m_inv_dt0 := step.inv_dt;
    end;
@@ -6124,7 +6167,7 @@ begin
    m_flags := m_flags and (not e_world_locked);
 
    {$IFDEF COMPUTE_PHYSICSTIME}
-   m_physicsTime := GetRawReferenceTime - old_physicsTime;
+   m_profile.step := GetRawReferenceTime - startTime;
    {$ENDIF}
 
    if Draw then
