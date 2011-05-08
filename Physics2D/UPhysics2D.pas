@@ -55,6 +55,7 @@ unit UPhysics2D;
   Contact me: http://hi.baidu.com/wqyfavor
               wqyfavor@qq.com
               QQ: 466798985
+              Tweet: t.qq.com/wqyfavor
 }
 
 interface
@@ -813,6 +814,8 @@ type
          1: (next: Int32);
    end;
 
+//{$DEFINE B2_USE_DYNAMIC_TREE}
+{$IFDEF B2_USE_DYNAMIC_TREE}
    /// A dynamic tree arranges data in a binary tree to accelerate
    /// queries such as volume queries and ray casts. Leafs are proxies
    /// with an AABB. In the tree we expand the proxy AABB by b2_fatAABBFactor
@@ -883,6 +886,72 @@ type
 
       procedure Validate; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
    end;
+{$ELSE}
+   Tb2Proxy = record
+     aabb: Tb2AABB;
+     userData: Pointer;
+     id: Int32;
+   end;
+
+   /// This implementation is not a tree at all. It is just a cache friendly array of AABBs.
+   Tb2DynamicTree = class
+   private
+      // Map of ids to proxies indices. This may have holes (which contain a free list).
+      m_proxyMap: array of Int32;
+
+      // Contiguous array of proxies
+      m_proxies: array of Tb2Proxy;
+      m_proxyCount: Int32;
+      m_proxyCapacity: Int32;
+
+      m_freeId: Int32;
+
+      procedure Initialize;
+   public
+      constructor Create;
+
+      /// Create a proxy. Provide a tight fitting AABB and a userData pointer.
+      function CreateProxy(const _aabb: Tb2AABB; _userData: Pointer): Int32;
+
+      /// Destroy a proxy. This asserts if the id is invalid.
+      procedure DestroyProxy(proxyId: Int32); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+
+      /// Move a proxy with a swepted AABB. If the proxy has moved outside of its fattened AABB,
+      /// then the proxy is removed from the tree and re-inserted. Otherwise
+      /// the function returns immediately.
+      /// @return true if the proxy was re-inserted.
+      function MoveProxy(proxyId: Int32; const aabb: Tb2AABB;
+         const displacement: TVector2): Boolean;
+
+      /// Perform some iterations to re-balance the tree.
+      procedure Rebalance(iterations: Int32);
+
+      /// Get proxy user data.
+      /// @return the proxy user data or 0 if the id is invalid.
+      function GetUserData(proxyId: Int32): Pointer; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+
+      /// Get the fat AABB for a proxy.
+      function GetFatAABB(proxyId: Int32): Pb2AABB; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+
+    	/// Compute the height of the binary tree in O(N) time. Should not be called often.
+      function ComputeHeight: Int32; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+
+      /// Query an AABB for overlapping proxies. The callback class
+      /// is called for each proxy that overlaps the supplied AABB.
+      procedure Query(callback: Tb2GenericCallBackWrapper; const _aabb: Tb2AABB);
+
+      /// Ray-cast against the proxies in the tree. This relies on the callback
+      /// to perform a exact ray-cast in the case were the proxy contains a shape.
+      /// The callback also performs the any collision filtering. This has performance
+      /// roughly equal to k * log(n), where k is the number of collisions and n is the
+      /// number of proxies in the tree.
+      /// @param input the ray-cast input data. The ray extends from p1 to p1 + maxFraction * (p2 - p1).
+      /// @param callback a callback class that is called for each proxy that is hit by the ray.
+      procedure RayCast(callback: Tb2GenericCallBackWrapper; const input: Tb2RayCastInput);
+
+      procedure Validate; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+   end;
+{$ENDIF}
 
    /// The broad-phase is used for computing pairs and performing volume queries and ray casts.
    /// This broad-phase does not persist pairs. Instead, this reports potentially new pairs.
@@ -8068,6 +8137,8 @@ end;
 
 { Tb2DynamicTree }
 
+{$IFDEF B2_USE_DYNAMIC_TREE}
+
 constructor Tb2DynamicTree.Create;
 begin
    m_root := b2_nullNode;
@@ -8661,6 +8732,271 @@ procedure Tb2DynamicTree.Validate;
 begin
    CountLeaves(m_root);
 end;
+
+{$ELSE}
+
+constructor Tb2DynamicTree.Create;
+begin
+   m_proxyCapacity := 128;
+   m_proxyCount := 0;
+
+   SetLength(m_proxyMap, m_proxyCapacity);
+   SetLength(m_proxies, m_proxyCapacity);
+
+   Initialize;
+end;
+
+procedure Tb2DynamicTree.Initialize;
+var
+   i: Integer;
+begin
+   // Build the free list
+   m_freeId := m_proxyCount;
+   for i := m_freeId to m_proxyCapacity - 2 do
+      m_proxyMap[i] := i + 1;
+   m_proxyMap[m_proxyCapacity - 1] := b2_nullNode;
+end;
+
+function Tb2DynamicTree.ComputeHeight: Int32;
+begin
+   Result := 0;
+end;
+
+function Tb2DynamicTree.CreateProxy(const _aabb: Tb2AABB;
+   _userData: Pointer): Int32;
+var
+   id: Int32;
+begin
+   if m_proxyCount = m_proxyCapacity then
+   begin
+      m_proxyCapacity := m_proxyCapacity * 2;
+      SetLength(m_proxyMap, m_proxyCapacity);
+      SetLength(m_proxies, m_proxyCapacity);
+
+      Initialize;
+   end;
+
+   //b2Assert(0 <= m_freeId && m_freeId < m_proxyCapacity);
+   Result := m_freeId;
+   m_freeId := m_proxyMap[Result];
+
+   m_proxies[m_proxyCount].aabb := _aabb;
+   m_proxies[m_proxyCount].userData := _userData;
+   m_proxies[m_proxyCount].id := Result;
+   m_proxyMap[Result] := m_proxyCount;
+   Inc(m_proxyCount);
+end;
+
+procedure Tb2DynamicTree.DestroyProxy(proxyId: Int32);
+var
+   index: Int32;
+begin
+   // b2Assert(0 < m_proxyCount && 0 <= proxyId && proxyId < m_proxyCapacity);
+   index := m_proxyMap[proxyId];
+
+   // Add to free list
+   m_proxyMap[proxyId] := m_freeId;
+   m_freeId := proxyId;
+
+   // Keep proxy array contiguous
+   if index < m_proxyCount - 1 then
+   begin
+      m_proxies[index] := m_proxies[m_proxyCount - 1];
+      m_proxyMap[m_proxies[index].id] := index;
+   end;
+
+   Dec(m_proxyCount);
+   Validate;
+end;
+
+function Tb2DynamicTree.MoveProxy(proxyId: Int32; const aabb: Tb2AABB;
+   const displacement: TVector2): Boolean;
+const
+   _r: TVector2 = (X: b2_aabbExtension; Y: b2_aabbExtension);
+var
+   b: Tb2AABB;
+   d: TVector2;
+   index: Int32;
+begin
+   // b2Assert(0 < m_proxyCount && 0 <= proxyId && proxyId < m_proxyCapacity);
+	 // B2_NOT_USED(displacement);
+
+   index := m_proxyMap[proxyId];
+
+   if {$IFDEF OP_OVERLOAD}m_proxies[index].aabb.Contains(aabb)
+      {$ELSE}Contains(m_proxies[index].aabb, aabb){$ENDIF} then
+   begin
+      Result := False;
+      Exit;
+   end;
+
+   // Extend AABB.
+   b := aabb;
+   {$IFDEF OP_OVERLOAD}
+   b.lowerBound.SubtractBy(_r);
+   b.upperBound.AddBy(_r);
+   {$ELSE}
+   SubtractBy(b.lowerBound, _r);
+   AddBy(b.upperBound, _r);
+   {$ENDIF}
+
+   // Predict AABB displacement.
+   {$IFDEF OP_OVERLOAD}
+   d := b2_aabbMultiplier * displacement;
+   {$ELSE}
+   d := Multiply(displacement, b2_aabbMultiplier);
+   {$ENDIF}
+
+   with b do
+   begin
+      if d.x < 0.0 then
+         lowerBound.x := lowerBound.x + d.x
+      else
+         upperBound.x := upperBound.x + d.x;
+
+      if d.y < 0.0 then
+         lowerBound.y := lowerBound.y + d.y
+      else
+         upperBound.y := upperBound.y + d.y;
+   end;
+
+   m_proxies[index].aabb := b;
+   Result := True;
+end;
+
+procedure Tb2DynamicTree.Rebalance(iterations: Int32);
+begin
+   //B2_NOT_USED(iterations);
+end;
+
+function Tb2DynamicTree.GetUserData(proxyId: Int32): Pointer;
+begin
+   Result := m_proxies[m_proxyMap[proxyId]].userData;
+end;
+
+function Tb2DynamicTree.GetFatAABB(proxyId: Int32): Pb2AABB;
+begin
+   Result := @m_proxies[m_proxyMap[proxyId]].aabb;
+end;
+
+procedure Tb2DynamicTree.Query(callback: Tb2GenericCallBackWrapper; const _aabb: Tb2AABB);
+var
+   i: Integer;
+begin
+   for i := 0 to m_proxyCount - 1 do
+      if b2TestOverlap(m_proxies[i].aabb, _aabb) then
+         if not callback.QueryCallback(m_proxies[i].id) then
+            Exit;
+end;
+
+procedure Tb2DynamicTree.RayCast(callback: Tb2GenericCallBackWrapper;
+   const input: Tb2RayCastInput);
+var
+   i: Integer;
+   maxFraction, value: PhysicsFloat;
+   r, t, v, abs_v, c, h: TVector2;
+   segmentAABB: Tb2AABB;
+   subInput: Tb2RayCastInput;
+begin
+   {$IFDEF OP_OVERLOAD}
+   r := input.p2 - input.p1;
+   //b2Assert(r.LengthSquared() > 0.0f);
+   r.Normalize;
+   {$ELSE}
+   r := Subtract(input.p2, input.p1);
+   //b2Assert(r.LengthSquared() > 0.0f);
+   Normalize(r);
+   {$ENDIF}
+
+   // v is perpendicular to the segment.
+   v := b2Cross(1.0, r);
+   abs_v := b2Abs(v);
+
+   // Separating axis for segment (Gino, p80).
+   // |dot(v, p1 - c)| > dot(|v|, h)
+
+   maxFraction := input.maxFraction;
+
+   // Build a bounding box for the segment.
+   {$IFDEF OP_OVERLOAD}
+   t := input.p1 + maxFraction * (input.p2 - input.p1);
+   {$ELSE}
+   t := Add(input.p1, Multiply(Subtract(input.p2, input.p1), maxFraction));
+   {$ENDIF}
+   segmentAABB.lowerBound := b2Min(input.p1, t);
+   segmentAABB.upperBound := b2Max(input.p1, t);
+
+   for i := 0 to m_proxyCount - 1 do
+   begin
+      with m_proxies[i] do
+      begin
+         if not b2TestOverlap(aabb, segmentAABB) then
+            Continue;
+
+         // Separating axis for segment (Gino, p80).
+         // |dot(v, p1 - c)| > dot(|v|, h)
+         {$IFDEF OP_OVERLOAD}
+         c := aabb.GetCenter;
+         h := aabb.GetExtents;
+         if Abs(b2Dot(v, input.p1 - c)) - b2Dot(abs_v, h) > 0.0 then
+            Continue;
+         {$ELSE}
+         c := GetCenter(aabb);
+         h := GetExtents(aabb);
+         if Abs(b2Dot(v, Subtract(input.p1, c))) - b2Dot(abs_v, h) > 0.0 then
+            Continue;
+         {$ENDIF}
+
+         subInput.p1 := input.p1;
+         subInput.p2 := input.p2;
+         subInput.maxFraction := maxFraction;
+
+         value := callback.RayCastCallback(subInput, id);
+
+         if value = 0.0 then
+            Exit; // The client has terminated the ray cast.
+
+         if value > 0.0 then
+         begin
+            maxFraction := value;
+            // Update segment bounding box.
+            {$IFDEF OP_OVERLOAD}
+            t := input.p1 + maxFraction * (input.p2 - input.p1);
+            {$ELSE}
+            t := Add(input.p1, Multiply(Subtract(input.p2, input.p1), maxFraction));
+            {$ENDIF}
+            segmentAABB.lowerBound := b2Min(input.p1, t);
+            segmentAABB.upperBound := b2Max(input.p1, t);
+         end;
+      end;
+   end;
+end;
+
+procedure Tb2DynamicTree.Validate;
+var
+   //i: Integer;
+   id, freeCount: Int32;
+begin
+   //b2Assert(m_proxyCount > 0 || m_freeId == b2_nullNode);
+   //b2Assert(m_freeId == b2_nullNode || m_freeId < m_proxyCapacity);
+
+   id := m_freeId;
+   //freeCount := 0;
+   while id <> b2_nullNode do
+   begin
+      //Inc(freeCount);
+      //b2Assert(freeCount <= m_proxyCapacity);
+      id := m_proxyMap[id];
+   end;
+
+   //b2Assert(freeCount + m_proxyCount == m_proxyCapacity);
+   //b2Assert(m_proxyCount <= m_proxyCapacity);
+
+   //for i := 0 to m_proxyCount - 1 do
+      //b2Assert(m_proxyMap[m_proxies[i].id] == i);
+end;
+
+{$ENDIF}
 
 { Tb2BroadPhase }
 
