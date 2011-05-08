@@ -824,7 +824,6 @@ type
     	aabb: Tb2AABB; /// Enlarged AABB
       userData: Pointer;
       child1, child2: Int32;
-      leafCount: Int32;
       height: Int32; // Node is in use if height > 0
       case Byte of
          0: (parent: Int32);
