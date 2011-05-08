@@ -98,7 +98,7 @@ var
    minimumHeight: PhysicsFloat;
 begin
    cm := m_world.GetContactManager;
-   height := cm.m_broadPhase.ComputeHeight;
+   height := cm.m_broadPhase.GetTreeHeight;
    leafCount := cm.m_broadPhase.GetProxyCount;
    minimumNodeCount := 2 * leafCount - 1;
    minimumHeight := Ceil(Ln(minimumNodeCount) / Ln(2.0));
