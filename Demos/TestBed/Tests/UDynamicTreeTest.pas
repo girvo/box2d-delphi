@@ -355,7 +355,7 @@ begin
          m_rayCastInput.p1), m_rayActor.fraction)), 6.0, c_color5);
       {$ENDIF}
 
-   height := m_tree.ComputeHeight;
+   height := m_tree.GetHeight;
    DrawText(Format('dynamic tree height = %d', [height]));
    Inc(m_stepCount);
 end;

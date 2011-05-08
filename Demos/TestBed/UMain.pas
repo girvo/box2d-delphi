@@ -822,8 +822,11 @@ begin
 
    if settings.drawStats then
    begin
-      DrawText(Format('bodies/contacts/joints/proxies = %d/%d/%d/%d',
-         [m_world.GetBodyCount, m_world.GetContactCount, m_world.GetJointCount, m_world.GetProxyCount]));
+      NextLine; // space line
+      DrawText(Format('bodies/contacts/joints = %d/%d/%d',
+         [m_world.GetBodyCount, m_world.GetContactCount, m_world.GetJointCount]));
+      DrawText(Format('proxies/height/balance/quality = %d/%d/%d/%f',
+         [m_world.GetProxyCount, m_world.GetTreeHeight, m_world.GetTreeBalance, m_world.GetTreeQuality]));
       NextLine; // space line
    end;
 

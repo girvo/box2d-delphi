@@ -471,6 +471,16 @@ type
       function GetContactList: Pb2Contact; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       function GetContactCount: Int32; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
+      /// Get the height of the dynamic tree.
+	    function GetTreeHeight: Int32;
+
+	    /// Get the balance of the dynamic tree.
+	    function GetTreeBalance: Int32;
+
+	    /// Get the quality metric of the dynamic tree. The smaller the better.
+	    /// The minimum is 1.
+    	function GetTreeQuality: PhysicsFloat;
+
       function GetProxyCount: Int32; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}/// Get the number of broad-phase proxies.
 
       /// Change the global gravity vector.
@@ -799,23 +809,29 @@ type
       next: Int32;
    end;
 
+{$DEFINE B2_USE_DYNAMIC_TREE}
+
+{$IFDEF B2_USE_DYNAMIC_TREE}
+
+   /// A node in the dynamic tree. The client does not interact with this directly.
+   Pb2DynamicTreeNode = ^Tb2DynamicTreeNode;
    Tb2DynamicTreeNode = record
    {$IFDEF OP_OVERLOAD}
    public
       function IsLeaf: Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
    public
    {$ENDIF}
-    	aabb: Tb2AABB; /// This is the fattened AABB.
+    	aabb: Tb2AABB; /// Enlarged AABB
       userData: Pointer;
       child1, child2: Int32;
       leafCount: Int32;
+      height: Int32; // Node is in use if height > 0
       case Byte of
          0: (parent: Int32);
          1: (next: Int32);
    end;
 
-//{$DEFINE B2_USE_DYNAMIC_TREE}
-{$IFDEF B2_USE_DYNAMIC_TREE}
+   /// A dynamic AABB tree broad-phase, inspired by Nathanael Presson's btDbvt.
    /// A dynamic tree arranges data in a binary tree to accelerate
    /// queries such as volume queries and ray casts. Leafs are proxies
    /// with an AABB. In the tree we expand the proxy AABB by b2_fatAABBFactor
@@ -829,7 +845,7 @@ type
       m_nodes: array of Tb2DynamicTreeNode;
       m_nodeCount, m_nodeCapacity: Int32;
       m_freeList: Int32;
-      m_path: UInt32; /// This is used incrementally traverse the tree for re-balancing.
+      m_path: UInt32; /// This is used to incrementally traverse the tree for re-balancing.
       m_insertionCount: Int32;
 
       function AllocateNode: Int32;
@@ -838,8 +854,18 @@ type
       procedure InsertLeaf(leaf: Int32);
       procedure RemoveLeaf(leaf: Int32);
 
+      function Balance(iA: Int32): Int32;
+	    procedure Shuffle(index: Int32);
+
+      function ComputeHeight: Int32; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       function ComputeHeight(nodeId: Int32): Int32; overload;
-      function CountLeaves(nodeId: Int32): Int32;
+
+      procedure ValidateStructure(index: Int32);
+	    procedure ValidateMetrics(index: Int32);
+
+	    function GetMaxBalance(index: Int32): Int32; overload;
+	    function GetTotalArea(index: Int32): PhysicsFloat;
+
    public
       constructor Create;
 
@@ -868,9 +894,6 @@ type
       /// Get the fat AABB for a proxy.
       function GetFatAABB(proxyId: Int32): Pb2AABB; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
-    	/// Compute the height of the binary tree in O(N) time. Should not be called often.
-      function ComputeHeight: Int32; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-
       /// Query an AABB for overlapping proxies. The callback class
       /// is called for each proxy that overlaps the supplied AABB.
       procedure Query(callback: Tb2GenericCallBackWrapper; const _aabb: Tb2AABB);
@@ -885,8 +908,21 @@ type
       procedure RayCast(callback: Tb2GenericCallBackWrapper; const input: Tb2RayCastInput);
 
       procedure Validate; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+
+	    /// Compute the height of the binary tree in O(N) time. Should not be called often.
+      function GetHeight: Int32; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+
+      /// Get the maximum balance of an node in the tree. The balance is the difference
+	    /// in height of the two children of a node.
+      function GetMaxBalance: Int32; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+
+	    /// Get the ratio of the sum of the node areas to the root area.
+	    function GetAreaRatio: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
    end;
-{$ELSE}
+{$ENDIF}
+
+{$IFDEF B2_USE_BRUTE_FORCE}
+
    Tb2Proxy = record
      aabb: Tb2AABB;
      userData: Pointer;
@@ -1019,7 +1055,9 @@ type
       /// @param callback a callback class that is called for each proxy that is hit by the ray.
       procedure RayCast(callback: Tb2GenericCallBackWrapper; const input: Tb2RayCastInput); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
-      function ComputeHeight: Int32; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Compute the height of the embedded tree.
+      function GetTreeHeight: Int32; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Get the height of the embedded tree.
+      function GetTreeBalance: Int32; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Get the balance of the embedded tree.
+      function GetTreeQuality: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Get the quality metric of the embedded tree.
 
       property GetProxyCount: Int32 read m_proxyCount; /// Get the number of proxies.
    end;
@@ -5771,6 +5809,21 @@ begin
    Result := m_contactManager.m_contactCount;
 end;
 
+function Tb2World.GetTreeHeight: Int32;
+begin
+   Result := m_contactManager.m_broadPhase.GetTreeHeight;
+end;
+
+function Tb2World.GetTreeBalance: Int32;
+begin
+   Result := m_contactManager.m_broadPhase.GetTreeBalance;
+end;
+
+function Tb2World.GetTreeQuality: PhysicsFloat;
+begin
+   Result := m_contactManager.m_broadPhase.GetTreeQuality;
+end;
+
 procedure Tb2World.DrawShape(fixture: Tb2Fixture; const xf: Tb2Transform;
   const color: RGBA);
 var
@@ -8123,6 +8176,7 @@ begin
 end;
 
 { Tb2DynamicTreeNode }
+{$IFDEF B2_USE_DYNAMIC_TREE}
 {$IFDEF OP_OVERLOAD}
 function Tb2DynamicTreeNode.IsLeaf: Boolean;
 begin
@@ -8133,6 +8187,7 @@ function IsLeaf(const node: Tb2DynamicTreeNode): Boolean; {$IFDEF INLINE_AVAIL}i
 begin
    Result := node.child1 = b2_nullNode;
 end;
+{$ENDIF}
 {$ENDIF}
 
 { Tb2DynamicTree }
@@ -8159,9 +8214,13 @@ begin
 
    // Build a linked list for the free list.
    for i := m_nodeCount to value - 2 do
+   begin
       m_nodes[i].next := i + 1;
+      m_nodes[i].height := 0;
+   end;
 
    m_nodes[value - 1].next := b2_nullNode;
+   m_nodes[value - 1].height := 0;
    m_nodeCapacity := value;
 end;
 
@@ -8182,7 +8241,7 @@ begin
    m_nodes[nodeId].parent := b2_nullNode;
    m_nodes[nodeId].child1 := b2_nullNode;
    m_nodes[nodeId].child2 := b2_nullNode;
-   m_nodes[nodeId].leafCount := 0;
+   m_nodes[nodeId].height := 1;
    Inc(m_nodeCount);
    Result := nodeId;
 end;
@@ -8192,15 +8251,16 @@ begin
    //b2Assert(0 <= nodeId && nodeId < m_nodeCapacity);
    //b2Assert(0 < m_nodeCount);
    m_nodes[nodeId].next := m_freeList;
+   m_nodes[nodeId].height := 0;
    m_freeList := nodeId;
    Dec(m_nodeCount);
 end;
 
 procedure Tb2DynamicTree.InsertLeaf(leaf: Int32);
 var
-   leafAABB, parentAABB, aabb: Tb2AABB;
-   siblingArea, parentArea, cost1, cost2, cost3, inheritanceCost: PhysicsFloat;
-   sibling, _child1, _child2, oldParent, newParent: Int32;
+   combinedAABB, leafAABB, parentAABB, aabb: Tb2AABB;
+   area, combinedArea, cost, inheritanceCost, cost1, cost2: PhysicsFloat;
+   index, sibling, _child1, _child2, oldParent, newParent: Int32;
 begin
    Inc(m_insertionCount);
 
@@ -8213,107 +8273,100 @@ begin
 
    // Find the best sibling for this node
    leafAABB := m_nodes[leaf].aabb;
-   sibling := m_root;
+   index := m_root;
    {$IFDEF OP_OVERLOAD}
-   while not m_nodes[sibling].IsLeaf do
+   while not m_nodes[index].IsLeaf do
    {$ELSE}
-   while not IsLeaf(m_nodes[sibling]) do
+   while not IsLeaf(m_nodes[index]) do
    {$ENDIF}
    begin
       // Expand the node's AABB.
-      with m_nodes[sibling] do
+      with m_nodes[index] do
       begin
          {$IFDEF OP_OVERLOAD}
-         aabb.Combine(leafAABB);
+         area := aabb.GetPerimeter;
          {$ELSE}
-         Combine(aabb, leafAABB);
+         area := GetPerimeter(aabb);
          {$ENDIF}
-         Inc(leafCount);
-
-         _child1 := child1;
-         _child2 := child2;
 
          {$IFDEF OP_OVERLOAD}
-         siblingArea := aabb.GetPerimeter;
-         parentAABB.Combine(aabb, leafAABB);
+         combinedAABB.Combine(aabb, leafAABB);
+         combinedArea := combinedAABB.GetPerimeter;
          {$ELSE}
-         siblingArea := GetPerimeter(aabb);
-         Combine(parentAABB, aabb, leafAABB);
+         Combine(combinedAABB, aabb, leafAABB);
+         combinedArea := GetPerimeter(combinedAABB);
          {$ENDIF}
+
+         _child1 := child1;
+         _child2 := child2
       end;
 
-      {$IFDEF OP_OVERLOAD}
-      parentArea := parentAABB.GetPerimeter;
-      {$ELSE}
-      parentArea := GetPerimeter(parentAABB);
-      {$ENDIF}
-      cost1 := 2.0 * parentArea;
+      // Cost of creating a new parent for this node and the new leaf
+      cost := 2.0 * combinedArea;
 
-      inheritanceCost := 2.0 * (parentArea - siblingArea);
+      // Minimum cost of pushing the leaf further down the tree
+      inheritanceCost := 2.0 * (combinedArea - area);
 
+      // Cost of descending into child1
       {$IFDEF OP_OVERLOAD}
       if m_nodes[_child1].IsLeaf then
       begin
          aabb.Combine(leafAABB, m_nodes[_child1].aabb);
-         cost2 := aabb.GetPerimeter + inheritanceCost;
+         cost1 := aabb.GetPerimeter + inheritanceCost;
       end
       else
       begin
          aabb.Combine(leafAABB, m_nodes[_child1].aabb);
-         cost2 := aabb.GetPerimeter - m_nodes[_child1].aabb.GetPerimeter + inheritanceCost;
+         cost1 := aabb.GetPerimeter - m_nodes[_child1].aabb.GetPerimeter + inheritanceCost;
       end;
+
+      // Cost of descending into child2
       if m_nodes[_child2].IsLeaf then
       begin
          aabb.Combine(leafAABB, m_nodes[_child2].aabb);
-         cost3 := aabb.GetPerimeter + inheritanceCost;
+         cost2 := aabb.GetPerimeter + inheritanceCost;
       end
       else
       begin
          aabb.Combine(leafAABB, m_nodes[_child2].aabb);
-         cost3 := aabb.GetPerimeter - m_nodes[_child2].aabb.GetPerimeter + inheritanceCost;
+         cost2 := aabb.GetPerimeter - m_nodes[_child2].aabb.GetPerimeter + inheritanceCost;
       end;
       {$ELSE}
       if IsLeaf(m_nodes[_child1]) then
       begin
          Combine(aabb, leafAABB, m_nodes[_child1].aabb);
-         cost2 := GetPerimeter(aabb) + inheritanceCost;
+         cost1 := GetPerimeter(aabb) + inheritanceCost;
       end
       else
       begin
          Combine(aabb, leafAABB, m_nodes[_child1].aabb);
-         cost2 := GetPerimeter(aabb) - GetPerimeter(m_nodes[_child1].aabb) + inheritanceCost;
+         cost1 := GetPerimeter(aabb) - GetPerimeter(m_nodes[_child1].aabb) + inheritanceCost;
       end;
       if IsLeaf(m_nodes[_child2]) then
       begin
          Combine(aabb, leafAABB, m_nodes[_child2].aabb);
-         cost3 := GetPerimeter(aabb) + inheritanceCost;
+         cost2 := GetPerimeter(aabb) + inheritanceCost;
       end
       else
       begin
          Combine(aabb, leafAABB, m_nodes[_child2].aabb);
-         cost3 := GetPerimeter(aabb) - GetPerimeter(m_nodes[_child2].aabb) + inheritanceCost;
+         cost2 := GetPerimeter(aabb) - GetPerimeter(m_nodes[_child2].aabb) + inheritanceCost;
       end;
       {$ENDIF}
 
       // Descend according to the minimum cost.
-      if (cost1 < cost2) and (cost1 < cost3) then
+      if (cost < cost1) and (cost < cost2) then
          Break;
 
-      // Expand the node's AABB to account for the new leaf.
-      {$IFDEF OP_OVERLOAD}
-      m_nodes[sibling].aabb.Combine(leafAABB);
-      {$ELSE}
-      Combine(m_nodes[sibling].aabb, leafAABB);
-      {$ENDIF}
-
       // Descend
-      if cost2 < cost3 then
-         sibling := _child1
+      if cost1 < cost2 then
+         index := _child1
       else
-         sibling := _child2;
+         index := _child2;
    end;
 
    // Create a new parent for the siblings.
+   sibling := index;
    oldParent := m_nodes[sibling].parent;
    newParent := AllocateNode;
    with m_nodes[newParent] do
@@ -8325,7 +8378,7 @@ begin
       {$ELSE}
       Combine(aabb, leafAABB, m_nodes[sibling].aabb);
       {$ENDIF}
-      leafCount := m_nodes[sibling].leafCount + 1;
+      height := m_nodes[sibling].height + 1;
    end;
 
    if oldParent <> b2_nullNode then
@@ -8350,11 +8403,35 @@ begin
       m_nodes[leaf].parent := newParent;
       m_root := newParent;
    end;
+
+   // Walk back up the tree fixing heights and AABBs
+   index := m_nodes[leaf].parent;
+   while index <> b2_nullNode do
+   begin
+      index := Balance(index);
+      with m_nodes[index] do
+      begin
+         //b2Assert(child1 != b2_nullNode);
+         //b2Assert(child2 != b2_nullNode);
+
+         height := 1 + b2Max(m_nodes[child1].height, m_nodes[child2].height);
+
+         {$IFDEF OP_OVERLOAD}
+         aabb.Combine(m_nodes[child1].aabb, m_nodes[child2].aabb);
+         {$ELSE}
+         Combine(aabb, m_nodes[child1].aabb, m_nodes[child2].aabb);
+         {$ENDIF}
+
+         index := parent;
+      end;
+   end;
+
+   //Validate();
 end;
 
 procedure Tb2DynamicTree.RemoveLeaf(leaf: Int32);
 var
-   grandParent, _parent, sibling: Int32;
+   grandParent, _parent, index, sibling: Int32;
    oldAABB: Tb2AABB;
 begin
    if leaf = m_root then
@@ -8385,9 +8462,11 @@ begin
       FreeNode(_parent);
 
       // Adjust ancestor bounds.
-      _parent := grandParent;
-      while _parent <> b2_nullNode do
-         with m_nodes[_parent] do
+      index := grandParent;
+      while index <> b2_nullNode do
+      begin
+         index := Balance(index);
+         with m_nodes[index] do
          begin
             oldAABB := aabb;
             {$IFDEF OP_OVERLOAD}
@@ -8396,10 +8475,10 @@ begin
             Combine(aabb, m_nodes[child1].aabb, m_nodes[child2].aabb);
             {$ENDIF}
 
-            //b2Assert(m_nodes[parent].leafCount > 0);
-            Dec(leafCount);
-            _parent := parent;
+            height := 1 + b2Max(m_nodes[child1].height, m_nodes[child2].height);
+            index := parent;
          end;
+      end;
    end
    else
    begin
@@ -8407,6 +8486,330 @@ begin
       m_nodes[sibling].parent := b2_nullNode;
       FreeNode(_parent);
    end;
+
+   //Validate();
+end;
+
+// Perform a left or right rotation if node A is imbalanced.
+// Returns the new root index.
+function Tb2DynamicTree.Balance(iA: Int32): Int32;
+var
+   A, B, C, D, E, F, G: Pb2DynamicTreeNode;
+   iB, iC, _iF, iG, iD, iE, balance: Int32;
+begin
+   //b2Assert(iA != b2_nullNode);
+
+   A := @m_nodes[iA];
+   {$IFDEF OP_OVERLOAD}
+   if A^.IsLeaf or (A^.height < 3) then
+   {$ELSE}
+   if IsLeaf(A^) or (A^.height < 3) then
+   {$ENDIF}
+   begin
+      Result := iA;
+      Exit;
+   end;
+
+   iB := A^.child1;
+   iC := A^.child2;
+   //b2Assert(0 <= iB && iB < m_nodeCapacity);
+   //b2Assert(0 <= iC && iC < m_nodeCapacity);
+
+   B := @m_nodes[iB];
+   C := @m_nodes[iC];
+
+   balance := C^.height - B^.height;
+
+   // Rotate C up
+   if balance > 1 then
+   begin
+      _iF := C^.child1;
+      iG := C^.child2;
+      F := @m_nodes[_iF];
+      G := @m_nodes[iG];
+      //b2Assert(0 <= iF && iF < m_nodeCapacity);
+      //b2Assert(0 <= iG && iG < m_nodeCapacity);
+
+      // Swap A and C
+      C^.child1 := iA;
+      C^.parent := A^.parent;
+      A^.parent := iC;
+
+      // A's old parent should point to C
+      if C^.parent <> b2_nullNode then
+      begin
+         if m_nodes[C^.parent].child1 = iA then
+            m_nodes[C^.parent].child1 := iC
+         else
+         begin
+            //b2Assert(m_nodes[C->parent].child2 == iA);
+            m_nodes[C^.parent].child2 := iC;
+         end;
+      end
+      else
+         m_root := iC;
+
+      // Rotate
+      if F^.height > G^.height then
+      begin
+         C^.child2 := _iF;
+         A^.child2 := iG;
+         G^.parent := iA;
+         {$IFDEF OP_OVERLOAD}
+         A^.aabb.Combine(B^.aabb, G^.aabb);
+         C^.aabb.Combine(A^.aabb, F^.aabb);
+         {$ELSE}
+         Combine(A^.aabb, B^.aabb, G^.aabb);
+         Combine(C^.aabb, A^.aabb, F^.aabb);
+         {$ENDIF}
+
+         A^.height := 1 + b2Max(B^.height, G^.height);
+         C^.height := 1 + b2Max(A^.height, F^.height);
+      end
+      else
+      begin
+         C^.child2 := iG;
+         A^.child2 := _iF;
+         F^.parent := iA;
+         {$IFDEF OP_OVERLOAD}
+         A^.aabb.Combine(B^.aabb, F^.aabb);
+         C^.aabb.Combine(A^.aabb, G^.aabb);
+         {$ELSE}
+         Combine(A^.aabb, B^.aabb, F^.aabb);
+         Combine(C^.aabb, A^.aabb, G^.aabb);
+         {$ENDIF}
+
+         A^.height := 1 + b2Max(B^.height, F^.height);
+         C^.height := 1 + b2Max(A^.height, G^.height);
+      end;
+
+      Result := iC;
+      Exit;
+   end;
+
+   // Rotate B up
+   if balance < -1 then
+   begin
+      iD := B^.child1;
+      iE := B^.child2;
+      D := @m_nodes[iD];
+      E := @m_nodes[iE];
+      //b2Assert(0 <= iD && iD < m_nodeCapacity);
+      //b2Assert(0 <= iE && iE < m_nodeCapacity);
+
+      // Swap A and B
+      B^.child1 := iA;
+      B^.parent := A^.parent;
+      A^.parent := iB;
+
+      // A's old parent should point to B
+      if B^.parent <> b2_nullNode then
+      begin
+         if m_nodes[B^.parent].child1 = iA then
+            m_nodes[B^.parent].child1 := iB
+         else
+         begin
+            //b2Assert(m_nodes[B->parent].child2 == iA);
+            m_nodes[B^.parent].child2 := iB;
+         end;
+      end
+      else
+         m_root := iB;
+
+      // Rotate
+      if D^.height > E^.height then
+      begin
+         B^.child2 := iD;
+         A^.child1 := iE;
+         E^.parent := iA;
+
+         {$IFDEF OP_OVERLOAD}
+         A^.aabb.Combine(C^.aabb, E^.aabb);
+         B^.aabb.Combine(A^.aabb, D^.aabb);
+         {$ELSE}
+         Combine(A^.aabb, C^.aabb, E^.aabb);
+         Combine(B^.aabb, A^.aabb, D^.aabb);
+         {$ENDIF}
+
+         A^.height := 1 + b2Max(C^.height, E^.height);
+         B^.height := 1 + b2Max(A^.height, D^.height);
+      end
+      else
+      begin
+         B^.child2 := iE;
+         A^.child1 := iD;
+         D^.parent := iA;
+
+         {$IFDEF OP_OVERLOAD}
+         A^.aabb.Combine(C^.aabb, D^.aabb);
+         B^.aabb.Combine(A^.aabb, E^.aabb);
+         {$ELSE}
+         Combine(A^.aabb, C^.aabb, D^.aabb);
+         Combine(B^.aabb, A^.aabb, E^.aabb);
+         {$ENDIF}
+
+         A^.height := 1 + b2Max(C^.height, D^.height);
+         B^.height := 1 + b2Max(A^.height, E^.height);
+      end;
+
+      Result := iB;
+      Exit;
+   end;
+
+   Result := iA;
+end;
+
+// Shuffle grandchildren to improve quality. This cannot increase the tree height,
+// but it can cause slight imbalance.
+// Balanced Hierarchies for Collision Detection between Fracturing Objects
+// http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.125.7818&rep=rep1&type=pdf
+procedure Tb2DynamicTree.Shuffle(index: Int32);
+var
+   node, node1, node2, node11, node12, node21, node22: Pb2DynamicTreeNode;
+   i, i1, i2, i11, i12, i21, i22: Int32;
+   b11, b12, b21, b22, b1, b2: Tb2AABB;
+   m1, m2, m3: PhysicsFloat;
+begin
+   if index = b2_nullNode then
+      Exit;
+
+   node := @m_nodes[index];
+   if node^.height < 3 then
+      Exit;
+
+   i1 := node^.child1;
+   i2 := node^.child2;
+
+   //b2Assert(0 <= i1 && i1 < m_nodeCapacity);
+   //b2Assert(0 <= i2 && i2 < m_nodeCapacity);
+
+   node1 := @m_nodes[i1];
+   node2 := @m_nodes[i2];
+
+   if (node1^.height < 2) or (node2^.height < 2) then
+      Exit;
+
+   i11 := node1^.child1;
+   i12 := node1^.child2;
+   i21 := node2^.child1;
+   i22 := node2^.child2;
+
+   node11 := @m_nodes[i11];
+   node12 := @m_nodes[i12];
+   node21 := @m_nodes[i21];
+   node22 := @m_nodes[i22];
+
+   b11 := node11^.aabb;
+   b12 := node12^.aabb;
+   b21 := node21^.aabb;
+   b22 := node22^.aabb;
+
+   // Metrics
+   {$IFDEF OP_OVERLOAD}
+   b1.Combine(b11, b12);
+   b2.Combine(b21, b22);
+   m1 := b1.GetPerimeter + b2.GetPerimeter;
+   {$ELSE}
+   Combine(b1, b11, b12);
+   Combine(b2, b21, b22);
+   m1 := GetPerimeter(b1) + GetPerimeter(b2);
+   {$ENDIF}
+
+   {$IFDEF OP_OVERLOAD}
+   b1.Combine(b11, b22);
+   b2.Combine(b12, b21);
+   m2 := b1.GetPerimeter + b2.GetPerimeter;
+   {$ELSE}
+   Combine(b1, b11, b22);
+   Combine(b2, b12, b21);
+   m2 := GetPerimeter(b1) + GetPerimeter(b2);
+   {$ENDIF}
+
+   {$IFDEF OP_OVERLOAD}
+   b1.Combine(b11, b21);
+   b2.Combine(b12, b22);
+   m3 := b1.GetPerimeter() + b2.GetPerimeter();
+   {$ELSE}
+   Combine(b1, b11, b21);
+   Combine(b2, b12, b22);
+   m3 := GetPerimeter(b1) + GetPerimeter(b2);
+   {$ENDIF}
+
+   if (m1 <= m2) and (m1 <= m3) then
+      Exit;
+
+   if m2 <= m3 then
+   begin
+      // (node11, node22), (node21, node12)
+      node1^.child2 := i22;
+      node22^.parent := i1;
+      {$IFDEF OP_OVERLOAD}
+      node1^.aabb.Combine(node11^.aabb, node22^.aabb);
+      {$ELSE}
+      Combine(node1^.aabb, node11^.aabb, node22^.aabb);
+      {$ENDIF}
+      node1^.height := 1 + b2Max(node11^.height, node22^.height);
+
+      node2^.child2 := i12;
+      node12^.parent := i2;
+      {$IFDEF OP_OVERLOAD}
+      node2^.aabb.Combine(node21^.aabb, node12^.aabb);
+      {$ELSE}
+      Combine(node2^.aabb, node21^.aabb, node12^.aabb);
+      {$ENDIF}
+      node2^.height := 1 + b2Max(node21^.height, node12^.height);
+   end
+   else
+   begin
+      // (node11, node21), (node12, node22)
+      node1^.child2 := i21;
+      node21^.parent := i1;
+      {$IFDEF OP_OVERLOAD}
+      node1^.aabb.Combine(node11^.aabb, node21^.aabb);
+      {$ELSE}
+      Combine(node1^.aabb, node11^.aabb, node21^.aabb);
+      {$ENDIF}
+      node1^.height := 1 + b2Max(node11^.height, node21^.height);
+
+      node2^.child1 := i12;
+      node12^.parent := i2;
+      {$IFDEF OP_OVERLOAD}
+      node2^.aabb.Combine(node12^.aabb, node22^.aabb);
+      {$ELSE}
+      Combine(node2^.aabb, node12^.aabb, node22^.aabb);
+      {$ENDIF}
+      node2^.height := 1 + b2Max(node12^.height, node22^.height);
+   end;
+
+   {$IFDEF OP_OVERLOAD}
+   node^.aabb.Combine(node1^.aabb, node2^.aabb);
+   {$ELSE}
+   Combine(node^.aabb, node1^.aabb, node2^.aabb);
+   {$ENDIF}
+   node^.height := 1 + b2Max(node1^.height, node2^.height);
+
+   i := node^.parent;
+   while i <> b2_nullNode do
+   begin
+      node := @m_nodes[i];
+
+      i1 := node^.child1;
+      i2 := node^.child2;
+
+      node1 := @m_nodes[i1];
+      node2 := @m_nodes[i2];
+
+      {$IFDEF OP_OVERLOAD}
+      node^.aabb.Combine(node1^.aabb, node2^.aabb);
+      {$ELSE}
+      Combine(node^.aabb, node1^.aabb, node2^.aabb);
+      {$ENDIF}
+      node^.height := 1 + b2Max(node1^.height, node2^.height);
+
+      i := node^.parent;
+   end;
+
+   //Validate();
 end;
 
 function Tb2DynamicTree.ComputeHeight(nodeId: Int32): Int32;
@@ -8428,28 +8831,132 @@ begin
    Result := 1 + b2Max(height1, height2);
 end;
 
-function Tb2DynamicTree.CountLeaves(nodeId: Int32): Int32;
+procedure Tb2DynamicTree.ValidateStructure(index: Int32);
 begin
-   if nodeId = b2_nullNode then
+   if index = b2_nullNode then
+      Exit;
+
+   //if index = m_root then
+      //b2Assert(m_nodes[index].parent == b2_nullNode);
+
+   {$IFDEF OP_OVERLOAD}
+   if m_nodes[index].IsLeaf then
+   {$ELSE}
+   if IsLeaf(m_nodes[index]) then
+   {$ENDIF}
+   begin
+      //b2Assert(child1 == b2_nullNode);
+      //b2Assert(child2 == b2_nullNode);
+      //b2Assert(node->height == 1);
+      Exit;
+   end;
+
+   //b2Assert(0 <= child1 && child1 < m_nodeCapacity);
+   //b2Assert(0 <= child2 && child2 < m_nodeCapacity);
+
+   //b2Assert(m_nodes[child1].parent == index);
+   //b2Assert(m_nodes[child2].parent == index);
+
+   ValidateStructure(m_nodes[index].child1);
+   ValidateStructure(m_nodes[index].child2);
+end;
+
+procedure Tb2DynamicTree.ValidateMetrics(index: Int32);
+var
+   node: Pb2DynamicTreeNode;
+   child1, child2, height1, height2, height: Int32;
+   aabb: Tb2AABB;
+begin
+   if index = b2_nullNode then
+      Exit;
+
+   node := @m_nodes[index];
+
+   child1 := node^.child1;
+   child2 := node^.child2;
+
+   {$IFDEF OP_OVERLOAD}
+   if node^.IsLeaf then
+   {$ELSE}
+   if IsLeaf(node^) then
+   {$ENDIF}
+   begin
+      //b2Assert(child1 == b2_nullNode);
+      //b2Assert(child2 == b2_nullNode);
+      //b2Assert(node->height == 1);
+      Exit;
+   end;
+
+   //b2Assert(0 <= child1 && child1 < m_nodeCapacity);
+   //b2Assert(0 <= child2 && child2 < m_nodeCapacity);
+
+   height1 := m_nodes[child1].height;
+   height2 := m_nodes[child2].height;
+   height := 1 + b2Max(height1, height2);
+   //b2Assert(node->height == height);
+
+   {$IFDEF OP_OVERLOAD}
+   aabb.Combine(m_nodes[child1].aabb, m_nodes[child2].aabb);
+   {$ELSE}
+   Combine(aabb, m_nodes[child1].aabb, m_nodes[child2].aabb);
+   {$ENDIF}
+
+   //b2Assert(aabb.lowerBound == node->aabb.lowerBound);
+   //b2Assert(aabb.upperBound == node->aabb.upperBound);
+
+   ValidateMetrics(child1);
+   ValidateMetrics(child2);
+end;
+
+function Tb2DynamicTree.GetMaxBalance(index: Int32): Int32;
+var
+   child1, child2: Int32;
+   balance, balance1, balance2: Int32;
+begin
+   if index = b2_nullNode then
    begin
       Result := 0;
       Exit;
    end;
 
-   //b2Assert(0 <= nodeId && nodeId < m_nodeCapacity);
    {$IFDEF OP_OVERLOAD}
-   if m_nodes[nodeId].IsLeaf then
+   if m_nodes[index].IsLeaf then
    {$ELSE}
-   if IsLeaf(m_nodes[nodeId]) then
+   if IsLeaf(m_nodes[index]) then
    {$ENDIF}
    begin
-      //b2Assert(node->leafCount == 1);
-      Result := 1;
+      Result := 0;
       Exit;
    end;
 
-   Result := CountLeaves(m_nodes[nodeId].child1) + CountLeaves(m_nodes[nodeId].child2);
-   //b2Assert(Result == node->leafCount);
+   child1 := m_nodes[index].child1;
+   child2 := m_nodes[index].child2;
+
+   balance := Abs(m_nodes[child2].height - m_nodes[child1].height);
+   balance1 := GetMaxBalance(child1);
+   balance2 := GetMaxBalance(child2);
+
+   Result := b2Max(balance, b2Max(balance1, balance2));
+end;
+
+// Compute the total surface area of a sub-tree (perimeter)
+function Tb2DynamicTree.GetTotalArea(index: Int32): PhysicsFloat;
+var
+   node: Pb2DynamicTreeNode;
+begin
+   if index = b2_nullNode then
+   begin
+      Result := 0.0;
+      Exit;
+   end;
+
+   //b2Assert(0 <= index && index < m_nodeCapacity);
+   node := @m_nodes[index];
+   {$IFDEF OP_OVERLOAD}
+   Result := node^.aabb.GetPerimeter + GetTotalArea(node^.child1) + GetTotalArea(node^.child2);
+   {$ELSE}
+   Result := GetPerimeter(node^.aabb) + GetTotalArea(node^.child1) + GetTotalArea(node^.child2);
+   {$ENDIF}
 end;
 
 function Tb2DynamicTree.ComputeHeight: Int32;
@@ -8477,7 +8984,7 @@ begin
       upperBound := Add(_aabb.upperBound, _r);
       {$ENDIF}
       userData := _userData;
-      leafCount := 1;
+      height := 1;
    end;
 
    InsertLeaf(proxyId);
@@ -8552,33 +9059,25 @@ end;
 procedure Tb2DynamicTree.Rebalance(iterations: Int32);
 var
    i: Integer;
-   node, selector: Int32;
-   children: PInt32;
-   bit: UInt32;
 begin
    if m_root = b2_nullNode then
       Exit;
 
-   // Rebalance the tree by removing and re-inserting leaves.
+   // Rebalance the tree by shuffling.
    for i := 0 to iterations - 1 do
    begin
-      node := m_root;
-
-      bit := 0;
-      while not {$IFDEF OP_OVERLOAD}m_nodes[node].IsLeaf{$ELSE}IsLeaf(m_nodes[node]){$ENDIF} do
+      while m_nodes[m_path].height = 0 do
       begin
-         children := @m_nodes[node].child1;
-         selector := (m_path shr bit) and 1;// Child selector based on a bit in the path
-         node := PInt32(Integer(children) + SizeOf(Int32) * selector)^; // Select the child nod
-
-         // Keep bit between 0 and 31 because m_path has 32 bits
-         // bit = (bit + 1) % 31
-         bit := (bit + 1) and $1F;
+         Inc(m_path);
+         if m_path = m_nodeCapacity then
+            m_path := 0;
       end;
-      Inc(m_path);
 
-      RemoveLeaf(node);
-      InsertLeaf(node);
+      Shuffle(m_path);
+
+      Inc(m_path);
+      if m_path = m_nodeCapacity then
+         m_path := 0;
    end;
 end;
 
@@ -8729,12 +9228,55 @@ begin
 end;
 
 procedure Tb2DynamicTree.Validate;
+var
+   freeCount, freeIndex: Int32;
 begin
-   CountLeaves(m_root);
+   ValidateStructure(m_root);
+   ValidateMetrics(m_root);
+
+   freeCount := 0;
+   freeIndex := m_freeList;
+   while freeIndex <> b2_nullNode do
+   begin
+      //b2Assert(0 <= freeIndex && freeIndex < m_nodeCapacity);
+      freeIndex := m_nodes[freeIndex].next;
+      Inc(freeCount);
+   end;
+
+   //b2Assert(GetHeight() == ComputeHeight());
+   //b2Assert(m_nodeCount + freeCount == m_nodeCapacity);
 end;
 
-{$ELSE}
+function Tb2DynamicTree.GetHeight: Int32;
+begin
+   if m_root = b2_nullNode then
+      Result := 0
+   else
+      Result := m_nodes[m_root].height;
+end;
 
+function Tb2DynamicTree.GetMaxBalance: Int32;
+begin
+   Result := GetMaxBalance(m_root);
+end;
+
+function Tb2DynamicTree.GetAreaRatio: PhysicsFloat;
+begin
+   if m_root = b2_nullNode then
+   begin
+      Result := 0.0;
+   end
+   else
+      {$IFDEF OP_OVERLOAD}
+      Result := GetTotalArea(m_root) / m_nodes[m_root].aabb.GetPerimeter;
+      {$ELSE}
+      Result := GetTotalArea(m_root) / GetPerimeter(m_nodes[m_root].aabb);
+      {$ENDIF}
+end;
+
+{$ENDIF}
+
+{$IFDEF B2_USE_BRUTE_FORCE}
 constructor Tb2DynamicTree.Create;
 begin
    m_proxyCapacity := 128;
@@ -9213,9 +9755,19 @@ begin
    m_tree.RayCast(callback, input);
 end;
 
-function Tb2BroadPhase.ComputeHeight: Int32;
+function Tb2BroadPhase.GetTreeHeight: Int32;
 begin
-   Result := m_tree.ComputeHeight;
+   Result := m_tree.GetHeight;
+end;
+
+function Tb2BroadPhase.GetTreeBalance: Int32;
+begin
+   Result := m_tree.GetMaxBalance;
+end;
+
+function Tb2BroadPhase.GetTreeQuality: PhysicsFloat;
+begin
+   Result := m_tree.GetAreaRatio;
 end;
 
 //////////////////////////////////////////////////////////////
