@@ -1,4 +1,4 @@
-unit ULineJoint;
+unit UWheelJoint;
 
 interface
 {$I ..\..\Physics2D\Physics2D.inc}
@@ -7,7 +7,7 @@ uses
    UMain, UPhysics2DTypes, UPhysics2D, SysUtils;
 
 type
-   TLineJoint = class(TTester)
+   TWheelJoint = class(TTester)
    public
       constructor Create; override;
    end;
@@ -15,15 +15,15 @@ type
 
 implementation
 
-{ TLineJoint }
+{ TWheelJoint }
 
-constructor TLineJoint.Create;
+constructor TWheelJoint.Create;
 var
    ground, body: Tb2Body;
    edge: Tb2EdgeShape;
    shape: Tb2PolygonShape;
    bd: Tb2BodyDef;
-   jd: Tb2LineJointDef;
+   jd: Tb2WheelJointDef;
    axis: TVector2;
 begin
    inherited;
@@ -46,7 +46,7 @@ begin
       body := m_world.CreateBody(bd);
       body.CreateFixture(shape, 1.0);
 
-      jd := Tb2LineJointDef.Create;
+      jd := Tb2WheelJointDef.Create;
       SetValue(axis, 2.0, 1.0);
       {$IFDEF OP_OVERLOAD}
       axis.Normalize;
@@ -64,5 +64,6 @@ begin
 end;
 
 initialization
-   RegisterTestEntry('Line Joint', TLineJoint);
+   RegisterTestEntry('Wheel Joint', TWheelJoint);
 end.
+

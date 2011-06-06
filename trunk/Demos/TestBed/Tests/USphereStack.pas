@@ -7,7 +7,7 @@ uses
    UMain, UPhysics2DTypes, UPhysics2D, SysUtils;
 
 const
-   e_count = 10;
+   e_count = 15;
 
 type
    TSphereStack = class(TTester)
@@ -47,7 +47,7 @@ begin
       SetValue(bd.position, 0.0, 4.0 + 3.0 * i);
       m_bodies[i] := m_world.CreateBody(bd, False);
       m_bodies[i].CreateFixture(cshape, 1.0, False);
-      //m_bodies[i].SetLinearVelocity(MakeVector(0.0, -100.0));
+      m_bodies[i].SetLinearVelocity(MakeVector(0.0, -50.0));
    end;
    cshape.Free;
    bd.Free;
