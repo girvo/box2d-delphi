@@ -36,7 +36,6 @@ uses
   UEdgeShapes in 'Tests\UEdgeShapes.pas',
   UFixedJoint in 'Tests\UFixedJoint.pas',
   UGears in 'Tests\UGears.pas',
-  ULineJoint in 'Tests\ULineJoint.pas',
   UMotorsAndLimits in 'Tests\UMotorsAndLimits.pas',
   UOneSidedPlatform in 'Tests\UOneSidedPlatform.pas',
   UPolyCollision in 'Tests\UPolyCollision.pas',
@@ -60,7 +59,8 @@ uses
   URevolute in 'Tests\URevolute.pas',
   URope in 'Tests\URope.pas',
   UCar in 'Tests\UCar.pas',
-  URopeJoint in 'Tests\URopeJoint.pas';
+  URopeJoint in 'Tests\URopeJoint.pas',
+  UWheelJoint in 'Tests\UWheelJoint.pas';
 
 {$R *.res}
 

@@ -79,7 +79,6 @@
 			<DCCReference Include="Tests\UEdgeShapes.pas"/>
 			<DCCReference Include="Tests\UFixedJoint.pas"/>
 			<DCCReference Include="Tests\UGears.pas"/>
-			<DCCReference Include="Tests\ULineJoint.pas"/>
 			<DCCReference Include="Tests\UMotorsAndLimits.pas"/>
 			<DCCReference Include="Tests\UOneSidedPlatform.pas"/>
 			<DCCReference Include="Tests\UPolyCollision.pas"/>
@@ -104,6 +103,7 @@
 			<DCCReference Include="Tests\URope.pas"/>
 			<DCCReference Include="Tests\UCar.pas"/>
 			<DCCReference Include="Tests\URopeJoint.pas"/>
+			<DCCReference Include="Tests\UWheelJoint.pas"/>
 			<None Include="..\..\OpenGL Canvas\OpenGLCanvas.inc"/>
 			<None Include="..\..\Physics2D\Physics2D.inc"/>
 			<None Include="..\..\Physics2D\delete.bat"/>

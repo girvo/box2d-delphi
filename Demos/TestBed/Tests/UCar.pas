@@ -17,8 +17,8 @@ type
       m_zeta: PhysicsFloat;
       m_speed: PhysicsFloat;
 
-      m_spring1: Tb2LineJoint;
-      m_spring2: Tb2LineJoint;
+      m_spring1: Tb2WheelJoint;
+      m_spring2: Tb2WheelJoint;
 
       constructor Create; override;
       procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
@@ -40,7 +40,7 @@ var
    ground, body, prevBody: Tb2Body;
    box, pShape, chassis: Tb2PolygonShape;
    circle: Tb2CircleShape;
-   jd: Tb2LineJointDef;
+   jd: Tb2WheelJointDef;
    rjd: Tb2RevoluteJointDef;
    anchor: TVector2;
    vertices: array[0..7] of TVector2;
@@ -231,14 +231,14 @@ begin
       m_wheel2 := m_world.CreateBody(bd);
       m_wheel2.CreateFixture(fd);
 
-      jd := Tb2LineJointDef.Create;
+      jd := Tb2WheelJointDef.Create;
       jd.Initialize(m_car, m_wheel1, m_wheel1.GetPosition, axis);
       jd.motorSpeed := 0.0;
       jd.maxMotorTorque := 20.0;
       jd.enableMotor := True;
       jd.frequencyHz := m_hz;
       jd.dampingRatio := m_zeta;
-      m_spring1 := Tb2LineJoint(m_world.CreateJoint(jd, False));
+      m_spring1 := Tb2WheelJoint(m_world.CreateJoint(jd, False));
 
       jd.Initialize(m_car, m_wheel2, m_wheel2.GetPosition, axis);
       jd.motorSpeed := 0.0;
@@ -246,7 +246,7 @@ begin
       jd.enableMotor := False;
       jd.frequencyHz := m_hz;
       jd.dampingRatio := m_zeta;
-      m_spring2 := Tb2LineJoint(m_world.CreateJoint(jd));
+      m_spring2 := Tb2WheelJoint(m_world.CreateJoint(jd));
    end;
 end;
 

@@ -201,7 +201,6 @@ type
       normalImpulse: PhysicsFloat; ///< the non-penetration impulse
       tangentImpulse: PhysicsFloat; ///< the friction impulse
       id: Tb2ContactID; ///< uniquely identifies a contact point between two shapes
-      isNew: Boolean;
    end;
 
    /// A manifold for two touching convex shapes.
@@ -814,8 +813,8 @@ type
 {$IFDEF B2_USE_DYNAMIC_TREE}
 
    /// A node in the dynamic tree. The client does not interact with this directly.
-   Pb2DynamicTreeNode = ^Tb2DynamicTreeNode;
-   Tb2DynamicTreeNode = record
+   Pb2TreeNode = ^Tb2TreeNode;
+   Tb2TreeNode = record
    {$IFDEF OP_OVERLOAD}
    public
       function IsLeaf: Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
@@ -824,7 +823,7 @@ type
     	aabb: Tb2AABB; /// Enlarged AABB
       userData: Pointer;
       child1, child2: Int32;
-      height: Int32; // Node is in use if height > 0
+      height: Int32; // leaf = 0, free node = -1
       case Byte of
          0: (parent: Int32);
          1: (next: Int32);
@@ -841,7 +840,7 @@ type
    Tb2DynamicTree = class
    private
       m_root: Int32;
-      m_nodes: array of Tb2DynamicTreeNode;
+      m_nodes: array of Tb2TreeNode;
       m_nodeCount, m_nodeCapacity: Int32;
       m_freeList: Int32;
       m_path: UInt32; /// This is used to incrementally traverse the tree for re-balancing.
@@ -1246,7 +1245,7 @@ type
    //////////////////////////////////////////////////////////////
    // Joints
    Tb2JointType = (e_unknownJoint, e_revoluteJoint, e_prismaticJoint,
-      e_distanceJoint, e_pulleyJoint, e_mouseJoint, e_gearJoint, e_lineJoint,
+      e_distanceJoint, e_pulleyJoint, e_mouseJoint, e_gearJoint, e_wheelJoint,
       e_weldJoint, e_frictionJoint, e_fixedJoint, e_ropeJoint);
    Tb2LimitState = (e_inactiveLimit, e_atLowerLimit, e_atUpperLimit, e_equalLimits);
 
@@ -2282,13 +2281,13 @@ type
       property MaxTorque: PhysicsFloat read m_maxTorque write m_maxTorque;
    end;
 
-   /// Line joint definition. This requires defining a line of
+   /// Wheel joint definition. This requires defining a line of
    /// motion using an axis and an anchor point. The definition uses local
    /// anchor points and a local axis so that the initial configuration
    /// can violate the constraint slightly. The joint translation is zero
    /// when the local anchor points coincide in world space. Using local
    /// anchors and a local axis helps when saving and loading a game.
-   Tb2LineJointDef = class(Tb2JointDef)
+   Tb2WheelJointDef = class(Tb2JointDef)
    public
       localAnchorA: TVector2; /// The local anchor point relative to body1's origin.
       localAnchorB: TVector2; /// The local anchor point relative to body2's origin.
@@ -2307,12 +2306,12 @@ type
       procedure Initialize(bodyA, bodyB: Tb2Body; const anchor, axis: TVector2);
    end;
 
-   /// A line joint. This joint provides two degrees of freedom: translation
+   /// A wheel joint. This joint provides two degrees of freedom: translation
    /// along an axis fixed in body1 and rotation in the plane. You can use a
    /// joint limit to restrict the range of motion and a joint motor to drive
    /// the rotation or to model rotational friction.
    /// This joint is designed for vehicle suspensions.
-   Tb2LineJoint = class(Tb2Joint)
+   Tb2WheelJoint = class(Tb2Joint)
    protected
       m_localAnchorA,
       m_localAnchorB,
@@ -2344,7 +2343,7 @@ type
       function SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean; override;
 
    public
-      constructor Create(def: Tb2LineJointDef);
+      constructor Create(def: Tb2WheelJointDef);
 
       function GetAnchorA: TVector2; override;
       function GetAnchorB: TVector2; override;
@@ -2637,8 +2636,8 @@ procedure SetZero(var jb: Tb2Jacobian); overload; {$IFDEF INLINE_AVAIL}inline;{$
 procedure SetValue(var jb: Tb2Jacobian; const x1, x2: TVector2; a1, a2: PhysicsFloat); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function Compute(var jb: Tb2Jacobian; const x1, x2: TVector2; a1, a2: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
-/// Tb2DynamicTreeNode
-function IsLeaf(const node: Tb2DynamicTreeNode): Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+/// Tb2TreeNode
+function IsLeaf(const node: Tb2TreeNode): Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 {$ENDIF}
 
 function GetRawReferenceTime: Double;
@@ -5663,8 +5662,8 @@ begin
                {$ELSE}
                DrawSegment(GetCenter(m_fixtureA.m_aabb),
                   GetCenter(m_fixtureB.m_aabb), m_pairColor);
-               {$ENDIF}
-               c := m_next;*)
+               {$ENDIF}*)
+               c := m_next;
             end;
       end;
 
@@ -6044,7 +6043,7 @@ begin
       e_pulleyJoint: j := Tb2PulleyJoint.Create(Tb2PulleyJointDef(def));
       e_mouseJoint: j := Tb2MouseJoint.Create(Tb2MouseJointDef(def));
       e_gearJoint: j := Tb2GearJoint.Create(Tb2GearJointDef(def));
-      e_lineJoint: j := Tb2LineJoint.Create(Tb2LineJointDef(def));
+      e_wheelJoint: j := Tb2WheelJoint.Create(Tb2WheelJointDef(def));
       e_weldJoint: j := Tb2WeldJoint.Create(Tb2WeldJointDef(def));
       e_frictionJoint: j := Tb2FrictionJoint.Create(Tb2FrictionJointDef(def));
       e_fixedJoint: j := Tb2FixedJoint.Create(Tb2FixedJointDef(def));
@@ -6385,7 +6384,6 @@ begin
          mp2^.normalImpulse := 0.0;
          mp2^.tangentImpulse := 0.0;
          id2key := mp2^.id.key;
-         found := False;
 
          for j := 0 to oldManifold.pointCount - 1 do
          begin
@@ -6395,15 +6393,8 @@ begin
             begin
                mp2^.normalImpulse := mp1^.normalImpulse;
                mp2^.tangentImpulse := mp1^.tangentImpulse;
-               found := True;
                Break;
             end;
-         end;
-
-         if not found then
-         begin
-            mp2^.normalImpulse := 0.0;
-            mp2^.tangentImpulse := 0.0;
          end;
       end;
 
@@ -8174,15 +8165,15 @@ begin
 	 Result := PInt32(Integer(m_stack) + SizeOf(Int32) * m_count)^;
 end;
 
-{ Tb2DynamicTreeNode }
+{ Tb2TreeNode }
 {$IFDEF B2_USE_DYNAMIC_TREE}
 {$IFDEF OP_OVERLOAD}
-function Tb2DynamicTreeNode.IsLeaf: Boolean;
+function Tb2TreeNode.IsLeaf: Boolean;
 begin
    Result := child1 = b2_nullNode;
 end;
 {$ELSE}
-function IsLeaf(const node: Tb2DynamicTreeNode): Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function IsLeaf(const node: Tb2TreeNode): Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 begin
    Result := node.child1 = b2_nullNode;
 end;
@@ -8215,11 +8206,11 @@ begin
    for i := m_nodeCount to value - 2 do
    begin
       m_nodes[i].next := i + 1;
-      m_nodes[i].height := 0;
+      m_nodes[i].height := -1;
    end;
 
    m_nodes[value - 1].next := b2_nullNode;
-   m_nodes[value - 1].height := 0;
+   m_nodes[value - 1].height := -1;
    m_nodeCapacity := value;
 end;
 
@@ -8240,7 +8231,7 @@ begin
    m_nodes[nodeId].parent := b2_nullNode;
    m_nodes[nodeId].child1 := b2_nullNode;
    m_nodes[nodeId].child2 := b2_nullNode;
-   m_nodes[nodeId].height := 1;
+   m_nodes[nodeId].height := 0;
    Inc(m_nodeCount);
    Result := nodeId;
 end;
@@ -8250,7 +8241,7 @@ begin
    //b2Assert(0 <= nodeId && nodeId < m_nodeCapacity);
    //b2Assert(0 < m_nodeCount);
    m_nodes[nodeId].next := m_freeList;
-   m_nodes[nodeId].height := 0;
+   m_nodes[nodeId].height := -1;
    m_freeList := nodeId;
    Dec(m_nodeCount);
 end;
@@ -8493,16 +8484,16 @@ end;
 // Returns the new root index.
 function Tb2DynamicTree.Balance(iA: Int32): Int32;
 var
-   A, B, C, D, E, F, G: Pb2DynamicTreeNode;
+   A, B, C, D, E, F, G: Pb2TreeNode;
    iB, iC, _iF, iG, iD, iE, balance: Int32;
 begin
    //b2Assert(iA != b2_nullNode);
 
    A := @m_nodes[iA];
    {$IFDEF OP_OVERLOAD}
-   if A^.IsLeaf or (A^.height < 3) then
+   if A^.IsLeaf or (A^.height < 2) then
    {$ELSE}
-   if IsLeaf(A^) or (A^.height < 3) then
+   if IsLeaf(A^) or (A^.height < 2) then
    {$ENDIF}
    begin
       Result := iA;
@@ -8664,7 +8655,7 @@ end;
 // http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.125.7818&rep=rep1&type=pdf
 procedure Tb2DynamicTree.Shuffle(index: Int32);
 var
-   node, node1, node2, node11, node12, node21, node22: Pb2DynamicTreeNode;
+   node, node1, node2, node11, node12, node21, node22: Pb2TreeNode;
    i, i1, i2, i11, i12, i21, i22: Int32;
    b11, b12, b21, b22, b1, b2: Tb2AABB;
    m1, m2, m3: PhysicsFloat;
@@ -8673,7 +8664,7 @@ begin
       Exit;
 
    node := @m_nodes[index];
-   if node^.height < 3 then
+   if node^.height < 2 then
       Exit;
 
    i1 := node^.child1;
@@ -8685,7 +8676,7 @@ begin
    node1 := @m_nodes[i1];
    node2 := @m_nodes[i2];
 
-   if (node1^.height < 2) or (node2^.height < 2) then
+   if (node1^.height < 1) or (node2^.height < 1) then
       Exit;
 
    i11 := node1^.child1;
@@ -8815,15 +8806,19 @@ function Tb2DynamicTree.ComputeHeight(nodeId: Int32): Int32;
 var
    height1, height2: Int32;
 begin
-   if nodeId = b2_nullNode then
-   begin
-      Result := 0;
-      Exit;
-   end;
-
-   //b2Assert(0 <= nodeId && nodeId < m_nodeCapacity);
+	 //b2Assert(0 <= nodeId && nodeId < m_nodeCapacity);
    with m_nodes[nodeId] do
    begin
+      {$IFDEF OP_OVERLOAD}
+      if IsLeaf then
+      {$ELSE}
+      if IsLeaf(m_nodes[nodeId]) then
+      {$ENDIF}
+      begin
+         Result := 0;
+         Exit;
+      end;
+
       height1 := ComputeHeight(child1);
       height2 := ComputeHeight(child2);
    end;
@@ -8846,7 +8841,7 @@ begin
    begin
       //b2Assert(child1 == b2_nullNode);
       //b2Assert(child2 == b2_nullNode);
-      //b2Assert(node->height == 1);
+      //b2Assert(node->height == 0);
       Exit;
    end;
 
@@ -8862,7 +8857,7 @@ end;
 
 procedure Tb2DynamicTree.ValidateMetrics(index: Int32);
 var
-   node: Pb2DynamicTreeNode;
+   node: Pb2TreeNode;
    child1, child2, height1, height2, height: Int32;
    aabb: Tb2AABB;
 begin
@@ -8882,7 +8877,7 @@ begin
    begin
       //b2Assert(child1 == b2_nullNode);
       //b2Assert(child2 == b2_nullNode);
-      //b2Assert(node->height == 1);
+      //b2Assert(node->height == 0);
       Exit;
    end;
 
@@ -8941,7 +8936,7 @@ end;
 // Compute the total surface area of a sub-tree (perimeter)
 function Tb2DynamicTree.GetTotalArea(index: Int32): PhysicsFloat;
 var
-   node: Pb2DynamicTreeNode;
+   node: Pb2TreeNode;
 begin
    if index = b2_nullNode then
    begin
@@ -8983,7 +8978,7 @@ begin
       upperBound := Add(_aabb.upperBound, _r);
       {$ENDIF}
       userData := _userData;
-      height := 1;
+      height := 0;
    end;
 
    InsertLeaf(proxyId);
@@ -9065,7 +9060,7 @@ begin
    // Rebalance the tree by shuffling.
    for i := 0 to iterations - 1 do
    begin
-      while m_nodes[m_path].height = 0 do
+      while m_nodes[m_path].height = -1 do
       begin
          Inc(m_path);
          if m_path = m_nodeCapacity then
@@ -16182,7 +16177,7 @@ begin
    Result := True;
 end;
 
-{ Tb2LineJointDef }
+{ Tb2WheelJointDef }
 
 // Linear constraint (point-to-line)
 // d = pB - pA = xB + rB - xA - rA
@@ -16200,10 +16195,10 @@ end;
 // Cdot = wB - wA
 // J = [0 0 -1 0 0 1]
 
-constructor Tb2LineJointDef.Create;
+constructor Tb2WheelJointDef.Create;
 begin
    inherited;
-   JointType := e_lineJoint;
+   JointType := e_wheelJoint;
    localAnchorA := b2Vec2_Zero;
    localAnchorB := b2Vec2_Zero;
    SetValue(localAxisA, 1.0, 0.0);
@@ -16215,7 +16210,7 @@ begin
    dampingRatio := 0.7;
 end;
 
-procedure Tb2LineJointDef.Initialize(bodyA, bodyB: Tb2Body; const anchor, axis: TVector2);
+procedure Tb2WheelJointDef.Initialize(bodyA, bodyB: Tb2Body; const anchor, axis: TVector2);
 begin
    Self.bodyA := bodyA;
    Self.bodyB := bodyB;
@@ -16224,9 +16219,9 @@ begin
    localAxisA := bodyA.GetLocalVector(axis);
 end;
 
-{ Tb2LineJoint }
+{ Tb2WheelJoint }
 
-constructor Tb2LineJoint.Create(def: Tb2LineJointDef);
+constructor Tb2WheelJoint.Create(def: Tb2WheelJointDef);
 begin
    inherited Create(def);
    m_localAnchorA := def.localAnchorA;
@@ -16254,7 +16249,7 @@ begin
    m_ay := b2Vec2_Zero;
 end;
 
-procedure Tb2LineJoint.InitVelocityConstraints(const step: Tb2TimeStep);
+procedure Tb2WheelJoint.InitVelocityConstraints(const step: Tb2TimeStep);
 var
    rA, rB, P, d: TVector2;
    invMass, C, omega, k, LA, LB, dampCof: PhysicsFloat;
@@ -16385,7 +16380,7 @@ begin
    end;
 end;
 
-procedure Tb2LineJoint.SolveVelocityConstraints(const step: Tb2TimeStep);
+procedure Tb2WheelJoint.SolveVelocityConstraints(const step: Tb2TimeStep);
 var
    vA, vB, P: TVector2;
    wA, wB, Cdot, impulse, LA, LB, oldImpulse, maxImpulse: PhysicsFloat;
@@ -16476,7 +16471,7 @@ begin
    m_bodyB.m_angularVelocity := wB;
 end;
 
-function Tb2LineJoint.SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean;
+function Tb2WheelJoint.SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean;
 var
    xA, xB, rA, rB, d, ay, P: TVector2;
    angleA, angleB, sAy, sBy, C, k, impulse, LA, LB: PhysicsFloat;
@@ -16549,17 +16544,17 @@ begin
    Result := Abs(C) <= b2_linearSlop;
 end;
 
-function Tb2LineJoint.GetAnchorA: TVector2;
+function Tb2WheelJoint.GetAnchorA: TVector2;
 begin
    Result := m_bodyA.GetWorldPoint(m_localAnchorA);
 end;
 
-function Tb2LineJoint.GetAnchorB: TVector2;
+function Tb2WheelJoint.GetAnchorB: TVector2;
 begin
    Result := m_bodyB.GetWorldPoint(m_localAnchorB);
 end;
 
-function Tb2LineJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
+function Tb2WheelJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
 begin
    {$IFDEF OP_OVERLOAD}
    Result := inv_dt * (m_impulse * m_ay + m_springImpulse * m_ax);
@@ -16568,17 +16563,17 @@ begin
    {$ENDIF}
 end;
 
-function Tb2LineJoint.GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat;
+function Tb2WheelJoint.GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat;
 begin
 	 Result := inv_dt * m_motorImpulse;
 end;
 
-function Tb2LineJoint.GetJointSpeed: PhysicsFloat;
+function Tb2WheelJoint.GetJointSpeed: PhysicsFloat;
 begin
    Result := m_bodyB.m_angularVelocity - m_bodyA.m_angularVelocity;
 end;
 
-function Tb2LineJoint.GetJointTranslation: PhysicsFloat;
+function Tb2WheelJoint.GetJointTranslation: PhysicsFloat;
 begin
    {$IFDEF OP_OVERLOAD}
    Result := b2Dot(m_bodyB.GetWorldPoint(m_localAnchorB) -
@@ -16589,26 +16584,26 @@ begin
    {$ENDIF}
 end;
 
-function Tb2LineJoint.GetMotorTorque(inv_dt: PhysicsFloat): PhysicsFloat;
+function Tb2WheelJoint.GetMotorTorque(inv_dt: PhysicsFloat): PhysicsFloat;
 begin
    Result := inv_dt * m_motorImpulse;
 end;
 
-procedure Tb2LineJoint.EnableMotor(flag: Boolean);
+procedure Tb2WheelJoint.EnableMotor(flag: Boolean);
 begin
    m_bodyA.SetAwake(True);
    m_bodyB.SetAwake(True);
    m_enableMotor := flag;
 end;
 
-procedure Tb2LineJoint.SetMotorSpeed(speed: PhysicsFloat);
+procedure Tb2WheelJoint.SetMotorSpeed(speed: PhysicsFloat);
 begin
    m_bodyA.SetAwake(True);
    m_bodyB.SetAwake(True);
    m_motorSpeed := speed;
 end;
 
-procedure Tb2LineJoint.SetMaxMotorTorque(torque: PhysicsFloat);
+procedure Tb2WheelJoint.SetMaxMotorTorque(torque: PhysicsFloat);
 begin
    m_bodyA.SetAwake(True);
    m_bodyB.SetAwake(True);
@@ -17627,3 +17622,5 @@ finalization
    ep_collieder.Free;
 
 end.
+
+
