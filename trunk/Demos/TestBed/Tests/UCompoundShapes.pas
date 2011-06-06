@@ -22,7 +22,7 @@ var
    bd: Tb2BodyDef;
    body: Tb2Body;
    edge: Tb2EdgeShape;
-   shape, polygon1, polygon2, triangle1, triangle2, bottom, left, right: Tb2PolygonShape;
+   polygon1, polygon2, triangle1, triangle2, bottom, left, right: Tb2PolygonShape;
    circle1, circle2: Tb2CircleShape;
    xf1, xf2: Tb2Transform;
    vertices: array[0..2] of TVector2;

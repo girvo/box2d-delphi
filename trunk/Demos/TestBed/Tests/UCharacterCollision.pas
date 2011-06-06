@@ -30,7 +30,7 @@ var
    shape: Tb2PolygonShape;
    lshape: Tb2LoopShape;
    fd: Tb2FixtureDef;
-   d, angle, delta: PhysicsFloat;
+   angle, delta: PhysicsFloat;
    cshape: Tb2CircleShape;
    vertices: array[0..5] of TVector2;
    vs: array[0..9] of TVector2;

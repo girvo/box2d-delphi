@@ -26,7 +26,6 @@ const
 var
    ground, body1, body2, body3, body4, body5, body6: Tb2Body;
    edge: Tb2EdgeShape;
-   shape: Tb2PolygonShape;
    sd, triangleShapeDef, boxShapeDef, circleShapeDef: Tb2FixtureDef;
    bd, triangleBodyDef, boxBodyDef, circleBodyDef: Tb2BodyDef;
    polygon: Tb2PolygonShape;
