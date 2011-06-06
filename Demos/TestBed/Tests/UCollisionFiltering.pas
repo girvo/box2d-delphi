@@ -38,7 +38,7 @@ const
 constructor TCollisionFiltering.Create;
 var
    edge: Tb2EdgeShape;
-   shape, polygon, p: Tb2PolygonShape;
+   polygon, p: Tb2PolygonShape;
    sd, boxShapeDef, circleShapeDef: Tb2FixtureDef;
    bd, triangleBodyDef, boxBodyDef, circleBodyDef: Tb2BodyDef;
    body, ground, body1, body2, body3, body4, body5, body6: Tb2Body;

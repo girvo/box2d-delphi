@@ -73,7 +73,6 @@ begin
    begin
       bd := Tb2BodyDef.Create;
       bd.bodyType := b2_dynamicBody;
-      bd.inertiaScale := 10.0;
 
       prevBody := ground;
 
@@ -118,7 +117,6 @@ begin
    begin
       bd := Tb2BodyDef.Create;
       bd.bodyType := b2_dynamicBody;
-      bd.inertiaScale := 10.0;
 
       prevBody := ground;
       for i := 0 to e_count - 1 do

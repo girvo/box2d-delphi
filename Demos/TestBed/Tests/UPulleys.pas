@@ -23,32 +23,45 @@ constructor TPulleys.Create;
 var
    ground: Tb2Body;
    bd: Tb2BodyDef;
-   edge: Tb2EdgeShape;
+   //edge: Tb2EdgeShape;
    shape: Tb2PolygonShape;
    body1, body2: Tb2Body;
+   circle: Tb2CircleShape;
    pulleyDef: Tb2PulleyJointDef;
-   b, y, L: PhysicsFloat;
+   a, b, y, L: PhysicsFloat;
 begin
    inherited;
+
+   a := 1.0;
+   b := 2.0;
+   y := 16.0;
+   L := 12.0;
+
    begin
 			bd := Tb2BodyDef.Create;
 			ground := m_world.CreateBody(bd);
 
-			edge := Tb2EdgeShape.Create;
-			edge.SetVertices(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
-			ground.CreateFixture(edge, 0.0);
+//		edge := Tb2EdgeShape.Create;
+//		edge.SetVertices(MakeVector(-40.0, 0.0), MakeVector(40.0, 0.0));
+//    ground.CreateFixture(edge, 0.0);
+
+      circle := Tb2CircleShape.Create;
+      circle.m_radius := 2.0;
+
+			SetValue(circle.m_p, -10.0, y + b + L);
+			ground.CreateFixture(circle, 0.0, False, False);
+
+			SetValue(circle.m_p, 10.0, y + b + L);
+			ground.CreateFixture(&circle, 0.0);
    end;
 
    begin
-      b := 4.0;
-      y := 16.0;
-      L := 12.0;
-
       shape := Tb2PolygonShape.Create;
       shape.SetAsBox(2, b);
 
       bd := Tb2BodyDef.Create;
       bd.bodyType := b2_dynamicBody;
+      //bd.fixedRotation := True;
 
       SetValue(bd.position, -10.0, y);
       body1 := m_world.CreateBody(bd, False);
@@ -60,7 +73,7 @@ begin
 
       pulleyDef := Tb2PulleyJointDef.Create;
       pulleyDef.Initialize(body1, body2, MakeVector(-10.0, y + b + L),
-         MakeVector(10.0, y + b + L), MakeVector(-10.0, y + b), MakeVector(10.0, y + b), 2.0);
+         MakeVector(10.0, y + b + L), MakeVector(-10.0, y + b), MakeVector(10.0, y + b), 1.5);
 
       m_joint1 := Tb2PulleyJoint(m_world.CreateJoint(pulleyDef));
    end;

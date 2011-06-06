@@ -1289,6 +1289,7 @@ type
    Tb2Joint = class
    private
       // Cache here per time step to reduce cache misses.
+      // TODO_ERIN nuke
       m_localCenterA, m_localCenterB: TVector2;
       m_invMassA, m_invIA,
       m_invMassB, m_invIB: PhysicsFloat;
@@ -1434,9 +1435,11 @@ type
       /// @warning You should use this flag sparingly since it increases processing time.
       bullet: Boolean;
 
-      active: Boolean; /// Does this body start out active?
+      /// Does this body start out active?
+      active: Boolean;
 
-	    inertiaScale: PhysicsFloat; /// Experimental: scales the inertia tensor.
+      /// Scale the gravity applied to this body.
+	    gravityScale: PhysicsFloat;
 
       constructor Create;
    end;
@@ -1468,6 +1471,7 @@ type
 
       m_linearDamping: PhysicsFloat;
       m_angularDamping: PhysicsFloat;
+      m_gravityScale: PhysicsFloat;
 
       destructor Destroy2; // Only free heap
       procedure ComputeStoredInertia;
@@ -1678,6 +1682,7 @@ type
       property GetAngularVelocity: PhysicsFloat read m_angularVelocity;
       property LinearDamping: PhysicsFloat read m_linearDamping write m_linearDamping;
       property AngularDamping: PhysicsFloat read m_angularDamping write m_angularDamping;
+      property GravityScale: PhysicsFloat read m_gravityScale write m_gravityScale;
 
       property GetMass: PhysicsFloat read m_mass;
       /// Get the rotational inertia of the body about the local origin.
@@ -2021,8 +2026,7 @@ type
    end;
 
    /// Pulley joint definition. This requires two ground anchors,
-   /// two dynamic body anchor points, max lengths for each side,
-   /// and a pulley ratio.
+   /// two dynamic body anchor points, and a pulley ratio.
    Tb2PulleyJointDef = class(Tb2JointDef)
    public
       groundAnchorA: TVector2; /// The first ground anchor in world coordinates. This point never moves.
@@ -2031,10 +2035,7 @@ type
       localAnchorB: TVector2; /// The local anchor point relative to bodyB's origin.
 
       lengthA: PhysicsFloat; /// The a reference length for the segment attached to bodyA.
-      maxLengthA: PhysicsFloat; /// The maximum length of the segment attached to bodyA.
-
       lengthB: PhysicsFloat; /// The a reference length for the segment attached to bodyB.
-      maxLengthB: PhysicsFloat; /// The maximum length of the segment attached to bodyB.
 
       ratio: PhysicsFloat; /// The pulley ratio, used to simulate a block-and-tackle.
 
@@ -2046,24 +2047,23 @@ type
 
    /// The pulley joint is connected to two bodies and two fixed ground points.
    /// The pulley supports a ratio such that:
-   /// lengthA + ratio * lengthB <= constant
+   /// length1 + ratio * length2 <= constant
    /// Yes, the force transmitted is scaled by the ratio.
-   /// The pulley also enforces a maximum length limit on both sides. This is
-   /// useful to prevent one side of the pulley hitting the top.
+   /// Warning: the pulley joint can get a bit squirrelly by itself. They often
+   /// work better when combined with prismatic joints. You should also cover the
+   /// the anchor points with static shapes to prevent one side from going to
+   /// zero length.
    Tb2PulleyJoint = class(Tb2Joint)
    protected
       m_groundAnchorA, m_groundAnchorB, m_localAnchorA, m_localAnchorB: TVector2;
       m_u1, m_u2: TVector2;
 
       m_constant, m_ratio: PhysicsFloat;
-      m_maxLength1, m_maxLength2: PhysicsFloat;
 
-      m_pulleyMass, m_limitMass1, m_limitMass2: PhysicsFloat; // Effective masses
+      m_pulleyMass: PhysicsFloat; // Effective masses
 
       // Impulses for accumulation/warm starting.
-      m_impulse, m_limitImpulse1, m_limitImpulse2: PhysicsFloat;
-
-      m_state, m_limitState1, m_limitState2: Tb2LimitState;
+      m_impulse: PhysicsFloat;
 
       procedure InitVelocityConstraints(const step: Tb2TimeStep); override;
       procedure SolveVelocityConstraints(const step: Tb2TimeStep); override;
@@ -6349,7 +6349,6 @@ var
    bodyA, bodyB: Tb2Body;
    mp1, mp2: Pb2ManifoldPoint;
    id2key: UInt32;
-   found: Boolean;
 begin
    oldManifold := m_manifold;
    m_flags := m_flags or e_contact_enabledFlag; // Re-enable this contact.
@@ -7799,9 +7798,9 @@ begin
 
          // Integrate velocities.
          {$IFDEF OP_OVERLOAD}
-         m_linearVelocity.AddBy(step.dt * (gravity + m_invMass * m_force));
+         m_linearVelocity.AddBy(step.dt * (m_gravityScale * gravity + m_invMass * m_force));
          {$ELSE}
-         AddBy(m_linearVelocity, Multiply(UPhysics2DTypes.Add(gravity,
+         AddBy(m_linearVelocity, Multiply(UPhysics2DTypes.Add(Multiply(gravity, m_gravityScale),
             Multiply(m_force, m_invMass)), step.dt));
          {$ENDIF}
          m_angularVelocity := m_angularVelocity + step.dt * m_invI * m_torque;
@@ -10177,7 +10176,7 @@ begin
    bullet := False;
    bodyType := b2_staticBody;
    active := True;
-   inertiaScale := 1.0;
+   gravityScale := 1.0;
 end;
 
 { Tb2Body }
@@ -10188,7 +10187,7 @@ begin
    //b2Assert(bd->linearVelocity.IsValid());
    //b2Assert(b2IsValid(bd->angle));
    //b2Assert(b2IsValid(bd->angularVelocity));
-   //b2Assert(b2IsValid(bd->inertiaScale) && bd->inertiaScale >= 0.0f);
+   //b2Assert(b2IsValid(bd->gravityScale) && bd->gravityScale >= 0.0f);
    //b2Assert(b2IsValid(bd->angularDamping) && bd->angularDamping >= 0.0f);
    //b2Assert(b2IsValid(bd->linearDamping) && bd->linearDamping >= 0.0f);
 
@@ -10231,6 +10230,8 @@ begin
    m_angularVelocity := bd.angularVelocity;
    m_linearDamping := bd.linearDamping;
    m_angularDamping := bd.angularDamping;
+
+   m_gravityScale := 1.0;
 
    m_force := b2Vec2_Zero;
    m_torque := 0.0;
@@ -13879,7 +13880,7 @@ begin
       m_a2 := b2Cross(r2, m_axis);
 
       m_motorMass := m_invMassA + m_invMassB + m_invIA * m_a1 * m_a1 + m_invIB * m_a2 * m_a2;
-      if m_motorMass > FLT_EPSILON then
+      if m_motorMass > 0.0 then
          m_motorMass := 1.0 / m_motorMass;
    end;
 
@@ -14587,23 +14588,15 @@ end;
 { Tb2PulleyJointDef }
 
 // Pulley:
-// lengthA = norm(p1 - s1)
-// lengthB = norm(p2 - s2)
-// C0 = (lengthA + ratio * lengthB)_initial
-// C = C0 - (lengthA + ratio * lengthB) >= 0
+// length1 = norm(p1 - s1)
+// length2 = norm(p2 - s2)
+// C0 = (length1 + ratio * length2)_initial
+// C = C0 - (length1 + ratio * length2)
 // u1 = (p1 - s1) / norm(p1 - s1)
 // u2 = (p2 - s2) / norm(p2 - s2)
 // Cdot = -dot(u1, v1 + cross(w1, r1)) - ratio * dot(u2, v2 + cross(w2, r2))
 // J = -[u1 cross(r1, u1) ratio * u2  ratio * cross(r2, u2)]
 // K = J * invM * JT
-//   = invMass1 + invI1 * cross(r1, u1)^2 + ratio^2 * (invMass2 + invI2 * cross(r2, u2)^2)
-//
-// Limit:
-// C = maxLength - length
-// u = (p - s) / norm(p - s)
-// Cdot = -dot(u, v + cross(w, r))
-// K = invMass + invI * cross(r, u)^2
-// 0 <= impulse
 
 const
    b2_minPulleyLength = 2.0;
@@ -14617,17 +14610,13 @@ begin
    SetValue(localAnchorA, -1.0, 0.0);
    SetValue(localAnchorB, 1.0, 0.0);
    lengthA := 0.0;
-   maxLengthA := 0.0;
    lengthB := 0.0;
-   maxLengthB := 0.0;
    ratio := 1.0;
    collideConnected := True;
 end;
 
 procedure Tb2PulleyJointDef.Initialize(bodyA, bodyB: Tb2Body; const groundAnchorA,
    groundAnchorB, anchorA, anchorB: TVector2; ratio: PhysicsFloat);
-var
-   C: PhysicsFloat;
 begin
    Self.bodyA := bodyA;
    Self.bodyB := bodyB;
@@ -14643,10 +14632,6 @@ begin
    lengthB := LengthVec(Subtract(anchorB, groundAnchorB));
    {$ENDIF}
    Self.ratio := ratio;
-   //b2Assert(ratio > B2_FLT_EPSILON);
-   C := lengthA + ratio * lengthB;
-   maxLengthA := C - ratio * b2_minPulleyLength;
-   maxLengthB := (C - b2_minPulleyLength) / ratio;
 end;
 
 { Tb2PulleyJoint }
@@ -14663,12 +14648,7 @@ begin
    m_ratio := def.ratio;
    m_constant := def.lengthA + m_ratio * def.lengthB;
 
-   m_maxLength1 := b2Min(def.maxLengthA, m_constant - m_ratio * b2_minPulleyLength);
-   m_maxLength2 := b2Min(def.maxLengthB, (m_constant - b2_minPulleyLength) / m_ratio);
-
    m_impulse := 0.0;
-   m_limitImpulse1 := 0.0;
-   m_limitImpulse2 := 0.0;
 end;
 
 function Tb2PulleyJoint.GetAnchorA: TVector2;
@@ -14698,7 +14678,7 @@ end;
 procedure Tb2PulleyJoint.InitVelocityConstraints(const step: Tb2TimeStep);
 var
    r1, r2, P1, P2: TVector2;
-   lengthA, lengthB, C, cr1u1, cr2u2: PhysicsFloat;
+   lengthA, lengthB, cr1u1, cr2u2, m1, m2: PhysicsFloat;
 begin
    {$IFDEF OP_OVERLOAD}
    r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
@@ -14711,12 +14691,12 @@ begin
    lengthA := m_u1.Length;
    lengthB := m_u2.Length;
 
-   if lengthA > b2_linearSlop then
+   if lengthA > 10.0 * b2_linearSlop then
       m_u1.DivideBy(lengthA)
    else
       m_u1 := b2Vec2_Zero;
 
-   if lengthB > b2_linearSlop then
+   if lengthB > 10.0 * b2_linearSlop then
       m_u2.DivideBy(lengthB)
    else
       m_u2 := b2Vec2_Zero;
@@ -14731,72 +14711,42 @@ begin
    lengthA := LengthVec(m_u1);
    lengthB := LengthVec(m_u2);
 
-   if lengthA > b2_linearSlop then
+   if lengthA > 10.0 * b2_linearSlop then
       DivideBy(m_u1, lengthA)
    else
       m_u1 := b2Vec2_Zero;
 
-   if lengthB > b2_linearSlop then
+   if lengthB > 10.0 * b2_linearSlop then
       DivideBy(m_u2, lengthB)
    else
       m_u2 := b2Vec2_Zero;
    {$ENDIF}
 
-   C := m_constant - lengthA - m_ratio * lengthB;
-   if C > 0.0 then
-   begin
-      m_state := e_inactiveLimit;
-      m_impulse := 0.0;
-   end
-   else
-      m_state := e_atUpperLimit;
-
-   if lengthA < m_maxLength1 then
-   begin
-      m_limitState1 := e_inactiveLimit;
-      m_limitImpulse1 := 0.0;
-   end
-   else
-      m_limitState1 := e_atUpperLimit;
-
-   if lengthB < m_maxLength2 then
-   begin
-      m_limitState2 := e_inactiveLimit;
-      m_limitImpulse2 := 0.0;
-   end
-   else
-      m_limitState2 := e_atUpperLimit;
-
    // Compute effective mass.
    cr1u1 := b2Cross(r1, m_u1);
    cr2u2 := b2Cross(r2, m_u2);
 
-   m_limitMass1 := m_bodyA.m_invMass + m_bodyA.m_invI * cr1u1 * cr1u1;
-   m_limitMass2 := m_bodyB.m_invMass + m_bodyB.m_invI * cr2u2 * cr2u2;
-   m_pulleyMass := m_limitMass1 + m_ratio * m_ratio * m_limitMass2;
-   //b2Assert(m_limitMass1 > B2_FLT_EPSILON);
-   //b2Assert(m_limitMass2 > B2_FLT_EPSILON);
-   //b2Assert(m_pulleyMass > B2_FLT_EPSILON);
-   m_limitMass1 := 1.0 / m_limitMass1;
-   m_limitMass2 := 1.0 / m_limitMass2;
-   m_pulleyMass := 1.0 / m_pulleyMass;
+   m1 := m_bodyA.m_invMass + m_bodyA.m_invI * cr1u1 * cr1u1;
+   m2 := m_bodyB.m_invMass + m_bodyB.m_invI * cr2u2 * cr2u2;
+
+ 	 m_pulleyMass := m1 + m_ratio * m_ratio * m2;
+   if m_pulleyMass > 0.0 then
+      m_pulleyMass := 1.0 / m_pulleyMass;
 
    if step.warmStarting then
    begin
       // Scale impulses to support variable time steps.
       m_impulse := m_impulse * step.dtRatio;
-      m_limitImpulse1 := m_limitImpulse1 * step.dtRatio;
-      m_limitImpulse2 := m_limitImpulse2 * step.dtRatio;
 
       // Warm starting.
       {$IFDEF OP_OVERLOAD}
-      P1 := -(m_impulse + m_limitImpulse1) * m_u1;
-      P2 := (-m_ratio * m_impulse - m_limitImpulse2) * m_u2;
+      P1 := -m_impulse * m_u1;
+      P2 := (-m_ratio * m_impulse) * m_u2;
       m_bodyA.m_linearVelocity.AddBy(m_bodyA.m_invMass * P1);
       m_bodyB.m_linearVelocity.AddBy(m_bodyB.m_invMass * P2);
       {$ELSE}
-      P1 := Multiply(m_u1, -(m_impulse + m_limitImpulse1));
-      P2 := Multiply(m_u2, (-m_ratio * m_impulse - m_limitImpulse2));
+      P1 := Multiply(m_u1, -m_impulse);
+      P2 := Multiply(m_u2, -m_ratio * m_impulse);
       AddBy(m_bodyA.m_linearVelocity, Multiply(P1, m_bodyA.m_invMass));
       AddBy(m_bodyB.m_linearVelocity, Multiply(P2, m_bodyB.m_invMass));
       {$ENDIF}
@@ -14804,17 +14754,13 @@ begin
       m_bodyB.m_angularVelocity := m_bodyB.m_angularVelocity + m_bodyB.m_invI * b2Cross(r2, P2);
    end
    else
-   begin
 		  m_impulse := 0.0;
-		  m_limitImpulse1 := 0.0;
-		  m_limitImpulse2 := 0.0;
-   end;
 end;
 
 procedure Tb2PulleyJoint.SolveVelocityConstraints(const step: Tb2TimeStep);
 var
    r1, r2, v1, v2, P1, P2: TVector2;
-   Cdot, impulse, oldImpulse: PhysicsFloat;
+   Cdot, impulse: PhysicsFloat;
 begin
    {$IFDEF OP_OVERLOAD}
    r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
@@ -14824,7 +14770,6 @@ begin
    r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
    {$ENDIF}
 
-   if m_state = e_atUpperLimit then
    begin
       {$IFDEF OP_OVERLOAD}
       v1 := m_bodyA.m_linearVelocity + b2Cross(m_bodyA.m_angularVelocity, r1);
@@ -14836,9 +14781,7 @@ begin
 
       Cdot := -b2Dot(m_u1, v1) - m_ratio * b2Dot(m_u2, v2);
       impulse := m_pulleyMass * (-Cdot);
-      oldImpulse := m_impulse;
-      m_impulse := b2Max(0.0, m_impulse + impulse);
-      impulse := m_impulse - oldImpulse;
+      m_impulse := m_impulse + impulse;
 
       {$IFDEF OP_OVERLOAD}
       P1 := (-impulse) * m_u1;
@@ -14854,221 +14797,101 @@ begin
       m_bodyA.m_angularVelocity := m_bodyA.m_angularVelocity + m_bodyA.m_invI * b2Cross(r1, P1);
       m_bodyB.m_angularVelocity := m_bodyB.m_angularVelocity + m_bodyB.m_invI * b2Cross(r2, P2);
    end;
-
-   if m_limitState1 = e_atUpperLimit then
-   begin
-      {$IFDEF OP_OVERLOAD}
-      v1 := m_bodyA.m_linearVelocity + b2Cross(m_bodyA.m_angularVelocity, r1);
-      {$ELSE}
-      v1 := Add(m_bodyA.m_linearVelocity, b2Cross(m_bodyA.m_angularVelocity, r1));
-      {$ENDIF}
-
-      Cdot := -b2Dot(m_u1, v1);
-      impulse := -m_limitMass1 * Cdot;
-      oldImpulse := m_limitImpulse1;
-      m_limitImpulse1 := b2Max(0.0, m_limitImpulse1 + impulse);
-      impulse := m_limitImpulse1 - oldImpulse;
-
-      {$IFDEF OP_OVERLOAD}
-      P1 := (-impulse) * m_u1;
-      m_bodyA.m_linearVelocity.AddBy(m_bodyA.m_invMass * P1);
-      {$ELSE}
-      P1 := Multiply(m_u1, -impulse);
-      AddBy(m_bodyA.m_linearVelocity, Multiply(P1, m_bodyA.m_invMass));
-      {$ENDIF}
-      m_bodyA.m_angularVelocity := m_bodyA.m_angularVelocity + m_bodyA.m_invI * b2Cross(r1, P1);
-   end;
-
-   if m_limitState2 = e_atUpperLimit then
-   begin
-      {$IFDEF OP_OVERLOAD}
-      v2 := m_bodyB.m_linearVelocity + b2Cross(m_bodyB.m_angularVelocity, r2);
-      {$ELSE}
-      v2 := Add(m_bodyB.m_linearVelocity, b2Cross(m_bodyB.m_angularVelocity, r2));
-      {$ENDIF}
-
-      Cdot := -b2Dot(m_u2, v2);
-      impulse := -m_limitMass2 * Cdot;
-      oldImpulse := m_limitImpulse2;
-      m_limitImpulse2 := b2Max(0.0, m_limitImpulse2 + impulse);
-      impulse := m_limitImpulse2 - oldImpulse;
-
-      {$IFDEF OP_OVERLOAD}
-      P2 := (-impulse) * m_u2;
-      m_bodyB.m_linearVelocity.AddBy(m_bodyB.m_invMass * P2);
-      {$ELSE}
-      P2 := Multiply(m_u2, -impulse);
-      AddBy(m_bodyB.m_linearVelocity, Multiply(P2, m_bodyB.m_invMass));
-      {$ENDIF}
-      m_bodyB.m_angularVelocity := m_bodyB.m_angularVelocity + m_bodyB.m_invI * b2Cross(r2, P2);
-   end;
 end;
 
 function Tb2PulleyJoint.SolvePositionConstraints(baumgarte: PhysicsFloat): Boolean;
 var
-   s1, s2, r1, r2, P1, P2: TVector2;
-   linearError, lengthA, lengthB, C, impulse: PhysicsFloat;
+   s1, s2, r1, r2, p1, p2: TVector2;
+   linearError, length1, length2, C, impulse, cr1u1, cr2u2, mass, m1, m2: PhysicsFloat;
 begin
    s1 := m_groundAnchorA;
 	 s2 := m_groundAnchorB;
 
-   linearError := 0.0;
+   {$IFDEF OP_OVERLOAD}
+   r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
+   r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
 
-   if m_state = e_atUpperLimit then
-   begin
-      {$IFDEF OP_OVERLOAD}
-      r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
-      r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
+   p1 := m_bodyA.m_sweep.c + r1;
+   p2 := m_bodyB.m_sweep.c + r2;
 
-      // Get the pulley axes.
-      m_u1 := m_bodyA.m_sweep.c + r1 - s1;
-      m_u2 := m_bodyB.m_sweep.c + r2 - s2;
+   // Get the pulley axes.
+   m_u1 := p1 - s1;
+   m_u2 := p2 - s2;
 
-      lengthA := m_u1.Length;
-      lengthB := m_u2.Length;
+   length1 := m_u1.Length;
+   length2 := m_u2.Length;
 
-      if lengthA > b2_linearSlop then
-         m_u1.DivideBy(lengthA)
-      else
-         m_u1 := b2Vec2_Zero;
+   if length1 > b2_linearSlop then
+      m_u1.DivideBy(length1)
+   else
+      m_u1 := b2Vec2_Zero;
 
-      if lengthB > b2_linearSlop then
-         m_u2.DivideBy(lengthB)
-      else
-         m_u2 := b2Vec2_Zero;
-      {$ELSE}
-      r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
-      r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
+   if length2 > b2_linearSlop then
+      m_u2.DivideBy(length2)
+   else
+      m_u2 := b2Vec2_Zero;
+   {$ELSE}
+   r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
+   r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
 
-      // Get the pulley axes.
-      m_u1 := Subtract(Add(m_bodyA.m_sweep.c, r1), s1);
-      m_u2 := Subtract(Add(m_bodyB.m_sweep.c, r2), s2);
+   p1 := Add(m_bodyA.m_sweep.c, r1);
+   p2 := Add(m_bodyB.m_sweep.c, r2);
 
-      lengthA := LengthVec(m_u1);
-      lengthB := LengthVec(m_u2);
+   // Get the pulley axes.
+   m_u1 := Subtract(p1, s1);
+   m_u2 := Subtract(p2, s2);
 
-      if lengthA > b2_linearSlop then
-         DivideBy(m_u1, lengthA)
-      else
-         m_u1 := b2Vec2_Zero;
+   length1 := LengthVec(m_u1);
+   length2 := LengthVec(m_u2);
 
-      if lengthB > b2_linearSlop then
-         DivideBy(m_u2, lengthB)
-      else
-         m_u2 := b2Vec2_Zero;
-      {$ENDIF}
+   if length1 > b2_linearSlop then
+      DivideBy(m_u1, length1)
+   else
+      m_u1 := b2Vec2_Zero;
 
-      C := m_constant - lengthA - m_ratio * lengthB;
-      linearError := b2Max(linearError, -C);
+   if length2 > b2_linearSlop then
+      DivideBy(m_u2, length2)
+   else
+      m_u2 := b2Vec2_Zero;
+   {$ENDIF}
 
-      C := b2Clamp(C + b2_linearSlop, -b2_maxLinearCorrection, 0.0);
-      impulse := -m_pulleyMass * C;
+   // Compute effective mass.
+   cr1u1 := b2Cross(r1, m_u1);
+   cr2u2 := b2Cross(r2, m_u2);
 
-      {$IFDEF OP_OVERLOAD}
-      P1 := -impulse * m_u1;
-      P2 := -m_ratio * impulse * m_u2;
+   m1 := m_bodyA.m_invMass + m_bodyA.m_invI * cr1u1 * cr1u1;
+   m2 := m_bodyB.m_invMass + m_bodyB.m_invI * cr2u2 * cr2u2;
 
-      m_bodyA.m_sweep.c.AddBy(m_bodyA.m_invMass * P1);
-      m_bodyB.m_sweep.c.AddBy(m_bodyB.m_invMass * P2);
-      {$ELSE}
-      P1 := Multiply(m_u1, -impulse);
-      P2 := Multiply(m_u2, -m_ratio * impulse);
+   mass := m1 + m_ratio * m_ratio * m2;
+   if mass > 0.0 then
+      mass := 1.0 / mass;
 
-      AddBy(m_bodyA.m_sweep.c, Multiply(P1, m_bodyA.m_invMass));
-      AddBy(m_bodyB.m_sweep.c, Multiply(P2, m_bodyB.m_invMass));
-      {$ENDIF}
-      m_bodyA.m_sweep.a := m_bodyA.m_sweep.a + m_bodyA.m_invI * b2Cross(r1, P1);
-      m_bodyB.m_sweep.a := m_bodyB.m_sweep.a + m_bodyB.m_invI * b2Cross(r2, P2);
+   C := m_constant - length1 - m_ratio * length2;
+   linearError := Abs(C);
 
-      m_bodyA.SynchronizeTransform;
-      m_bodyB.SynchronizeTransform;
-   end;
+   C := b2Clamp(C + b2_linearSlop, -b2_maxLinearCorrection, b2_maxLinearCorrection);
+   impulse := -mass * C;
 
-   if m_limitState1 = e_atUpperLimit then
-   begin
-      {$IFDEF OP_OVERLOAD}
-      r1 := b2Mul(m_bodyA.m_xf.R, m_localAnchorA - m_bodyA.GetLocalCenter);
-      p1 := m_bodyA.m_sweep.c + r1;
+   {$IFDEF OP_OVERLOAD}
+   P1 := -impulse * m_u1;
+   P2 := -m_ratio * impulse * m_u2;
 
-      m_u1 := p1 - s1;
-      lengthA := m_u1.Length;
+   m_bodyA.m_sweep.c.AddBy(m_bodyA.m_invMass * P1);
+   m_bodyA.m_sweep.a := m_bodyA.m_sweep.a + m_bodyA.m_invI * b2Cross(r1, P1);
+   m_bodyB.m_sweep.c.AddBy(m_bodyB.m_invMass * P2);
+   m_bodyB.m_sweep.a := m_bodyB.m_sweep.a + m_bodyB.m_invI * b2Cross(r2, P2);
+   {$ELSE}
+   P1 := Multiply(m_u1, -impulse);
+   P2 := Multiply(m_u2, -m_ratio * impulse);
 
-      if lengthA > b2_linearSlop then
-         m_u1.DivideBy(lengthA)
-      else
-         m_u1 := b2Vec2_Zero;
-      {$ELSE}
-      r1 := b2Mul(m_bodyA.m_xf.R, Subtract(m_localAnchorA, m_bodyA.GetLocalCenter));
-      p1 := Add(m_bodyA.m_sweep.c, r1);
+   AddBy(m_bodyA.m_sweep.c, Multiply(P1, m_bodyA.m_invMass));
+   m_bodyA.m_sweep.a := m_bodyA.m_sweep.a + m_bodyA.m_invI * b2Cross(r1, P1);
+   AddBy(m_bodyB.m_sweep.c, Multiply(P2, m_bodyB.m_invMass));
+   m_bodyB.m_sweep.a := m_bodyB.m_sweep.a + m_bodyB.m_invI * b2Cross(r2, P2);
+   {$ENDIF}
 
-      m_u1 := Subtract(p1, s1);
-      lengthA := LengthVec(m_u1);
-
-      if lengthA > b2_linearSlop then
-         DivideBy(m_u1, lengthA)
-      else
-         m_u1 := b2Vec2_Zero;
-      {$ENDIF}
-
-      C := m_maxLength1 - lengthA;
-      linearError := b2Max(linearError, -C);
-      C := b2Clamp(C + b2_linearSlop, -b2_maxLinearCorrection, 0.0);
-      impulse := -m_limitMass1 * C;
-
-      {$IFDEF OP_OVERLOAD}
-      P1 := -impulse * m_u1;
-      m_bodyA.m_sweep.c.AddBy(m_bodyA.m_invMass * P1);
-      {$ELSE}
-      P1 := Multiply(m_u1, -impulse);
-      AddBy(m_bodyA.m_sweep.c, Multiply(P1, m_bodyA.m_invMass));
-      {$ENDIF}
-      m_bodyA.m_sweep.a := m_bodyA.m_sweep.a + m_bodyA.m_invI * b2Cross(r1, P1);
-
-      m_bodyA.SynchronizeTransform;
-   end;
-
-   if m_limitState2 = e_atUpperLimit then
-   begin
-      {$IFDEF OP_OVERLOAD}
-      r2 := b2Mul(m_bodyB.m_xf.R, m_localAnchorB - m_bodyB.GetLocalCenter);
-      p2 := m_bodyB.m_sweep.c + r2;
-
-      m_u2 := p2 - s2;
-      lengthB := m_u2.Length;
-
-      if lengthB > b2_linearSlop then
-         m_u2.DivideBy(lengthB)
-      else
-         m_u2 := b2Vec2_Zero;
-      {$ELSE}
-      r2 := b2Mul(m_bodyB.m_xf.R, Subtract(m_localAnchorB, m_bodyB.GetLocalCenter));
-      p2 := Add(m_bodyB.m_sweep.c, r2);
-
-      m_u2 := Subtract(p2, s2);
-      lengthB := LengthVec(m_u2);
-
-      if lengthB > b2_linearSlop then
-         DivideBy(m_u2, lengthB)
-      else
-         m_u2 := b2Vec2_Zero;
-      {$ENDIF}
-
-      C := m_maxLength2 - lengthB;
-      linearError := b2Max(linearError, -C);
-      C := b2Clamp(C + b2_linearSlop, -b2_maxLinearCorrection, 0.0);
-      impulse := -m_limitMass2 * C;
-
-      {$IFDEF OP_OVERLOAD}
-      P2 := -impulse * m_u2;
-      m_bodyB.m_sweep.c.AddBy(m_bodyB.m_invMass * P2);
-      {$ELSE}
-      P2 := Multiply(m_u2, -impulse);
-      AddBy(m_bodyB.m_sweep.c, Multiply(P2, m_bodyB.m_invMass));
-      {$ENDIF}
-      m_bodyB.m_sweep.a := m_bodyB.m_sweep.a + m_bodyB.m_invI * b2Cross(r2, P2);
-
-      m_bodyB.SynchronizeTransform;
-   end;
+   m_bodyA.SynchronizeTransform;
+   m_bodyB.SynchronizeTransform;
 
    Result := linearError < b2_linearSlop;
 end;
@@ -17622,5 +17445,6 @@ finalization
    ep_collieder.Free;
 
 end.
+
 
 
