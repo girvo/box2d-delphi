@@ -531,6 +531,7 @@ begin
       Test.m_textLine := DrawPanel.ClientHeight - 15;
       Test.DrawText(ActiveEntry^.Name);
       Test.NextLine; // A space line
+
       {$IFDEF COMPUTE_PHYSICSTIME}
       Test.DrawText(Format('Delta Time: %.4fs  Physics Time: %.5fs', [deltaTime, Test.m_world.Profile.step]));
       Test.DrawText(Format('Collide Time: %.4fs  Solve Time: %.5fs  SolveTOI Time: %.5fs',
@@ -766,9 +767,11 @@ procedure TTester.Step(var settings: TSettings; timeStep: PhysicsFloat);
 const
    k_axisScale = 0.4;
    clPoint: RGBA = (0.0, 1.0, 0.0, 1.0);
+   clLine: RGBA = (0.8, 0.8, 0.8, 1.0);
    clAdd: RGBA = (0.3, 0.95, 0.3, 1.0);
    clPersist: RGBA = (0.3, 0.3, 0.95, 1.0);
    clContactNormal: RGBA = (0.9, 0.9, 0.9, 1.0);
+   clBomb: RGBA = (0.0, 0.0, 1.0, 1.0);
 
 var
    i: Integer;
@@ -818,6 +821,7 @@ begin
    begin
       DrawText('Space: Launch bomb   Arrows: Move view   Home: Reset view');
       DrawText('Right Mouse: Span   Wheel: Scale');
+      DrawText('Hold Shift and drag the mouse to spawn a bullet.');
    end;
 
    if settings.drawStats then
@@ -837,28 +841,13 @@ begin
 
       m_debugDraw.DrawPoint(p1, 4.0, clPoint);
       m_debugDraw.DrawPoint(p2, 4.0, clPoint);
-
-      glColor3f(0.8, 0.8, 0.8);
-      glBegin(GL_LINES);
-      glVertex2f(p1.x, p1.y);
-      glVertex2f(p2.x, p2.y);
-      glEnd;
+      m_debugDraw.DrawSegment(p1, p2, clLine);
    end;
 
    if m_bombSpawning then
    begin
-      glPointSize(4.0);
-      glColor3f(0.0, 0.0, 1.0);
-      glBegin(GL_POINTS);
-      glColor3f(0.0, 0.0, 1.0);
-      glVertex2f(m_bombSpawnPoint.x, m_bombSpawnPoint.y);
-      glEnd;
-
-      glColor3f(0.8, 0.8, 0.8);
-      glBegin(GL_LINES);
-      glVertex2f(m_mouseWorld.x, m_mouseWorld.y);
-      glVertex2f(m_bombSpawnPoint.x, m_bombSpawnPoint.y);
-      glEnd;
+      m_debugDraw.DrawPoint(m_bombSpawnPoint, 4.0, clBomb);
+      m_debugDraw.DrawSegment(m_mouseWorld, m_bombSpawnPoint, clLine);
    end;
 
    if settings.drawContactPoints then
@@ -968,7 +957,7 @@ end;
 procedure TTester.ShiftMouseDown(const p: TVector2);
 begin
    m_mouseWorld := p;
-   if not Assigned(m_mouseJoint) then
+   if Assigned(m_mouseJoint) then
       Exit;
 
    SpawnBomb(p);

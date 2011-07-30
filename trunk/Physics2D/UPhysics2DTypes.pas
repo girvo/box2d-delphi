@@ -498,9 +498,6 @@ procedure Normalize(var Sweep: Tb2Sweep); overload;
 
 {$ENDIF}
 
-function b2MixFriction(friction1, friction2: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function b2MixRestitution(restitution1, restitution2: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-
 function b2Max(const a, b: PhysicsFloat): PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2Max(const a, b: TVector2): TVector2; overload;
 function b2Min(const a, b: PhysicsFloat): PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
@@ -1343,21 +1340,6 @@ begin
 end;
 
 {$ENDIF}
-
-/// Friction mixing law. Feel free to customize this.
-function b2MixFriction(friction1, friction2: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-begin
-	 Result := Sqrt(friction1 * friction2);
-end;
-
-/// Restitution mixing law. Feel free to customize this.
-function b2MixRestitution(restitution1, restitution2: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-begin
-   if restitution1 > restitution2 then
-      Result := restitution1
-   else
-      Result := restitution2;
-end;
 
 function b2Max(const a, b: PhysicsFloat): PhysicsFloat;
 begin
