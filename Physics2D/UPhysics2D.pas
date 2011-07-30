@@ -573,6 +573,9 @@ type
       m_toiCount: Int32;
       m_toi: PhysicsFloat;
 
+      m_friction: PhysicsFloat;
+      m_restitution: PhysicsFloat;
+
       m_evaluateProc: Tb2ContactEvaluateProc; // For different contacts
 
       {$IFDEF OP_OVERLOAD}
@@ -590,25 +593,11 @@ type
       /// Is this contact touching?
       function IsTouching: Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
-      /// Override the default friction mixture. You can call this in b2ContactListener::PreSolve.
-      /// This value persists until set or reset.
-      //procedure SetFriction(friction: PhysicsFloat);
-
-      /// Get the friction.
-      //function GetFriction: PhysicsFloat;
-
       /// Reset the friction mixture to the default value.
-      //procedure ResetFriction;
-
-      /// Override the default restitution mixture. You can call this in b2ContactListener::PreSolve.
-      /// The value persists until you set or reset.
-      //procedure SetRestitution(restitution: PhysicsFloat);
-
-      /// Get the restitution.
-      //function GetRestitution: PhysicsFloat;
+      procedure ResetFriction; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
       /// Reset the restitution to the default value.
-      //procedure ResetRestitution;
+      procedure ResetRestitution; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
       /// Enable/disable this contact. This can be used inside the pre-solve
       /// contact listener. The contact is only disabled for the current
@@ -1238,7 +1227,10 @@ type
       property IsSensor: Boolean read m_isSensor write m_isSensor;
       property UserData: Pointer read m_userData write m_userData;
       property Density: PhysicsFloat read m_density write m_density;
+
+      /// Set the coefficient of friction. This will _not_ change the friction of existing contacts.
       property Friction: PhysicsFloat read m_friction write m_friction;
+      /// Set the coefficient of restitution. This will _not_ change the restitution of existing contacts.
       property Restitution: PhysicsFloat read m_restitution write m_restitution;
    end;
 
@@ -2611,6 +2603,8 @@ function IsTouching(const contact: Tb2Contact): Boolean; {$IFDEF INLINE_AVAIL}in
 procedure SetEnabled(var contact: Tb2Contact; flag: Boolean); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function IsEnabled(const contact: Tb2Contact): Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Has this contact been disabled?
 procedure Update(var contact: Tb2Contact; listener: Tb2ContactListener);
+procedure ResetFriction(var contact: Tb2Contact); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure ResetRestitution(var contact: Tb2Contact); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 /// Tb2DistanceProxy
 procedure SetShape(var dp: Tb2DistanceProxy; shape: Tb2Shape; index: Int32);
@@ -2736,6 +2730,21 @@ const
        (EvaluateProc: nil; Primary: False)) // with e_loopShape
        );
 
+/// Friction mixing law. Feel free to customize this.
+function b2MixFriction(friction1, friction2: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+begin
+	 Result := Sqrt(friction1 * friction2);
+end;
+
+/// Restitution mixing law. Feel free to customize this.
+function b2MixRestitution(restitution1, restitution2: PhysicsFloat): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+begin
+   if restitution1 > restitution2 then
+      Result := restitution1
+   else
+      Result := restitution2;
+end;
+
 function NewContact(fixtureA, fixtureB: Tb2Fixture; indexA, indexB: Int32): Pb2Contact;
 begin
    New(Result);
@@ -2762,6 +2771,9 @@ begin
             m_indexB := indexA;
          end;
       end;
+
+      m_friction := b2MixFriction(m_fixtureA.m_friction, m_fixtureB.m_friction);
+      m_restitution := b2MixRestitution(m_fixtureA.m_restitution, m_fixtureB.m_restitution);
    end;
 end;
 
@@ -2913,6 +2925,18 @@ begin
             listener.PreSolve(contact, oldManifold);
       end;
    end;
+end;
+
+procedure ResetFriction(var contact: Tb2Contact);
+begin
+   with contact do
+      m_friction := b2MixFriction(m_fixtureA.m_friction, m_fixtureB.m_friction);
+end;
+
+procedure ResetRestitution(var contact: Tb2Contact);
+begin
+   with contact do
+      m_restitution := b2MixRestitution(m_fixtureA.m_restitution, m_fixtureB.m_restitution);
 end;
 
 /// Tb2WorldManifold
@@ -6448,6 +6472,16 @@ begin
    Result := (m_flags and e_contact_touchingFlag) = e_contact_touchingFlag;
 end;
 
+procedure Tb2Contact.ResetFriction;
+begin
+   m_friction := b2MixFriction(m_fixtureA.m_friction, m_fixtureB.m_friction);
+end;
+
+procedure Tb2Contact.ResetRestitution;
+begin
+   m_restitution := b2MixRestitution(m_fixtureA.m_restitution, m_fixtureB.m_restitution);
+end;
+
 procedure Tb2Contact.SetEnabled(flag: Boolean);
 begin
    if flag then
@@ -6521,8 +6555,8 @@ begin
          Inc(cc, i);
          with cc^ do
          begin
-            friction := b2MixFriction(m_fixtureA.m_friction, m_fixtureB.m_friction);
-            restitution := b2MixRestitution(m_fixtureA.m_restitution, m_fixtureB.m_restitution);
+            friction := m_friction;
+            restitution := m_restitution;
             manifold := @m_manifold;
             bodyA := m_fixtureA.m_body;
             bodyB := m_fixtureB.m_body;
@@ -14321,9 +14355,13 @@ end;
 
 procedure Tb2PrismaticJoint.EnableLimit(flag: Boolean);
 begin
-	 m_bodyA.SetAwake(True);
-	 m_bodyB.SetAwake(True);
-	 m_enableLimit := flag;
+   if flag <> m_enableLimit then
+   begin
+      m_bodyA.SetAwake(True);
+      m_bodyB.SetAwake(True);
+      m_enableLimit := flag;
+      m_impulse.z := 0.0;
+   end;
 end;
 
 procedure Tb2PrismaticJoint.EnableMotor(flag: Boolean);
@@ -14370,10 +14408,14 @@ end;
 procedure Tb2PrismaticJoint.SetLimits(lower, upper: PhysicsFloat);
 begin
    //b2Assert(lower <= upper);
-   m_bodyA.SetAwake(True);
-   m_bodyB.SetAwake(True);
-	 m_lowerTranslation := lower;
-	 m_upperTranslation := upper;
+   if (lower <> m_lowerTranslation) and (upper <> m_upperTranslation) then
+   begin
+      m_bodyA.SetAwake(True);
+      m_bodyB.SetAwake(True);
+      m_lowerTranslation := lower;
+      m_upperTranslation := upper;
+      m_impulse.z := 0.0;
+   end;
 end;
 
 procedure Tb2PrismaticJoint.SetMotorSpeed(speed: PhysicsFloat);
@@ -15449,18 +15491,26 @@ end;
 
 procedure Tb2RevoluteJoint.EnableLimit(flag: Boolean);
 begin
-	 m_bodyA.SetAwake(True);
-	 m_bodyB.SetAwake(True);
-	 m_enableLimit := flag;
+   if flag <> m_enableLimit then
+   begin
+ 	     m_bodyA.SetAwake(True);
+	     m_bodyB.SetAwake(True);
+	     m_enableLimit := flag;
+       m_impulse.z := 0.0;
+   end;
 end;
 
 procedure Tb2RevoluteJoint.SetLimits(lower, upper: PhysicsFloat);
 begin
    //b2Assert(lower <= upper);
-	 m_bodyA.SetAwake(True);
-	 m_bodyB.SetAwake(True);
-   m_lowerAngle := lower;
-   m_upperAngle := upper;
+   if (lower <> m_lowerAngle) and (upper <> m_upperAngle) then
+   begin
+   	  m_bodyA.SetAwake(True);
+      m_bodyB.SetAwake(True);
+      m_lowerAngle := lower;
+      m_upperAngle := upper;
+      m_impulse.z := 0.0;
+   end;
 end;
 
 procedure Tb2RevoluteJoint.EnableMotor(flag: Boolean);
