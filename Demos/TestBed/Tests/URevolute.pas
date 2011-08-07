@@ -9,6 +9,7 @@ uses
 type
    TRevolute = class(TTester)
    public
+      m_ball: Tb2Body;
       m_joint: Tb2RevoluteJoint;
 
       constructor Create; override;
@@ -26,8 +27,11 @@ var
    bd: Tb2BodyDef;
    shape: Tb2EdgeShape;
    cshape: Tb2CircleShape;
+   polyshape: Tb2PolygonShape;
    rjd: Tb2RevoluteJointDef;
+   fd: Tb2FixtureDef;
    body: Tb2Body;
+   verts: array[0..2] of TVector2;
 begin
    inherited;
    begin
@@ -48,14 +52,14 @@ begin
 
       rjd := Tb2RevoluteJointDef.Create;
 
-      SetValue(bd.position, 0.0, 20.0);
+      SetValue(bd.position, -10.0, 20.0);
       body := m_world.CreateBody(bd);
       body.CreateFixture(cshape, 5.0);
 
       body.SetAngularVelocity(100.0);
       body.SetLinearVelocity(MakeVector(-8.0 * 100.0, 0.0));
 
-      rjd.Initialize(ground, body, MakeVector(0.0, 12.0));
+      rjd.Initialize(ground, body, MakeVector(-10.0, 12.0));
       rjd.motorSpeed := 1.0 * Pi;
       rjd.maxMotorTorque := 10000.0;
       rjd.enableMotor := False;
@@ -65,6 +69,59 @@ begin
       rjd.collideConnected := true;
 
       m_joint := Tb2RevoluteJoint(m_world.CreateJoint(rjd));
+   end;
+
+   begin
+			cshape := Tb2CircleShape.Create;
+			cshape.m_radius := 3.0;
+
+      bd := Tb2BodyDef.Create;
+			bd.bodyType := b2_dynamicBody;
+      SetValue(bd.position, 5.0, 30.0);
+
+      fd := Tb2FixtureDef.Create;
+      fd.density := 5.0;
+			fd.filter.maskBits := 1;
+			fd.shape := cshape;
+
+			m_ball := m_world.CreateBody(bd);
+			m_ball.CreateFixture(fd);
+
+      polyshape := Tb2PolygonShape.Create;
+			polyshape.SetAsBox(10.0, 0.2, MakeVector(-10.0, 0.0), 0.0);
+
+      bd := Tb2BodyDef.Create;
+      SetValue(bd.position, 20.0, 10.0);
+			bd.bodyType := b2_dynamicBody;
+			bd.bullet := True;
+			body := m_world.CreateBody(bd);
+			body.CreateFixture(polyshape, 2.0);
+
+      rjd := Tb2RevoluteJointDef.Create;
+			rjd.Initialize(ground, body, MakeVector(20.0, 10.0));
+			rjd.lowerAngle := -0.25 * Pi;
+			rjd.upperAngle := 0.0 * Pi;
+			rjd.enableLimit := True;
+			m_world.CreateJoint(rjd);
+   end;
+
+   // Tests mass computation of a small object far from the origin
+   begin
+      bd := Tb2BodyDef.Create;
+			bd.bodyType := b2_dynamicBody;
+			body := m_world.CreateBody(bd);
+
+      polyshape := Tb2PolygonShape.Create;
+      verts[0] := MakeVector(17.63, 36.31);
+      verts[1] := MakeVector(17.52, 36.69);
+      verts[2] := MakeVector(17.19, 36.36);
+      polyshape.SetVertices(@verts[0], 3);
+
+      fd := Tb2FixtureDef.Create;
+			fd.shape := polyshape;
+			fd.density := 1;
+
+			body.CreateFixture(fd);	//assertion hits inside here
    end;
 end;
 
