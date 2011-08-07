@@ -842,7 +842,6 @@ type
       procedure RemoveLeaf(leaf: Int32);
 
       function Balance(iA: Int32): Int32;
-	    procedure Shuffle(index: Int32);
 
       function ComputeHeight: Int32; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       function ComputeHeight(nodeId: Int32): Int32; overload;
@@ -870,9 +869,6 @@ type
       /// @return true if the proxy was re-inserted.
       function MoveProxy(proxyId: Int32; const aabb: Tb2AABB;
          const displacement: TVector2): Boolean;
-
-      /// Perform some iterations to re-balance the tree.
-      procedure Rebalance(iterations: Int32);
 
       /// Get proxy user data.
       /// @return the proxy user data or 0 if the id is invalid.
@@ -1285,6 +1281,7 @@ type
       m_localCenterA, m_localCenterB: TVector2;
       m_invMassA, m_invIA,
       m_invMassB, m_invIB: PhysicsFloat;
+
    protected
       m_type: Tb2JointType;
       m_prev, m_next: Tb2Joint;
@@ -1323,6 +1320,11 @@ type
       property GetBodyB: Tb2Body read m_bodyB;
       property GetNext: Tb2Joint read m_next;
       property UserData: Pointer read m_userData write m_userData;
+
+      /// Get collide connected.
+	    /// Note: modifying the collide connect flag won't work correctly because
+    	/// the flag is only checked when fixture AABBs begin to overlap.
+      property IsCollideConnected: Boolean read m_collideConnected;
    end;
 
    {$IFDEF CONTROLLERS}
@@ -5473,6 +5475,10 @@ begin
             ce := body.m_contactList;
             while Assigned(ce) and (world_solve_island.m_bodyCount < b2_maxTOIContacts) do
             begin
+               if (world_solve_island.m_bodyCount = world_solve_island.m_bodyCapacity) or
+                (world_solve_island.m_contactCount = world_solve_island.m_contactCapacity) then
+                  Break;
+
                contact := ce.contact;
 
                // Has this contact already been added to the island?
@@ -6597,7 +6603,7 @@ end;
 // Initialize position dependent portions of the velocity constraints.
 procedure Tb2ContactSolver.InitializeVelocityConstraints;
 const
-   k_maxConditionNumber = 100.0;
+   k_maxConditionNumber = 1000.0;
 var
    i, j: Integer;
    cc: Pb2ContactConstraint;
@@ -8682,159 +8688,6 @@ begin
    Result := iA;
 end;
 
-// Shuffle grandchildren to improve quality. This cannot increase the tree height,
-// but it can cause slight imbalance.
-// Balanced Hierarchies for Collision Detection between Fracturing Objects
-// http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.125.7818&rep=rep1&type=pdf
-procedure Tb2DynamicTree.Shuffle(index: Int32);
-var
-   node, node1, node2, node11, node12, node21, node22: Pb2TreeNode;
-   i, i1, i2, i11, i12, i21, i22: Int32;
-   b11, b12, b21, b22, b1, b2: Tb2AABB;
-   m1, m2, m3: PhysicsFloat;
-begin
-   if index = b2_nullNode then
-      Exit;
-
-   node := @m_nodes[index];
-   if node^.height < 2 then
-      Exit;
-
-   i1 := node^.child1;
-   i2 := node^.child2;
-
-   //b2Assert(0 <= i1 && i1 < m_nodeCapacity);
-   //b2Assert(0 <= i2 && i2 < m_nodeCapacity);
-
-   node1 := @m_nodes[i1];
-   node2 := @m_nodes[i2];
-
-   if (node1^.height < 1) or (node2^.height < 1) then
-      Exit;
-
-   i11 := node1^.child1;
-   i12 := node1^.child2;
-   i21 := node2^.child1;
-   i22 := node2^.child2;
-
-   node11 := @m_nodes[i11];
-   node12 := @m_nodes[i12];
-   node21 := @m_nodes[i21];
-   node22 := @m_nodes[i22];
-
-   b11 := node11^.aabb;
-   b12 := node12^.aabb;
-   b21 := node21^.aabb;
-   b22 := node22^.aabb;
-
-   // Metrics
-   {$IFDEF OP_OVERLOAD}
-   b1.Combine(b11, b12);
-   b2.Combine(b21, b22);
-   m1 := b1.GetPerimeter + b2.GetPerimeter;
-   {$ELSE}
-   Combine(b1, b11, b12);
-   Combine(b2, b21, b22);
-   m1 := GetPerimeter(b1) + GetPerimeter(b2);
-   {$ENDIF}
-
-   {$IFDEF OP_OVERLOAD}
-   b1.Combine(b11, b22);
-   b2.Combine(b12, b21);
-   m2 := b1.GetPerimeter + b2.GetPerimeter;
-   {$ELSE}
-   Combine(b1, b11, b22);
-   Combine(b2, b12, b21);
-   m2 := GetPerimeter(b1) + GetPerimeter(b2);
-   {$ENDIF}
-
-   {$IFDEF OP_OVERLOAD}
-   b1.Combine(b11, b21);
-   b2.Combine(b12, b22);
-   m3 := b1.GetPerimeter() + b2.GetPerimeter();
-   {$ELSE}
-   Combine(b1, b11, b21);
-   Combine(b2, b12, b22);
-   m3 := GetPerimeter(b1) + GetPerimeter(b2);
-   {$ENDIF}
-
-   if (m1 <= m2) and (m1 <= m3) then
-      Exit;
-
-   if m2 <= m3 then
-   begin
-      // (node11, node22), (node21, node12)
-      node1^.child2 := i22;
-      node22^.parent := i1;
-      {$IFDEF OP_OVERLOAD}
-      node1^.aabb.Combine(node11^.aabb, node22^.aabb);
-      {$ELSE}
-      Combine(node1^.aabb, node11^.aabb, node22^.aabb);
-      {$ENDIF}
-      node1^.height := 1 + b2Max(node11^.height, node22^.height);
-
-      node2^.child2 := i12;
-      node12^.parent := i2;
-      {$IFDEF OP_OVERLOAD}
-      node2^.aabb.Combine(node21^.aabb, node12^.aabb);
-      {$ELSE}
-      Combine(node2^.aabb, node21^.aabb, node12^.aabb);
-      {$ENDIF}
-      node2^.height := 1 + b2Max(node21^.height, node12^.height);
-   end
-   else
-   begin
-      // (node11, node21), (node12, node22)
-      node1^.child2 := i21;
-      node21^.parent := i1;
-      {$IFDEF OP_OVERLOAD}
-      node1^.aabb.Combine(node11^.aabb, node21^.aabb);
-      {$ELSE}
-      Combine(node1^.aabb, node11^.aabb, node21^.aabb);
-      {$ENDIF}
-      node1^.height := 1 + b2Max(node11^.height, node21^.height);
-
-      node2^.child1 := i12;
-      node12^.parent := i2;
-      {$IFDEF OP_OVERLOAD}
-      node2^.aabb.Combine(node12^.aabb, node22^.aabb);
-      {$ELSE}
-      Combine(node2^.aabb, node12^.aabb, node22^.aabb);
-      {$ENDIF}
-      node2^.height := 1 + b2Max(node12^.height, node22^.height);
-   end;
-
-   {$IFDEF OP_OVERLOAD}
-   node^.aabb.Combine(node1^.aabb, node2^.aabb);
-   {$ELSE}
-   Combine(node^.aabb, node1^.aabb, node2^.aabb);
-   {$ENDIF}
-   node^.height := 1 + b2Max(node1^.height, node2^.height);
-
-   i := node^.parent;
-   while i <> b2_nullNode do
-   begin
-      node := @m_nodes[i];
-
-      i1 := node^.child1;
-      i2 := node^.child2;
-
-      node1 := @m_nodes[i1];
-      node2 := @m_nodes[i2];
-
-      {$IFDEF OP_OVERLOAD}
-      node^.aabb.Combine(node1^.aabb, node2^.aabb);
-      {$ELSE}
-      Combine(node^.aabb, node1^.aabb, node2^.aabb);
-      {$ENDIF}
-      node^.height := 1 + b2Max(node1^.height, node2^.height);
-
-      i := node^.parent;
-   end;
-
-   //Validate();
-end;
-
 function Tb2DynamicTree.ComputeHeight(nodeId: Int32): Int32;
 var
    height1, height2: Int32;
@@ -9081,31 +8934,6 @@ begin
 
    InsertLeaf(proxyId);
    Result := True;
-end;
-
-procedure Tb2DynamicTree.Rebalance(iterations: Int32);
-var
-   i: Integer;
-begin
-   if m_root = b2_nullNode then
-      Exit;
-
-   // Rebalance the tree by shuffling.
-   for i := 0 to iterations - 1 do
-   begin
-      while m_nodes[m_path].height = -1 do
-      begin
-         Inc(m_path);
-         if m_path = m_nodeCapacity then
-            m_path := 0;
-      end;
-
-      Shuffle(m_path);
-
-      Inc(m_path);
-      if m_path = m_nodeCapacity then
-         m_path := 0;
-   end;
 end;
 
 function Tb2DynamicTree.GetUserData(proxyId: Int32): Pointer;
@@ -9768,7 +9596,7 @@ begin
    end;
 
    // Try to keep the tree balanced.
-   m_tree.Rebalance(4);
+   //m_tree.Rebalance(4);
 end;
 
 procedure Tb2BroadPhase.Query(callback: Tb2GenericCallBackWrapper; const aabb: Tb2AABB);
@@ -12854,10 +12682,10 @@ const
    k_inv3 = 1.0 / 3.0;
 var
    i: Integer;
-   center, pRef, p1, p2, p3, e1, e2: TVector2;
+   center, s, e1, e2: TVector2;
    area, inertia: PhysicsFloat;
    D, triangleArea: PhysicsFloat;
-   px, py, ex1, ey1, ex2, ey2: PhysicsFloat;
+   ex1, ey1, ex2, ey2: PhysicsFloat;
    intx2, inty2: PhysicsFloat;
 begin
    // Polygon mass, centroid, and inertia.
@@ -12890,26 +12718,35 @@ begin
    area := 0.0;
    inertia := 0.0;
 
-   // pRef is the reference point for forming triangles.
+   // s is the reference point for forming triangles.
    // It's location doesn't change the result (except for rounding error).
-   pRef := b2Vec2_Zero;
+   s := b2Vec2_Zero;
+   // This code would put the reference point inside the polygon.
+   {$IFDEF OP_OVERLOAD}
+ 	 for i := 0 to m_vertexCount - 1 do
+      s.AddBy(m_vertices[i]);
+   s.DivideBy(m_vertexCount);
+   {$ELSE}
+ 	 for i := 0 to m_vertexCount - 1 do
+      AddBy(s, m_vertices[i]);
+   DivideBy(s, m_vertexCount);
+   {$ENDIF}
 
    for i := 0 to m_vertexCount - 1 do
    begin
       // Triangle vertices.
-      p1 := pRef;
-      p2 := m_vertices[i];
-      if (i + 1 < m_vertexCount) then
-         p3 := m_vertices[i + 1]
-      else
-         p3 := m_vertices[0];
-
       {$IFDEF OP_OVERLOAD}
-      e1 := p2 - p1;
-      e2 := p3 - p1;
+      e1 := m_vertices[i] - s;
+      if i + 1 < m_vertexCount then
+         e2 := m_vertices[i + 1] - s
+      else
+         e2 := m_vertices[0] - s;
       {$ELSE}
-      e1 := Subtract(p2, p1);
-      e2 := Subtract(p3, p1);
+      e1 := Subtract(m_vertices[i], s);
+      if i + 1 < m_vertexCount then
+         e2 := Subtract(m_vertices[i + 1], s)
+      else
+         e2 := Subtract(m_vertices[0], s);
       {$ENDIF}
 
       D := b2Cross(e1, e2);
@@ -12919,28 +12756,24 @@ begin
 
       // Area weighted centroid
       {$IFDEF OP_OVERLOAD}
-      center.AddBy(triangleArea * k_inv3 * (p1 + p2 + p3));
+      center.AddBy(triangleArea * k_inv3 * (e1 + e2));
       {$ELSE}
-      AddBy(center, Multiply(Add(p1, p2, p3), triangleArea * k_inv3));
+      AddBy(center, Multiply(Add(e1, e2), triangleArea * k_inv3));
       {$ENDIF}
 
-      px := p1.x;
-      py := p1.y;
       ex1 := e1.x;
       ey1 := e1.y;
       ex2 := e2.x;
       ey2 := e2.y;
 
-      intx2 := k_inv3 * (0.25 * (ex1 * ex1 + ex2 * ex1 + ex2 * ex2) +
-         (px * ex1 + px * ex2)) + 0.5 * px * px;
-      inty2 := k_inv3 * (0.25 * (ey1 * ey1 + ey2 * ey1 + ey2 * ey2) +
-         (py * ey1 + py * ey2)) + 0.5 * py * py;
+      intx2 := ex1 * ex1 + ex2 * ex1 + ex2 * ex2;
+      inty2 := ey1 * ey1 + ey2 * ey1 + ey2 * ey2;
 
-      inertia := inertia + D * (intx2 + inty2);
+      inertia := inertia + (0.25 * k_inv3 * D) * (intx2 + inty2);
    end;
 
    m_baseMass.mass := area;
-   m_baseMass.I := inertia;
+   m_baseMass.I := inertia + area * b2Dot(s, s);
 
    // Total mass
    massData.mass := density * area;
@@ -12949,14 +12782,15 @@ begin
    //b2Assert(area > B2_FLT_EPSILON);
    {$IFDEF OP_OVERLOAD}
    center.DivideBy(area);
+   massData.center := center + s;
    {$ELSE}
    DivideBy(center, area);
+   massData.center := Add(center, s);
    {$ENDIF}
-   massData.center := center;
-   m_baseMass.center := center;
+   m_baseMass.center := massData.center;
 
    // Inertia tensor relative to the local origin.
-   massData.I := density * inertia;
+   massData.I := m_baseMass.I * density;
 end;
 
 function Tb2PolygonShape.ComputeSubmergedArea(const normal: TVector2; offset: PhysicsFloat;
@@ -15169,7 +15003,7 @@ end;
 procedure Tb2RevoluteJoint.SolveVelocityConstraints(const step: Tb2TimeStep);
 var
    Cdot, impulse: TVector3;
-   v1, v2, r1, r2, Cdot1, reduced, P, Cdot2, impulse2: TVector2;
+   v1, v2, r1, r2, Cdot1, reduced, P, Cdot2, impulse2, rhs: TVector2;
    w1, w2, m1, m2, i1, i2, fCdot, fimpulse, oldImpulse, maxImpulse, newImpulse: PhysicsFloat;
 begin
    v1 := m_bodyA.m_linearVelocity;
@@ -15247,17 +15081,26 @@ begin
          if newImpulse < 0.0 then
          begin
             {$IFDEF OP_OVERLOAD}
-            reduced := m_mass.Solve22(-Cdot1);
+            rhs := m_impulse.z * MakeVector(m_mass.col3.x, m_mass.col3.y) - Cdot1;
+            reduced := m_mass.Solve22(rhs);
             {$ELSE}
-            reduced := Solve22(m_mass, Negative(Cdot1));
+            rhs := Subtract(Multiply(MakeVector(m_mass.col3.x, m_mass.col3.y), m_impulse.z), Cdot1);
+            reduced := Solve22(m_mass, rhs);
             {$ENDIF}
+
             impulse.x := reduced.x;
             impulse.y := reduced.y;
             impulse.z := -m_impulse.z;
             m_impulse.x := m_impulse.x + reduced.x;
             m_impulse.y := m_impulse.y + reduced.y;
             m_impulse.z := 0.0;
-         end;
+         end
+         else
+            {$IFDEF OP_OVERLOAD}
+            m_impulse.AddBy(impulse);
+            {$ELSE}
+            AddBy(m_impulse, impulse);
+            {$ENDIF}
       end
       else if m_limitState = e_atUpperLimit then
       begin
@@ -15265,17 +15108,26 @@ begin
          if newImpulse > 0.0 then
          begin
             {$IFDEF OP_OVERLOAD}
-            reduced := m_mass.Solve22(-Cdot1);
+            rhs := m_impulse.z * MakeVector(m_mass.col3.x, m_mass.col3.y) - Cdot1;
+            reduced := m_mass.Solve22(rhs);
             {$ELSE}
-            reduced := Solve22(m_mass, Negative(Cdot1));
+            rhs := Subtract(Multiply(MakeVector(m_mass.col3.x, m_mass.col3.y), m_impulse.z), Cdot1);
+            reduced := Solve22(m_mass, rhs);
             {$ENDIF}
+
             impulse.x := reduced.x;
             impulse.y := reduced.y;
             impulse.z := -m_impulse.z;
             m_impulse.x := m_impulse.x + reduced.x;
             m_impulse.y := m_impulse.y + reduced.y;
             m_impulse.z := 0.0;
-         end;
+         end
+         else
+            {$IFDEF OP_OVERLOAD}
+            m_impulse.AddBy(impulse);
+            {$ELSE}
+            AddBy(m_impulse, impulse);
+            {$ENDIF}
       end;
 
       P.x := impulse.x;
