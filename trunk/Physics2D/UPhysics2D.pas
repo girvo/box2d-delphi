@@ -849,9 +849,6 @@ type
       procedure ValidateStructure(index: Int32);
 	    procedure ValidateMetrics(index: Int32);
 
-	    function GetMaxBalance(index: Int32): Int32; overload;
-	    function GetTotalArea(index: Int32): PhysicsFloat;
-
    public
       constructor Create;
 
@@ -890,6 +887,7 @@ type
       /// @param callback a callback class that is called for each proxy that is hit by the ray.
       procedure RayCast(callback: Tb2GenericCallBackWrapper; const input: Tb2RayCastInput);
 
+      /// Validate this tree. For testing.
       procedure Validate; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 	    /// Compute the height of the binary tree in O(N) time. Should not be called often.
@@ -897,10 +895,13 @@ type
 
       /// Get the maximum balance of an node in the tree. The balance is the difference
 	    /// in height of the two children of a node.
-      function GetMaxBalance: Int32; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function GetMaxBalance: Int32; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 	    /// Get the ratio of the sum of the node areas to the root area.
 	    function GetAreaRatio: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+
+      /// Build an optimal tree. Very expensive. For testing.
+	    procedure RebuildBottomUp;
    end;
 {$ENDIF}
 
@@ -8271,6 +8272,7 @@ begin
    m_nodes[nodeId].child1 := b2_nullNode;
    m_nodes[nodeId].child2 := b2_nullNode;
    m_nodes[nodeId].height := 0;
+   m_nodes[nodeId].userData := nil;
    Inc(m_nodeCount);
    Result := nodeId;
 end;
@@ -8788,57 +8790,6 @@ begin
    ValidateMetrics(child2);
 end;
 
-function Tb2DynamicTree.GetMaxBalance(index: Int32): Int32;
-var
-   child1, child2: Int32;
-   balance, balance1, balance2: Int32;
-begin
-   if index = b2_nullNode then
-   begin
-      Result := 0;
-      Exit;
-   end;
-
-   {$IFDEF OP_OVERLOAD}
-   if m_nodes[index].IsLeaf then
-   {$ELSE}
-   if IsLeaf(m_nodes[index]) then
-   {$ENDIF}
-   begin
-      Result := 0;
-      Exit;
-   end;
-
-   child1 := m_nodes[index].child1;
-   child2 := m_nodes[index].child2;
-
-   balance := Abs(m_nodes[child2].height - m_nodes[child1].height);
-   balance1 := GetMaxBalance(child1);
-   balance2 := GetMaxBalance(child2);
-
-   Result := b2Max(balance, b2Max(balance1, balance2));
-end;
-
-// Compute the total surface area of a sub-tree (perimeter)
-function Tb2DynamicTree.GetTotalArea(index: Int32): PhysicsFloat;
-var
-   node: Pb2TreeNode;
-begin
-   if index = b2_nullNode then
-   begin
-      Result := 0.0;
-      Exit;
-   end;
-
-   //b2Assert(0 <= index && index < m_nodeCapacity);
-   node := @m_nodes[index];
-   {$IFDEF OP_OVERLOAD}
-   Result := node^.aabb.GetPerimeter + GetTotalArea(node^.child1) + GetTotalArea(node^.child2);
-   {$ELSE}
-   Result := GetPerimeter(node^.aabb) + GetTotalArea(node^.child1) + GetTotalArea(node^.child2);
-   {$ENDIF}
-end;
-
 function Tb2DynamicTree.ComputeHeight: Int32;
 begin
    Result := ComputeHeight(m_root);
@@ -9111,22 +9062,150 @@ begin
 end;
 
 function Tb2DynamicTree.GetMaxBalance: Int32;
+var
+   i: Integer;
+   child1, child2, balance: Int32;
+   node: Pb2TreeNode;
 begin
-   Result := GetMaxBalance(m_root);
+   Result := 0;
+   for i := 0 to m_nodeCapacity - 1 do
+   begin
+      node := @m_nodes[i];
+      if node^.height <= 1 then
+         Continue;
+
+      //b2Assert(node->IsLeaf() == false);
+
+      child1 := node^.child1;
+      child2 := node^.child2;
+      balance := Abs(m_nodes[child2].height - m_nodes[child1].height);
+      Result := b2Max(Result, balance);
+   end;
 end;
 
 function Tb2DynamicTree.GetAreaRatio: PhysicsFloat;
+var
+   i: Integer;
+   root, node: Pb2TreeNode;
+   rootArea, totalArea: PhysicsFloat;
 begin
    if m_root = b2_nullNode then
-   begin
-      Result := 0.0;
-   end
+      Result := 0.0
    else
+   begin
+      root := @m_nodes[m_root];
       {$IFDEF OP_OVERLOAD}
-      Result := GetTotalArea(m_root) / m_nodes[m_root].aabb.GetPerimeter;
+      rootArea := root^.aabb.GetPerimeter();
       {$ELSE}
-      Result := GetTotalArea(m_root) / GetPerimeter(m_nodes[m_root].aabb);
+      rootArea := GetPerimeter(root^.aabb);
       {$ENDIF}
+
+      totalArea := 0.0;
+      for i := 0 to m_nodeCapacity - 1 do
+      begin
+         node := @m_nodes[i];
+         if node^.height < 0 then
+            Continue; // Free node in pool
+
+         {$IFDEF OP_OVERLOAD}
+         totalArea := totalArea + node^.aabb.GetPerimeter();
+         {$ELSE}
+         totalArea := totalArea + GetPerimeter(node^.aabb);
+         {$ENDIF}
+      end;
+
+      Result := totalArea / rootArea;
+   end;
+end;
+
+procedure Tb2DynamicTree.RebuildBottomUp;
+var
+   i, j: Integer;
+   count, iMin, jMin, index1, index2, parentIndex: Int32;
+   minCost, cost: PhysicsFloat;
+   nodes: array of Int32;
+   aabbi, aabbj, b: Tb2AABB;
+   child1, child2, parent: Pb2TreeNode;
+begin
+   SetLength(nodes, m_nodeCount);
+   count := 0;
+
+   // Build array of leaves. Free the rest.
+   for i := 0 to m_nodeCapacity - 1 do
+   begin
+      if m_nodes[i].height < 0 then
+         Continue; // free node in pool
+
+      {$IFDEF OP_OVERLOAD}
+      if m_nodes[i].IsLeaf then
+      {$ELSE}
+      if IsLeaf(m_nodes[i]) then
+      {$ENDIF}
+      begin
+         m_nodes[i].parent := b2_nullNode;
+         nodes[count] := i;
+         Inc(count);
+      end
+      else
+         FreeNode(i);
+   end;
+
+   while count > 1 do
+   begin
+      minCost := FLT_MAX;
+      iMin := -1;
+      jMin := -1;
+
+      for i := 0 to count - 1 do
+      begin
+         aabbi := m_nodes[nodes[i]].aabb;
+
+         for j := i + 1 to count - 1 do
+         begin
+            aabbj := m_nodes[nodes[j]].aabb;
+            {$IFDEF OP_OVERLOAD}
+            b.Combine(aabbi, aabbj);
+            cost := b.GetPerimeter();
+            {$ELSE}
+            Combine(b, aabbi, aabbj);
+            cost := GetPerimeter(b);
+            {$ENDIF}
+            if cost < minCost then
+            begin
+               iMin := i;
+               jMin := j;
+               minCost := cost;
+            end;
+         end;
+      end;
+
+      index1 := nodes[iMin];
+      index2 := nodes[jMin];
+      child1 := @m_nodes[index1];
+      child2 := @m_nodes[index2];
+
+      parentIndex := AllocateNode();
+      parent := @m_nodes[parentIndex];
+      parent^.child1 := index1;
+      parent^.child2 := index2;
+      parent^.height := 1 + b2Max(child1^.height, child2^.height);
+      {$IFDEF OP_OVERLOAD}
+      parent^.aabb.Combine(child1^.aabb, child2^.aabb);
+      {$ELSE}
+      Combine(parent^.aabb, child1^.aabb, child2^.aabb);
+      {$ENDIF}
+      parent^.parent := b2_nullNode;
+
+      child1^.parent := parentIndex;
+      child2^.parent := parentIndex;
+
+      nodes[jMin] := nodes[count - 1];
+      nodes[iMin] := parentIndex;
+
+      Dec(count);
+   end;
+
+   m_root := nodes[0];
 end;
 
 {$ENDIF}
