@@ -1,6 +1,6 @@
 unit UPhysics2DHelper;
 
-{ box2D 2.1.0 translation
+{ box2D 2.3.0 translation
 
   ###  This unit is written based on Box2D maintained by Erin Catto (http://www.box2d.org)
   All type names follow the Delphi custom Txxx and xxx means the corresponding
@@ -46,7 +46,7 @@ unit UPhysics2DHelper;
   ###  Controllers are added as enhancement and can be flagged by CONTROLLERS.
   If you don't need them, please unflag to reduce code size.
 
-  ###  If you want to do benchmark or something else, please flag COMPUTE_PHYSICSTIME.
+  ###  If you want to do benchmark or something else, please flag COMPUTE_PHYSICS_TIME.
   Time consumed by each step is updated and stored in Tb2World.GetPhysicsTime.
 
   ###  All assertions are ignored.
@@ -59,6 +59,8 @@ unit UPhysics2DHelper;
 }
 
 interface
+{$I Physics2D.inc}
+
 uses
    UPhysics2D, UPhysics2DTypes, Math, Classes;
 
@@ -84,6 +86,12 @@ procedure BuildRope(pts: PPointF; cnt: Int32; world: Tb2World; bodies: TList = n
 procedure BuildRope(const p1, p2: TPointF; world: Tb2World; bodies: TList = nil;
    body1: Tb2Body = nil; body2: Tb2Body = nil; max_segment: Single = 5;
    shape_density: Single = 1.0; shape_friction: Single = 0.0); overload;
+
+// radius is of the circumcircle of the polygon.
+// edge must not be larger than b2_maxPolygonVertices
+function BuildPentagonShape(radius: Single): Tb2PolygonShape; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function BuildHexagonShape(radius: Single): Tb2PolygonShape; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function BuildPolygonShape(radius: Single; edge: Integer): Tb2PolygonShape;
 
 var
    LastGeneratedPoints: TPointsF;
@@ -510,6 +518,38 @@ begin
    pts[1] := p2;
    BuildRope(@pts[0], 2, world, bodies, body1, body2, 1, max_segment,
       shape_density, shape_friction);
+end;
+
+function BuildPentagonShape(radius: Single): Tb2PolygonShape;
+begin
+   Result := BuildPolygonShape(radius, 5);
+end;
+
+function BuildHexagonShape(radius: Single): Tb2PolygonShape;
+begin
+   Result := BuildPolygonShape(radius, 6);
+end;
+
+function BuildPolygonShape(radius: Single; edge: Integer): Tb2PolygonShape;
+var
+   i: Integer;
+   angle, delta: Single;
+   vertices: Tb2PolyVertices;
+begin
+   Result := nil;
+   if (edge >= 3) and (edge <= b2_maxPolygonVertices) then
+   begin
+      angle := 0.0;
+      delta := 2 * Pi / edge;
+      for i := 0 to edge - 1 do
+      begin
+         SetValue(vertices[i], radius * Cos(angle), radius * Sin(angle));
+         angle := angle + delta;
+      end;
+
+      Result := Tb2PolygonShape.Create;
+      Result.SetVertices(@vertices[0], edge);
+   end;
 end;
 
 end.

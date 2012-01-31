@@ -18,7 +18,7 @@ unit UPhysics2DPolygonTool;
  * 3. This notice may not be removed or altered from any source distribution.
 }
 
-{ box2D 2.1.0 translation
+{ box2D 2.3.0 translation
 
   ###  This unit is written based on Box2D maintained by Erin Catto (http://www.box2d.org)
   All type names follow the Delphi custom Txxx and xxx means the corresponding
@@ -64,7 +64,7 @@ unit UPhysics2DPolygonTool;
   ###  Controllers are added as enhancement and can be flagged by CONTROLLERS.
   If you don't need them, please unflag to reduce code size.
 
-  ###  If you want to do benchmark or something else, please flag COMPUTE_PHYSICSTIME.
+  ###  If you want to do benchmark or something else, please flag COMPUTE_PHYSICS_TIME.
   Time consumed by each step is updated and stored in Tb2World.GetPhysicsTime.
 
   ###  All assertions are ignored.

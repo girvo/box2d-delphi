@@ -118,7 +118,7 @@ begin
       jd.enableLimit := True;
       SetValue(jd.localAnchorA, 0.0, 4.0);
       jd.localAnchorB := b2Vec2_Zero;
-      SetValue(jd.localAxis1, 0.0, 1.0);
+      SetValue(jd.localAxisA, 0.0, 1.0);
       jd.lowerTranslation := -1.0;
       jd.upperTranslation := 1.0;
 

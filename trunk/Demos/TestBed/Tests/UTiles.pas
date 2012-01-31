@@ -70,6 +70,12 @@ begin
       begin
          bd.bodyType := b2_dynamicBody;
          bd.position := y;
+
+//         if (i = 0) and (j = 0) then
+//						bd.allowSleep = false
+//         else
+//						bd.allowSleep = true;
+
          body := m_world.CreateBody(bd, False);
          body.CreateFixture(shape, 5.0, False);
          Inc(m_fixtureCount);
@@ -88,7 +94,9 @@ begin
    bd.Free;
    shape.Free;
 
+   {$IFDEF COMPUTE_PHYSICS_TIME}
    m_createTime := GetRawReferenceTime;
+   {$ENDIF}
 end;
 
 procedure TTiles.Step(var settings: TSettings; timeStep: PhysicsFloat);
@@ -97,6 +105,7 @@ var
    height, leafCount, minimumNodeCount: Int32;
    minimumHeight: PhysicsFloat;
 begin
+   inherited;
    cm := m_world.GetContactManager;
    height := cm.m_broadPhase.GetTreeHeight;
    leafCount := cm.m_broadPhase.GetProxyCount;
@@ -105,12 +114,13 @@ begin
    DrawText('Test of dynamic tree performance in worse case scenario.');
    DrawText('I know this is slow. I hope to address this in a future update.');
    DrawText(Format('dynamic tree height := %d, min := %d', [height, Trunc(minimumHeight)]));
+   {$IFDEF COMPUTE_PHYSICS_TIME}
    DrawText(Format('create time = %6.2f ms, fixture count = %d', [m_createTime, m_fixtureCount]));
-   inherited;
+   {$ENDIF}
 end;
 
 initialization
-   RegisterTestEntry('Tiles', TTiles);
+   RegisterTestEntry('Tiles(stress test)', TTiles);
 
 end.
 

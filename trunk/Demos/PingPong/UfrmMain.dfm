@@ -53,7 +53,6 @@ object frmMain: TfrmMain
     Height = 22
     Style = [cbStandardColors, cbExtendedColors, cbPrettyNames, cbCustomColors]
     Anchors = [akLeft, akBottom]
-    ItemHeight = 16
     TabOrder = 1
     OnChange = clrBlockColorChange
   end
@@ -66,7 +65,6 @@ object frmMain: TfrmMain
     AutoCloseUp = True
     Style = csDropDownList
     Anchors = [akLeft, akBottom]
-    ItemHeight = 13
     TabOrder = 2
     OnChange = cboBlockTypeChange
     Items.Strings = (

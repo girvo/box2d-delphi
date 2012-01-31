@@ -4,11 +4,13 @@ interface
 {$I ..\..\Physics2D\Physics2D.inc}
 
 uses
-   UMain, UPhysics2DTypes, UPhysics2D, SysUtils;
+   UMain, UPhysics2DTypes, UPhysics2D, UPhysics2DHelper, SysUtils;
 
 type
    TCharacterCollision = class(TTester)
    public
+      m_character: Tb2Body;
+
       constructor Create; override;
       procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
    end;
@@ -18,6 +20,7 @@ implementation
 
 /// This is a test of typical character collision scenarios. This does not
 /// show how you should implement a character in your application.
+/// Instead this is used to test smooth collision on edge chains.
 
 { TCharacterCollision }
 
@@ -28,9 +31,8 @@ var
    ground, body: Tb2Body;
    edge: Tb2EdgeShape;
    shape: Tb2PolygonShape;
-   lshape: Tb2LoopShape;
+   lshape: Tb2ChainShape;
    fd: Tb2FixtureDef;
-   angle, delta: PhysicsFloat;
    cshape: Tb2CircleShape;
    vertices: array[0..5] of TVector2;
    vs: array[0..9] of TVector2;
@@ -46,7 +48,8 @@ begin
       ground.CreateFixture(edge, 0.0);
    end;
 
-   // Collinear edges
+   // Collinear edges with no adjacency information.
+   // This shows the problematic case where a box shape can hit an internal vertex.
    begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
@@ -58,6 +61,21 @@ begin
       ground.CreateFixture(edge, 0.0, False, False);
       edge.SetVertices(MakeVector(-4.0, 1.0), MakeVector(-2.0, 1.0));
       ground.CreateFixture(edge, 0.0);
+   end;
+
+   // Chain shape
+   begin
+      bd := Tb2BodyDef.Create;
+			bd.angle := 0.25 * Pi;
+			ground := m_world.CreateBody(bd);
+
+			SetValue(vs[0], 5.0, 7.0);
+			SetValue(vs[1], 6.0, 8.0);
+			SetValue(vs[2], 7.0, 8.0);
+			SetValue(vs[3], 8.0, 7.0);
+
+      lshape := Tb2ChainShape.CreateChain(@vs[0], 4);
+			ground.CreateFixture(lshape, 0.0);
    end;
 
    // Square tiles. This shows that adjacency shapes may
@@ -84,7 +102,7 @@ begin
 			SetValue(vertices[1], 1.0, 3.0);
 			SetValue(vertices[2], 1.0, 5.0);
 			SetValue(vertices[3], -1.0, 5.0);
-			lshape := Tb2LoopShape.Create(@vertices[0], 4);
+			lshape := Tb2ChainShape.CreateLoop(@vertices[0], 4);
 			ground.CreateFixture(lshape, 0.0);
    end;
 
@@ -104,7 +122,7 @@ begin
 			SetValue(vs[7], -4.0, 3.0);
 			SetValue(vs[8], -6.0, 2.0);
 			SetValue(vs[9], -6.0, 0.0);
-			lshape := Tb2LoopShape.Create(@vs[0], 10);
+			lshape := Tb2ChainShape.CreateLoop(@vs[0], 10);
 			ground.CreateFixture(lshape, 0.0);
    end;
 
@@ -152,20 +170,9 @@ begin
       bd.bodyType := b2_dynamicBody;
       bd.fixedRotation := True;
       bd.allowSleep := False;
-
       body := m_world.CreateBody(bd);
 
-      angle := 0.0;
-      delta := Pi / 3.0;
-      for i := 0 to 5 do
-      begin
-         SetValue(vertices[i], 0.5 * Cos(angle), 0.5 * Sin(angle));
-         angle := angle + delta;
-      end;
-
-      shape := Tb2PolygonShape.Create;
-      shape.SetVertices(@vertices[0], 6);
-
+      shape := BuildHexagonShape(0.5);
       fd := Tb2FixtureDef.Create;
       fd.shape := shape;
       fd.density := 20.0;
@@ -190,14 +197,39 @@ begin
       fd.density := 20.0;
       body.CreateFixture(fd);
    end;
+
+   // Circle character
+   begin
+      bd := Tb2BodyDef.Create;
+      SetValue(bd.position, 1.0, 11.0);
+      bd.bodyType := b2_dynamicBody;
+      bd.allowSleep := False;
+
+      m_character := m_world.CreateBody(bd);
+
+      cshape := Tb2CircleShape.Create;
+      cshape.m_radius := 0.25;
+
+      fd := Tb2FixtureDef.Create;
+      fd.shape := cshape;
+      fd.density := 20.0;
+      fd.friction := 1.0;
+      m_character.CreateFixture(fd);
+   end;
 end;
 
 procedure TCharacterCollision.Step(var settings: TSettings; timeStep: PhysicsFloat);
+var
+   v: TVector2;
 begin
    inherited;
+   v := m_character.GetLinearVelocity;
+   v.x := -5.0;
+   m_character.SetLinearVelocity(v);
+
    DrawText('This demo tests various character collision shapes.');
    DrawText('Limitation: square and hexagon can snag on aligned boxes.');
-   DrawText('Feature: loops have smooth collision inside and out.');
+   DrawText('Feature: edge chains have smooth collision inside and out.');
 end;
 
 initialization

@@ -103,7 +103,7 @@ begin
             CreateRopes;
          end;
       189{-}:
-         if maxseg > 0.8 then
+         if maxseg > 0.6 then
          begin
             maxseg := maxseg - 0.2;
             CreateRopes;

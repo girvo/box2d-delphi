@@ -9,11 +9,14 @@
    {$UNDEF DOUBLE_PRECISION}
 {$ENDIF}
 
+// Please unflag to reduce code size if object dumping is not needed.
+{$DEFINE ENABLE_DUMP}
+
 // Please unflag to reduce code size if controllers are not needed.
 {$DEFINE CONTROLLERS}
 
 // Please unflag to calculate time used by physics in each step.
-{$DEFINE COMPUTE_PHYSICSTIME}
+{$DEFINE COMPUTE_PHYSICS_TIME}
 
 { Though Delphi 2006(up) supports operator overloading but in fact
   Add(vector1, vector2) performs faster than vector1 + vector2. }

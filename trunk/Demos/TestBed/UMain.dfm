@@ -2,9 +2,11 @@ object frmMain: TfrmMain
   Left = 282
   Top = 108
   Caption = 'TestBed'
-  ClientHeight = 586
-  ClientWidth = 747
+  ClientHeight = 562
+  ClientWidth = 784
   Color = clBtnFace
+  Constraints.MinHeight = 600
+  Constraints.MinWidth = 800
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
   Font.Height = -11
@@ -19,16 +21,20 @@ object frmMain: TfrmMain
   OnKeyUp = FormKeyUp
   OnMouseWheelDown = FormMouseWheelDown
   OnMouseWheelUp = FormMouseWheelUp
+  OnShow = FormShow
   PixelsPerInch = 96
   TextHeight = 13
   object Panel1: TPanel
-    Left = 584
+    Left = 621
     Top = 0
     Width = 163
-    Height = 586
+    Height = 562
     Align = alRight
     ParentBackground = False
     TabOrder = 0
+    DesignSize = (
+      163
+      562)
     object Label1: TLabel
       Left = 8
       Top = 5
@@ -38,53 +44,51 @@ object frmMain: TfrmMain
     end
     object Label2: TLabel
       Left = 8
-      Top = 100
+      Top = 182
       Width = 37
       Height = 13
+      Anchors = [akLeft, akBottom]
       Caption = 'Visibility'
+      ExplicitTop = 204
     end
-    object cboTests: TComboBox
-      Left = 7
-      Top = 24
-      Width = 148
-      Height = 21
-      AutoDropDown = True
-      AutoCloseUp = True
-      Style = csDropDownList
-      DropDownCount = 100
-      ImeName = 'Chinese (Simplified) - US Keyboard'
-      TabOrder = 0
-      OnChange = cboTestsChange
-      OnCloseUp = cboTestsCloseUp
+    object Bevel1: TBevel
+      Left = 5
+      Top = 112
+      Width = 154
+      Height = 2
+      Anchors = [akLeft, akBottom]
     end
     object chkWarmStarting: TCheckBox
       Left = 8
-      Top = 51
+      Top = 131
       Width = 97
       Height = 17
+      Anchors = [akLeft, akBottom]
       Caption = 'Warm Starting'
+      Checked = True
+      State = cbChecked
+      TabOrder = 0
+      OnClick = SimulationOptionsChanged
+    end
+    object chkTimeOfImpact: TCheckBox
+      Left = 8
+      Top = 146
+      Width = 105
+      Height = 17
+      Anchors = [akLeft, akBottom]
+      Caption = 'Time of Impact'
       Checked = True
       State = cbChecked
       TabOrder = 1
       OnClick = SimulationOptionsChanged
     end
-    object chkTimeOfImpact: TCheckBox
-      Left = 8
-      Top = 66
-      Width = 105
-      Height = 17
-      Caption = 'Time of Impact'
-      Checked = True
-      State = cbChecked
-      TabOrder = 2
-      OnClick = SimulationOptionsChanged
-    end
     object chklstVisibility: TCheckListBox
       Left = 8
-      Top = 118
+      Top = 197
       Width = 148
-      Height = 158
+      Height = 147
       OnClickCheck = chklstVisibilityClickCheck
+      Anchors = [akLeft, akBottom]
       ImeName = 'Chinese (Simplified) - US Keyboard'
       ItemHeight = 13
       Items.Strings = (
@@ -94,38 +98,41 @@ object frmMain: TfrmMain
         'Pairs'
         'Contact Points'
         'Contact Normals'
-        'Contact Forces'
-        'Friction Forces'
+        'Contact Impulse'
+        'Friction Impulse'
         'Center of Masses'
         'Statistics'
         'Key Information')
-      TabOrder = 3
+      TabOrder = 2
     end
     object btnPause: TButton
       Left = 7
-      Top = 418
+      Top = 484
       Width = 75
       Height = 25
+      Anchors = [akLeft, akBottom]
       Caption = 'Pause'
-      TabOrder = 4
+      TabOrder = 3
       OnClick = btnPauseClick
     end
     object btnSingleStep: TButton
       Left = 82
-      Top = 418
+      Top = 484
       Width = 75
       Height = 25
+      Anchors = [akLeft, akBottom]
       Caption = 'Single Step'
-      TabOrder = 5
+      TabOrder = 4
       OnClick = btnSingleStepClick
     end
     object GroupBox1: TGroupBox
       Left = 8
-      Top = 283
+      Top = 349
       Width = 148
       Height = 70
+      Anchors = [akLeft, akBottom]
       Caption = 'Gravity'
-      TabOrder = 6
+      TabOrder = 5
       object Label3: TLabel
         Left = 11
         Top = 21
@@ -168,20 +175,22 @@ object frmMain: TfrmMain
     end
     object btnReset: TButton
       Left = 7
-      Top = 443
+      Top = 509
       Width = 75
       Height = 25
+      Anchors = [akLeft, akBottom]
       Caption = 'Reset'
-      TabOrder = 7
+      TabOrder = 6
       OnClick = btnResetClick
     end
     object GroupBox2: TGroupBox
       Left = 8
-      Top = 355
+      Top = 421
       Width = 148
       Height = 57
+      Anchors = [akLeft, akBottom]
       Caption = 'Mode'
-      TabOrder = 8
+      TabOrder = 7
       object rdoRealTime: TRadioButton
         Left = 8
         Top = 16
@@ -205,22 +214,58 @@ object frmMain: TfrmMain
     end
     object chkAntialiasing: TCheckBox
       Left = 8
-      Top = 474
+      Top = 540
       Width = 97
       Height = 17
+      Anchors = [akLeft, akBottom]
       Caption = 'Antialiasing'
       Checked = True
       State = cbChecked
-      TabOrder = 9
+      TabOrder = 8
       OnClick = chkAntialiasingClick
     end
     object chkSubStepping: TCheckBox
       Left = 8
-      Top = 81
+      Top = 161
       Width = 105
       Height = 17
+      Anchors = [akLeft, akBottom]
       Caption = 'Sub-Stepping'
+      TabOrder = 9
+      OnClick = SimulationOptionsChanged
+    end
+    object btnDumpWorld: TButton
+      Left = 82
+      Top = 509
+      Width = 75
+      Height = 25
+      Anchors = [akLeft, akBottom]
+      Caption = 'Dump World'
       TabOrder = 10
+      OnClick = btnDumpWorldClick
+    end
+    object listTestEntries: TListBox
+      Left = 8
+      Top = 20
+      Width = 148
+      Height = 86
+      Anchors = [akLeft, akTop, akBottom]
+      ItemHeight = 13
+      TabOrder = 11
+      OnKeyDown = listTestEntriesKeyDown
+      OnKeyUp = listTestEntriesKeyUp
+      OnMouseDown = listTestEntriesMouseDown
+    end
+    object chkEnableSleep: TCheckBox
+      Left = 8
+      Top = 116
+      Width = 97
+      Height = 17
+      Anchors = [akLeft, akBottom]
+      Caption = 'Enable Sleep'
+      Checked = True
+      State = cbChecked
+      TabOrder = 12
       OnClick = SimulationOptionsChanged
     end
   end

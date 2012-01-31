@@ -165,6 +165,7 @@ begin
       rjd.Initialize(prevBody, ground, anchor);
       m_world.CreateJoint(rjd);
 
+      fd.Free;
       bd.Free;
       pShape.Free;
    end;

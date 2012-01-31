@@ -1,6 +1,6 @@
 unit UPhysics2DControllers;
 
-{ box2D 2.1.0 translation
+{ box2D 2.3.0 translation
 
   ###  This unit is written based on Box2D maintained by Erin Catto (http://www.box2d.org)
   All type names follow the Delphi custom Txxx and xxx means the corresponding
@@ -46,7 +46,7 @@ unit UPhysics2DControllers;
   ###  Controllers are added as enhancement and can be flagged by CONTROLLERS.
   If you don't need them, please unflag to reduce code size.
 
-  ###  If you want to do benchmark or something else, please flag COMPUTE_PHYSICSTIME.
+  ###  If you want to do benchmark or something else, please flag COMPUTE_PHYSICS_TIME.
   Time consumed by each step is updated and stored in Tb2World.GetPhysicsTime.
 
   ###  All assertions are ignored.
@@ -482,10 +482,10 @@ end;
 
 procedure Tb2TensorDampingController.SetAxisAligned(xDamping, yDamping: PhysicsFloat);
 begin
-   T.col1.x := -xDamping;
-   T.col1.y := 0;
-   T.col2.x := 0;
-   T.col2.y := -yDamping;
+   T.ex.x := -xDamping;
+   T.ex.y := 0;
+   T.ey.x := 0;
+   T.ey.y := -yDamping;
    if(xDamping > 0) or (yDamping > 0) then
       maxTimestep := 1 / b2Max(xDamping, yDamping)
    else
@@ -558,11 +558,11 @@ procedure _ComputeSegmentEffectiveForce(const first, second: TVector2;
 var
    edge: TVector2;
 begin
-   normal := b2Mul(xf.R, normal); // to world coordinate
+   normal := b2Mul(xf.q, normal); // to world coordinate
    {$IFDEF OP_OVERLOAD}
-   edge := b2Mul(xf.R, second - first);
+   edge := b2Mul(xf.q, second - first);
    {$ELSE}
-   edge := b2Mul(xf.R, Subtract(second, first));
+   edge := b2Mul(xf.q, Subtract(second, first));
    {$ENDIF}
    if b2Dot(windforce, normal) < 0 then // this edge faces the wind
    begin
@@ -586,14 +586,14 @@ begin
    Result := b2Vec2_Zero;
    with shape do
    begin
-      if m_vertexCount < 2 then
+      if m_count < 2 then
          Exit;
-      for i := 1 to m_vertexCount - 1 do
+      for i := 1 to m_count - 1 do
          _ComputeSegmentEffectiveForce(m_vertices[i - 1], m_vertices[i],
             m_normals[i - 1], xf, windforce, Result);
 
-      _ComputeSegmentEffectiveForce(m_vertices[m_vertexCount - 1],
-         m_vertices[0], m_normals[m_vertexCount - 1], xf, windforce, Result);
+      _ComputeSegmentEffectiveForce(m_vertices[m_count - 1],
+         m_vertices[0], m_normals[m_count - 1], xf, windforce, Result);
    end;
 end;
 

@@ -18,6 +18,8 @@ type
 
 implementation
 
+// The motor in this test gets smoother with higher velocity iterations.
+
 { TPrismatic }
 
 constructor TPrismatic.Create;

@@ -46,7 +46,8 @@ type
          fraction: PhysicsFloat): PhysicsFloat; override;
    end;
 
-   // This callback finds any hit. Polygon 0 is filtered.
+   // This callback finds any hit. Polygon 0 is filtered. For this type of query we are usually
+   // just checking for obstruction, so the actual fixture and hit point are irrelevant.
    TRayCastAnyCallback = class(Tb2RayCastCallback)
    public
       m_hit: Boolean;
@@ -79,12 +80,18 @@ var
 begin
    userData := PInt32(fixture.GetBody.UserData);
    if Assigned(userData) and (userData^ = 0) then
+      // By returning -1, we instruct the calling code to ignore this fixture and
+      // continue the ray-cast to the next fixture.
       Result := -1.0 // filter
    else
    begin
       m_hit := True;
       m_point := point;
       m_normal := normal;
+
+      // By returning the current fraction, we instruct the calling code to clip the ray and
+      // continue the ray-cast to the next fixture. WARNING: do not assume that fixtures
+      // are reported in order. However, by clipping, we can always get the closest fixture.
       Result := fraction;
    end;
 end;
@@ -98,17 +105,25 @@ var
 begin
    userData := PInt32(fixture.GetBody.UserData);
    if Assigned(userData) and (userData^ = 0) then
+      // By returning -1, we instruct the calling code to ignore this fixture
+      // and continue the ray-cast to the next fixture.
       Result := -1.0 // filter
    else
    begin
       m_hit := True;
       m_point := point;
       m_normal := normal;
+      // At this point we have a hit, so we know the ray is obstructed.
+      // By returning 0, we instruct the calling code to terminate the ray-cast.
       Result := 0.0;
    end;
 end;
 
 { TRayCastMultipleCallback }
+
+// This ray cast collects multiple hits along the ray. Polygon 0 is filtered.
+// The fixtures are not necessary reported in order, so we might not capture
+// the closest fixture.
 
 function TRayCastMultipleCallback.ReportFixture(fixture: Tb2Fixture;
    const point, normal: TVector2; fraction: PhysicsFloat): PhysicsFloat;
@@ -117,6 +132,8 @@ var
 begin
    userData := PInt32(fixture.GetBody.UserData);
    if Assigned(userData) and (userData^ = 0) then
+      // By returning -1, we instruct the calling code to ignore this fixture
+      // and continue the ray-cast to the next fixture.
       Result := -1.0 // filter
    else
    begin
@@ -126,8 +143,11 @@ begin
       Inc(m_count);
 
       if m_count = e_maxCount then
+         // At this point the buffer is full.
+         // By returning 0, we instruct the calling code to terminate the ray-cast.
          Result := 0.0
       else
+         // By returning 1, we instruct the caller to continue without clipping the ray.
          Result := 1.0;
    end;
 end;
@@ -290,11 +310,11 @@ begin
    inherited;
    DrawText('Press 1-5 to drop stuff, M to change the mode');
    if m_mode = e_closest then
-      DrawText('Mode: Any')
+      DrawText('Ray-cast mode: any - check for obstruction')
    else if m_mode = e_any then
-      DrawText('Mode: Multiple')
+      DrawText('Ray-cast mode: multiple - gather multiple fixtures')
    else if m_mode = e_multiple then
-      DrawText('Mode: Closest');
+      DrawText('Ray-cast mode: closest - find closest fixture along the ray');
 
    d.x := L * Cos(m_angle);
    d.y := L * Sin(m_angle);

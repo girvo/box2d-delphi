@@ -72,11 +72,12 @@ begin
 
    begin
       {$IFDEF OP_OVERLOAD}
-      xf1.R.SetValue(0.3524 * Pi);
+      xf1.q.SetAngle(0.3524 * Pi);
+      xf1.p := xf1.q.GetXAxis;
       {$ELSE}
-      SetValue(xf1.R, 0.3524 * Pi);
+      SetAngle(xf1.q, 0.3524 * Pi);
+      xf1.p := GetXAxis(xf1.q);
       {$ENDIF}
-      xf1.position := b2Mul(xf1.R, MakeVector(1.0, 0.0));
 
       vertices[0] := b2Mul(xf1, MakeVector(-1.0, 0.0));
       vertices[1] := b2Mul(xf1, MakeVector(1.0, 0.0));
@@ -90,11 +91,12 @@ begin
       sd1.density := 4.0;
 
       {$IFDEF OP_OVERLOAD}
-      xf2.R.SetValue(-0.3524 * Pi);
+      xf2.q.SetAngle(-0.3524 * Pi);
+      xf2.p := -xf2.q.GetXAxis;
       {$ELSE}
-      SetValue(xf2.R, -0.3524 * Pi);
+      SetAngle(xf2.q, -0.3524 * Pi);
+      xf2.p := Negative(GetXAxis(xf2.q));
       {$ENDIF}
-      xf2.position := b2Mul(xf2.R, MakeVector(-1.0, 0.0));
 
       vertices[0] := b2Mul(xf2, MakeVector(-1.0, 0.0));
       vertices[1] := b2Mul(xf2, MakeVector(1.0, 0.0));

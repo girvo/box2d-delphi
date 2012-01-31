@@ -76,13 +76,13 @@ begin
    DrawText(Format('point count := %d', [manifold.pointCount]));
 
    begin
-      for i := 0 to m_polygonA.m_vertexCount - 1 do
+      for i := 0 to m_polygonA.m_count - 1 do
         v[i] := b2Mul(m_transformA, m_polygonA.m_vertices[i]);
-      m_debugDraw.DrawPolygon(v, m_polygonA.m_vertexCount, color);
+      m_debugDraw.DrawPolygon(v, m_polygonA.m_count, color);
 
-      for i := 0 to m_polygonB.m_vertexCount - 1 do
+      for i := 0 to m_polygonB.m_count - 1 do
          v[i] := b2Mul(m_transformB, m_polygonB.m_vertices[i]);
-      m_debugDraw.DrawPolygon(v, m_polygonB.m_vertexCount, color);
+      m_debugDraw.DrawPolygon(v, m_polygonB.m_count, color);
    end;
 
    for i := 0 to manifold.pointCount - 1 do

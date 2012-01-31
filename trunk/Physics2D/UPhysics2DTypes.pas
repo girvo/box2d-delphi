@@ -1,6 +1,6 @@
 unit UPhysics2DTypes;
 
-{ box2D 2.1.0 translation
+{ box2D 2.3.0 translation
 
   ###  This unit is written based on Box2D maintained by Erin Catto (http://www.box2d.org)
   All type names follow the Delphi custom Txxx and xxx means the corresponding
@@ -46,7 +46,7 @@ unit UPhysics2DTypes;
   ###  Controllers are added as enhancement and can be flagged by CONTROLLERS.
   If you don't need them, please unflag to reduce code size.
 
-  ###  If you want to do benchmark or something else, please flag COMPUTE_PHYSICSTIME.
+  ###  If you want to do benchmark or something else, please flag COMPUTE_PHYSICS_TIME.
   Time consumed by each step is updated and stored in Tb2World.GetPhysicsTime.
 
   ###  All assertions are ignored.
@@ -212,15 +212,12 @@ type
    end;
 
    TMatrix22 = record
-      col1, col2: TVector2;
+      ex, ey: TVector2;
 
       {$IFDEF OP_OVERLOAD}
       procedure SetIdentity; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       procedure SetZero; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-      procedure SetValue(const _col1, _col2: TVector2); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-      /// Initialize this matrix using an angle. This matrix becomes
-	    /// an orthonormal rotation matrix.
-      procedure SetValue(angle: PhysicsFloat); overload;
+      procedure SetValue(const _col1, _col2: TVector2); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
       function Invert: TMatrix22;
       function GetInverse: TMatrix22; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} // The same with Invert, imported from v2.1.0
@@ -234,7 +231,7 @@ type
    end;
 
    TMatrix33 = record // Added from v2.1.0
-      col1, col2, col3: TVector3;
+      ex, ey, ez: TVector3;
 
       {$IFDEF OP_OVERLOAD}
       procedure SetIdentity; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
@@ -249,10 +246,32 @@ type
       /// 2-by-2 matrix equation.
       function Solve22(const b: TVector2): TVector2;
 
+      /// Get the inverse of this matrix as a 2-by-2.
+      /// Returns the zero matrix if singular.
+      procedure GetInverse22(var dest: TMatrix33);
+
+      /// Get the symmetric inverse of this matrix as a 3-by-3.
+      /// Returns the zero matrix if singular.
+      procedure GetSymInverse33(var dest: TMatrix33);
+
       // Operators
       class operator Negative(const AValue: TMatrix33): TMatrix33;
       class operator Add(const Left, Right: TMatrix33): TMatrix33;
       class operator Subtract(const Left, Right: TMatrix33): TMatrix33;
+      {$ENDIF}
+   end;
+
+   /// Rotation
+   Tb2Rot = record
+      s, c: PhysicsFloat; /// Sine and cosine
+
+      {$IFDEF OP_OVERLOAD}
+      procedure SetAngle(angle: PhysicsFloat); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      procedure SetIdentity; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+
+      function GetAngle: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function GetXAxis: TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+      function GetYAxis: TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       {$ENDIF}
    end;
 
@@ -261,14 +280,12 @@ type
    /// the position and orientation of rigid bodies.
    Pb2Transform = ^Tb2Transform;
    Tb2Transform = record
-      position: TVector2;
-      R: TMatrix22;
+      p: TVector2;
+      q: Tb2Rot;
 
       {$IFDEF OP_OVERLOAD}
       procedure SetIdentity; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-      procedure SetValue(const p: TVector2; angle: PhysicsFloat); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-      function GetAngle: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-      class function From(const position: TVector2; const R: TMatrix22): Tb2Transform; static;
+      procedure SetValue(const position: TVector2; angle: PhysicsFloat); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
       {$ENDIF}
    end;
 
@@ -288,7 +305,7 @@ type
       {$IFDEF OP_OVERLOAD}
       /// Get the interpolated transform at a specific time.
       /// @param beta is a factor in [0,1], where 0 indicates alpha0.
-    	procedure GetTransform(var xf: Tb2Transform; beta: PhysicsFloat); /// Renamed to GetTransform from v2.1.0
+    	procedure GetTransform(var xfb: Tb2Transform; beta: PhysicsFloat); /// Renamed to GetTransform from v2.1.0
 
       /// Advance the sweep forward, yielding a new initial state.
       /// @param alpha the new initial time.
@@ -303,15 +320,14 @@ const
    b2Pnt2_Zero: TPointF = (X: 0.0; Y: 0.0);
    b2Vec2_Zero: TVector2 = (X: 0.0; Y: 0.0);
    b2Vec3_Zero: TVector3 = (X: 0.0; Y: 0.0; Z: 0.0);
-   b2Mat22_identity: TMatrix22 = (col1: (X: 1.0; Y: 0.0); col2: (X: 0.0; Y: 1.0));
-   b2Mat33_identity: TMatrix33 = (col1: (X: 1.0; Y: 0.0; Z: 0.0); col2: (X: 0.0; Y: 1.0; Z: 0.0); col3: (X: 0.0; Y: 0.0; Z: 1.0));
-   b2XForm_identity: Tb2Transform = (position: (X: 0.0; Y: 0.0); R: (col1: (X: 1.0; Y: 0.0); col2: (X: 0.0; Y: 1.0)));
-   //b2Transform_identity = b2XForm_identity; // imported from 2.1.0
+   b2Mat22_identity: TMatrix22 = (ex: (X: 1.0; Y: 0.0); ey: (X: 0.0; Y: 1.0));
+   b2Mat33_identity: TMatrix33 = (ex: (X: 1.0; Y: 0.0; Z: 0.0); ey: (X: 0.0; Y: 1.0; Z: 0.0); ez: (X: 0.0; Y: 0.0; Z: 1.0));
 
 const
    UInt8_MAX = $FF;
    UINT16_MAX = $FFFF;
 
+   /// The maximum number of contact points between two convex shapes. Do not change this value.
    b2_maxManifoldPoints = 2;
 
    /// The maximum number of vertices on a convex polygon. You cannot increase
@@ -375,7 +391,8 @@ const
    /// This scale factor controls how fast overlap is resolved. Ideally this would be 1 so
    /// that overlap is removed in one time step. However using values close to 1 often lead
    /// to overshoot.
-   b2_contactBaumgarte = 0.2;
+   b2_baumgarte = 0.2;
+   b2_toiBaugarte = 0.75;
 
    // Sleep
    /// The time that a body must be still before it will go to sleep.
@@ -388,7 +405,8 @@ const
    b2_angularSleepTolerance = 2.0 / 180.0;		// 2 degrees/s
 
 function MakePoint(x, y: TPointFloat): TPointF; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function MakeVector(x, y: PhysicsFloat): TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function MakeVector(x, y: PhysicsFloat): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function MakeVector(x, y, z: PhysicsFloat): TVector3; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure SetZero(var p: TPointF); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure SetZero(var v: TVector2); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure SetValue(var p: TPointF; ax, ay: TPointFloat); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
@@ -462,8 +480,7 @@ procedure DivideBy(var v: TVector3; const Operand: Extended); overload; {$IFDEF 
 // For TMatrix22
 procedure SetIdentity(var m: TMatrix22); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 procedure SetZero(var m: TMatrix22); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-procedure SetValue(var m: TMatrix22; const _col1, _col2: TVector2); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-procedure SetValue(var m: TMatrix22; angle: PhysicsFloat); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure SetValue(var m: TMatrix22; const _ex, _ey: TVector2); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 function Invert(const m: TMatrix22): TMatrix22;
 function GetInverse(const m: TMatrix22): TMatrix22; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} // The same with Invert, imported from v2.1.0
@@ -480,19 +497,28 @@ procedure SetZero(var m: TMatrix33); overload; {$IFDEF INLINE_AVAIL}inline;{$END
 procedure SetValue(var m: TMatrix33; const _col1, _col2, _col3: TVector3); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function Solve33(var m: TMatrix33; const b: TVector3): TVector3;
 function Solve22(var m: TMatrix33; const b: TVector2): TVector2;
+procedure GetInverse22(var m: TMatrix33; var dest: TMatrix33);
+procedure GetSymInverse33(var m: TMatrix33; var dest: TMatrix33);
 
 function Negative(const AValue: TMatrix33): TMatrix33; overload;
 function Add(const Left, Right: TMatrix33): TMatrix33; overload;
 function Add(const m1, m2, m3: TMatrix33): TMatrix33; overload;
 function Subtract(const Left, Right: TMatrix33): TMatrix33; overload;
 
-// For T2bXForm
+//Tb2Rot
+procedure SetAngle(var r: Tb2Rot; angle: PhysicsFloat); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure SetIdentity(var r: Tb2Rot); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+
+function GetAngle(const r: Tb2Rot): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function GetXAxis(const r: Tb2Rot): TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function GetYAxis(const r: Tb2Rot): TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+
+// For Tb2Transform
 procedure SetIdentity(var xf: Tb2Transform); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-procedure SetValue(var xf: Tb2Transform; const p: TVector2; angle: PhysicsFloat); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
-function GetAngle(const xf: Tb2Transform): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+procedure SetValue(var xf: Tb2Transform; const position: TVector2; angle: PhysicsFloat); overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 // For Tb2Sweep
-procedure GetTransform(const Sweep: Tb2Sweep; var xf: Tb2Transform; beta: PhysicsFloat);
+procedure GetTransform(const Sweep: Tb2Sweep; var xfb: Tb2Transform; beta: PhysicsFloat);
 procedure Advance(var Sweep: Tb2Sweep; alpha: PhysicsFloat);
 procedure Normalize(var Sweep: Tb2Sweep); overload;
 
@@ -521,6 +547,7 @@ function b2Cross(const a: TVector2; s: PhysicsFloat): TVector2; overload; {$IFDE
 function b2Cross(s: PhysicsFloat; const a: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2Cross(const a, b: TVector3): TVector3; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2Mul(const A: TMatrix22; const v: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2Mul22(const A: TMatrix33; const v: TVector2): TVector2; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2MulT(const A: TMatrix22; const v: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2Distance(const a, b: TVector2): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2DistanceSquared(const a, b: TVector2): PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
@@ -529,7 +556,12 @@ function b2MulT(const A, B: TMatrix22): TMatrix22; overload; {$IFDEF INLINE_AVAI
 function b2Mul(const T: Tb2Transform; const v: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2MulT(const T: Tb2Transform; const v: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2Mul(const A: TMatrix33; const v: TVector3): TVector3; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2Mul(const A, B: Tb2Transform): Tb2Transform; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2MulT(const A, B: Tb2Transform): Tb2Transform; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2Mul(const q, r: Tb2Rot): Tb2Rot; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2MulT(const q, r: Tb2Rot): Tb2Rot; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2Mul(const q: Tb2Rot; const v: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
+function b2MulT(const q: Tb2Rot; const v: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2Abs(const a: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2Abs(const a: TMatrix22): TMatrix22; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
@@ -596,6 +628,13 @@ function MakeVector(x, y: PhysicsFloat): TVector2;
 begin
    Result.x := x;
    Result.y := y;
+end;
+
+function MakeVector(x, y, z: PhysicsFloat): TVector3;
+begin
+   Result.x := x;
+   Result.y := y;
+   Result.z := z;
 end;
 
 procedure SetZero(var p: TPointF);
@@ -1049,35 +1088,20 @@ procedure SetZero(var m: TMatrix22);
 begin
    with m do
    begin
-      col1.x := 0.0;
-      col2.x := 0.0;
-      col1.y := 0.0;
-      col2.y := 0.0;
+      ex.x := 0.0;
+      ey.x := 0.0;
+      ex.y := 0.0;
+      ey.y := 0.0;
    end;
 end;
 
-procedure SetValue(var m: TMatrix22; const _col1, _col2: TVector2);
+procedure SetValue(var m: TMatrix22; const _ex, _ey: TVector2);
 begin
    with m do
    begin
-      col1 := _col1;
-      col2 := _col2;
+      ex := _ex;
+      ey := _ey;
    end;
-end;
-
-procedure SetValue(var m: TMatrix22; angle: PhysicsFloat);
-var
-   c, s: PhysicsFloat;
-begin
-    SinCos(angle, s, c);
-
-    with m do
-    begin
-       col1.x := c;
-       col2.x := -s;
-       col1.y := s;
-       col2.y := c;
-    end;
 end;
 
 function Invert(const m: TMatrix22): TMatrix22;
@@ -1086,10 +1110,10 @@ var
 begin
    with m do
    begin
-      a := col1.x;
-      b := col2.x;
-      c := col1.y;
-      d := col2.y;
+      a := ex.x;
+      b := ey.x;
+      c := ex.y;
+      d := ey.y;
    end;
 
    det := a * d - b * c;
@@ -1097,10 +1121,10 @@ begin
       det := 1.0 / det;
    with Result do
    begin
-      col1.x :=  det * d;
-      col2.x := -det * b;
-      col1.y := -det * c;
-      col2.y :=  det * a;
+      ex.x :=  det * d;
+      ey.x := -det * b;
+      ex.y := -det * c;
+      ey.y :=  det * a;
    end;
 end;
 
@@ -1115,10 +1139,10 @@ var
 begin
    with m do
    begin
-      a11 := col1.x;
-      a12 := col2.x;
-      a21 := col1.y;
-      a22 := col2.y;
+      a11 := ex.x;
+      a12 := ey.x;
+      a21 := ex.y;
+      a22 := ey.y;
    end;
    det := a11 * a22 - a12 * a21;
    if det <> 0.0 then
@@ -1131,10 +1155,10 @@ function Negative(const AValue: TMatrix22): TMatrix22;
 begin
    with Result do
    begin
-      col1.x := -AValue.col1.x;
-      col1.y := -AValue.col1.y;
-      col2.x := -AValue.col2.x;
-      col2.y := -AValue.col2.y;
+      ex.x := -AValue.ex.x;
+      ex.y := -AValue.ex.y;
+      ey.x := -AValue.ey.x;
+      ey.y := -AValue.ey.y;
    end;
 end;
 
@@ -1142,10 +1166,10 @@ function Add(const Left, Right: TMatrix22): TMatrix22;
 begin
    with Result do
    begin
-      col1.x := Left.col1.x + Right.col1.x;
-      col1.y := Left.col1.y + Right.col1.y;
-      col2.x := Left.col2.x + Right.col2.x;
-      col2.y := Left.col2.y + Right.col2.y;
+      ex.x := Left.ex.x + Right.ex.x;
+      ex.y := Left.ex.y + Right.ex.y;
+      ey.x := Left.ey.x + Right.ey.x;
+      ey.y := Left.ey.y + Right.ey.y;
    end;
 end;
 
@@ -1153,10 +1177,10 @@ function Add(const m1, m2, m3: TMatrix22): TMatrix22;
 begin
    with Result do
    begin
-      col1.x := m1.col1.x + m2.col1.x + m3.col1.x;
-      col1.y := m1.col1.y + m2.col1.y + m3.col1.y;
-      col2.x := m1.col2.x + m2.col2.x + m3.col2.x;
-      col2.y := m1.col2.y + m2.col2.y + m3.col2.y;
+      ex.x := m1.ex.x + m2.ex.x + m3.ex.x;
+      ex.y := m1.ex.y + m2.ex.y + m3.ex.y;
+      ey.x := m1.ey.x + m2.ey.x + m3.ey.x;
+      ey.y := m1.ey.y + m2.ey.y + m3.ey.y;
    end;
 end;
 
@@ -1164,10 +1188,10 @@ function Subtract(const Left, Right: TMatrix22): TMatrix22;
 begin
    with Result do
    begin
-      col1.x := Left.col1.x - Right.col1.x;
-      col1.y := Left.col1.y - Right.col1.y;
-      col2.x := Left.col2.x - Right.col2.x;
-      col2.y := Left.col2.y - Right.col2.y;
+      ex.x := Left.ex.x - Right.ex.x;
+      ex.y := Left.ex.y - Right.ex.y;
+      ey.x := Left.ey.x - Right.ey.x;
+      ey.y := Left.ey.y - Right.ey.y;
    end;
 end;
 
@@ -1182,9 +1206,9 @@ procedure SetZero(var m: TMatrix33);
 begin
    with m do
    begin
-      col1 := b2Vec3_Zero;
-      col2 := b2Vec3_Zero;
-      col3 := b2Vec3_Zero;
+      ex := b2Vec3_Zero;
+      ey := b2Vec3_Zero;
+      ez := b2Vec3_Zero;
    end;
 end;
 
@@ -1192,9 +1216,9 @@ procedure SetValue(var m: TMatrix33; const _col1, _col2, _col3: TVector3);
 begin
    with m do
    begin
-      col1 := _col1;
-      col2 := _col2;
-      col3 := _col3;
+      ex := _col1;
+      ey := _col2;
+      ez := _col3;
    end;
 end;
 
@@ -1204,12 +1228,12 @@ var
 begin
    with m do
    begin
-      det := b2Dot(col1, b2Cross(col2, col3));
+      det := b2Dot(ex, b2Cross(ey, ez));
       if det <> 0.0 then
          det := 1.0 / det;
-      Result.x := det * b2Dot(b, b2Cross(col2, col3));
-      Result.y := det * b2Dot(col1, b2Cross(b, col3));
-      Result.z := det * b2Dot(col1, b2Cross(col2, b));
+      Result.x := det * b2Dot(b, b2Cross(ey, ez));
+      Result.y := det * b2Dot(ex, b2Cross(b, ez));
+      Result.z := det * b2Dot(ex, b2Cross(ey, b));
    end;
 end;
 
@@ -1219,11 +1243,69 @@ var
 begin
    with m do
    begin
-      det := col1.x * col2.y - col2.x * col1.y;
+      det := ex.x * ey.y - ey.x * ex.y;
       if det <> 0.0 then
          det := 1.0 / det;
-      Result.x := det * (col2.y * b.x - col2.x * b.y);
-      Result.y := det * (col1.x * b.y - col1.y * b.x);
+      Result.x := det * (ey.y * b.x - ey.x * b.y);
+      Result.y := det * (ex.x * b.y - ex.y * b.x);
+   end;
+end;
+
+procedure GetInverse22(var m: TMatrix33; var dest: TMatrix33);
+var
+   a, b, c, d, det: PhysicsFloat;
+begin
+   with m do
+   begin
+      a := ex.x;
+      b := ey.x;
+      c := ex.y;
+      d := ey.y;
+      det := a * d - b * c;
+      if det <> 0.0 then
+         det := 1.0 / det;
+
+      dest.ex.x :=  det * d;
+      dest.ey.x := -det * b;
+      dest.ex.z := 0.0;
+      dest.ex.y := -det * c;
+      dest.ey.y :=  det * a;
+      dest.ey.z := 0.0;
+      dest.ez.x := 0.0;
+      dest.ez.y := 0.0;
+      dest.ez.z := 0.0;
+   end;
+end;
+
+procedure GetSymInverse33(var m: TMatrix33; var dest: TMatrix33);
+var
+   det: PhysicsFloat;
+   a11, a12, a13, a22, a23, a33: PhysicsFloat;
+begin
+   with m do
+   begin
+      det := b2Dot(ex, b2Cross(ey, ez));
+      if det <> 0.0 then
+         det := 1.0 / det;
+
+      a11 := ex.x;
+      a12 := ey.x;
+      a13 := ez.x;
+      a22 := ey.y;
+      a23 := ez.y;
+      a33 := ez.z;
+
+      dest.ex.x := det * (a22 * a33 - a23 * a23);
+      dest.ex.y := det * (a13 * a23 - a12 * a33);
+      dest.ex.z := det * (a12 * a23 - a13 * a22);
+
+      dest.ey.x := dest.ex.y;
+      dest.ey.y := det * (a11 * a33 - a13 * a13);
+      dest.ey.z := det * (a13 * a12 - a11 * a23);
+
+      dest.ez.x := dest.ex.z;
+      dest.ez.y := dest.ey.z;
+      dest.ez.z := det * (a11 * a22 - a12 * a12);
    end;
 end;
 
@@ -1232,9 +1314,9 @@ begin
    Result := AValue;
    with Result do
    begin
-      SetNegative(col1);
-      SetNegative(col2);
-      SetNegative(col3);
+      SetNegative(ex);
+      SetNegative(ey);
+      SetNegative(ez);
    end;
 end;
 
@@ -1242,9 +1324,9 @@ function Add(const Left, Right: TMatrix33): TMatrix33;
 begin
    with Result do
    begin
-      col1 := Add(Left.col1, Right.col1);
-      col2 := Add(Left.col2, Right.col2);
-      col3 := Add(Left.col3, Right.col3);
+      ex := Add(Left.ex, Right.ex);
+      ey := Add(Left.ey, Right.ey);
+      ez := Add(Left.ez, Right.ez);
    end;
 end;
 
@@ -1252,9 +1334,9 @@ function Add(const m1, m2, m3: TMatrix33): TMatrix33;
 begin
    with Result do
    begin
-      col1 := Add(m1.col1, m2.col1, m3.col1);
-      col2 := Add(m1.col2, m2.col2, m3.col2);
-      col3 := Add(m1.col3, m2.col3, m3.col3);
+      ex := Add(m1.ex, m2.ex, m3.ex);
+      ey := Add(m1.ey, m2.ey, m3.ey);
+      ez := Add(m1.ez, m2.ez, m3.ez);
    end;
 end;
 
@@ -1262,10 +1344,37 @@ function Subtract(const Left, Right: TMatrix33): TMatrix33;
 begin
    with Result do
    begin
-      col1 := Subtract(Left.col1, Right.col1);
-      col2 := Subtract(Left.col2, Right.col2);
-      col3 := Subtract(Left.col3, Right.col3);
+      ex := Subtract(Left.ex, Right.ex);
+      ey := Subtract(Left.ey, Right.ey);
+      ez := Subtract(Left.ez, Right.ez);
    end;
+end;
+
+// For Tb2Rot
+procedure SetAngle(var r: Tb2Rot; angle: PhysicsFloat);
+begin
+   SinCos(angle, r.s, r.c);
+end;
+
+procedure SetIdentity(var r: Tb2Rot);
+begin
+   r.s := 0.0;
+   r.c := 1.0;
+end;
+
+function GetAngle(const r: Tb2Rot): PhysicsFloat;
+begin
+   Result := ArcTan2(r.s, r.c);
+end;
+
+function GetXAxis(const r: Tb2Rot): TVector2;
+begin
+   Result := MakeVector(r.c, r.s);
+end;
+
+function GetYAxis(const r: Tb2Rot): TVector2;
+begin
+   Result := MakeVector(-r.s, r.c);
 end;
 
 // For Tb2Transform
@@ -1274,40 +1383,34 @@ procedure SetIdentity(var xf: Tb2Transform);
 begin
    with xf do
    begin
-      position := b2Vec2_Zero;
-      SetIdentity(R);
+      p := b2Vec2_Zero;
+      SetIdentity(q);
    end;
 end;
 
-procedure SetValue(var xf: Tb2Transform; const p: TVector2; angle: PhysicsFloat);
+procedure SetValue(var xf: Tb2Transform; const position: TVector2; angle: PhysicsFloat);
 begin
    with xf do
    begin
-      position := p;
-      SetValue(R, angle);
+      p := position;
+      SetAngle(q, angle);
    end;
-end;
-
-function GetAngle(const xf: Tb2Transform): PhysicsFloat;
-begin
-   with xf do
-      Result := ArcTan2(R.col1.y, R.col1.x);
 end;
 
 // For Tb2Sweep
 
-procedure GetTransform(const Sweep: Tb2Sweep; var xf: Tb2Transform; beta: PhysicsFloat);
+procedure GetTransform(const Sweep: Tb2Sweep; var xfb: Tb2Transform; beta: PhysicsFloat);
 var
    angle: PhysicsFloat;
 begin
    with Sweep do
    begin
-      xf.position := Add(Multiply(c0, 1.0 - beta), Multiply(c, beta));
+      xfb.p := Add(Multiply(c0, 1.0 - beta), Multiply(c, beta));
       angle := (1.0 - beta) * a0 + beta * a;
-      SetValue(xf.R, angle);
+      SetAngle(xfb.q, angle);
 
       // Shift to origin
-      SubtractBy(xf.position, b2Mul(xf.R, localCenter));
+      SubtractBy(xfb.p, b2Mul(xfb.q, localCenter));
    end;
 end;
 
@@ -1480,16 +1583,23 @@ end;
 /// then this transforms the vector from one frame to another.
 function b2Mul(const A: TMatrix22; const v: TVector2): TVector2;
 begin
-   Result.x := A.col1.x * v.x + A.col2.x * v.y;
-   Result.y := A.col1.y * v.x + A.col2.y * v.y;
+   Result.x := A.ex.x * v.x + A.ey.x * v.y;
+   Result.y := A.ex.y * v.x + A.ey.y * v.y;
+end;
+
+/// Multiply a matrix times a vector.
+function b2Mul22(const A: TMatrix33; const v: TVector2): TVector2;
+begin
+   Result.x := A.ex.x * v.x + A.ey.x * v.y;
+   Result.y := A.ex.y * v.x + A.ey.y * v.y;
 end;
 
 /// Multiply a matrix transpose times a vector. If a rotation matrix is provided,
 /// then this transforms the vector from one frame to another (inverse transform).
 function b2MulT(const A: TMatrix22; const v: TVector2): TVector2;
 begin
-   Result.x := b2Dot(v, A.col1);
-   Result.y := b2Dot(v, A.col2);
+   Result.x := b2Dot(v, A.ex);
+   Result.y := b2Dot(v, A.ey);
 end;
 
 {$IFDEF OP_OVERLOAD}
@@ -1517,8 +1627,8 @@ end;
 // A * B
 function b2Mul(const A, B: TMatrix22): TMatrix22;
 begin
-   Result.col1 := b2Mul(A, B.col1);
-   Result.col2 := b2Mul(A, B.col2);
+   Result.ex := b2Mul(A, B.ex);
+   Result.ey := b2Mul(A, B.ey);
 end;
 
 // A^T * B
@@ -1526,64 +1636,96 @@ function b2MulT(const A, B: TMatrix22): TMatrix22;
 begin
    with Result do
    begin
-      col1.x := b2Dot(A.col1, B.col1);
-      col1.y := b2Dot(A.col2, B.col1);
-      col2.x := b2Dot(A.col1, B.col2);
-      col2.y := b2Dot(A.col2, B.col2);
+      ex.x := b2Dot(A.ex, B.ex);
+      ex.y := b2Dot(A.ey, B.ex);
+      ey.x := b2Dot(A.ex, B.ey);
+      ey.y := b2Dot(A.ey, B.ey);
    end;
 end;
 
-{$IFDEF OP_OVERLOAD}
+// Tb2Transform * TVector2
 function b2Mul(const T: Tb2Transform; const v: TVector2): TVector2;
 begin
-   Result := T.position + b2Mul(T.R, v);
+   Result.x := (T.q.c * v.x - T.q.s * v.y) + T.p.x;
+   Result.y := (T.q.s * v.x + T.q.c * v.y) + T.p.y;
 end;
-{$ELSE}
-function b2Mul(const T: Tb2Transform; const v: TVector2): TVector2;
-var
-   tmp: TVector2;
-begin
-   tmp := b2Mul(T.R, v);
-   Result.x := T.position.x + tmp.x;
-   Result.y := T.position.y + tmp.y;
-end;
-{$ENDIF}
 
-{$IFDEF OP_OVERLOAD}
-function b2MulT(const T: Tb2Transform; const v: TVector2): TVector2;
-begin
-   Result := b2MulT(T.R, v - T.position);
-end;
-{$ELSE}
 function b2MulT(const T: Tb2Transform; const v: TVector2): TVector2;
 var
-   tmp: TVector2;
+   px, py: PhysicsFloat;
 begin
-   tmp := Subtract(v, T.position);
-   Result := b2MulT(T.R, tmp);
+   px := v.x - T.p.x;
+   py := v.y - T.p.y;
+   Result.x := (T.q.c * px + T.q.s * py);
+   Result.y := (-T.q.s * px + T.q.c * py);
 end;
-{$ENDIF}
 
 {$IFDEF OP_OVERLOAD}
 function b2Mul(const A: TMatrix33; const v: TVector3): TVector3;
 begin
-   Result := v.x * A.col1 + v.y * A.col2 + v.z * A.col3;
+   Result := v.x * A.ex + v.y * A.ey + v.z * A.ez;
 end;
 {$ELSE}
 function b2Mul(const A: TMatrix33; const v: TVector3): TVector3;
 begin
-   Result := Add(Multiply(A.col1, v.x), Multiply(A.col2, v.y), Multiply(A.col3, v.z));
+   Result := Add(Multiply(A.ex, v.x), Multiply(A.ey, v.y), Multiply(A.ez, v.z));
 end;
 {$ENDIF}
 
+// Tb2Transform * Tb2Transform
+// v2 = A.q.Rot(B.q.Rot(v1) + B.p) + A.p
+//    = (A.q * B.q).Rot(v1) + A.q.Rot(B.p) + A.p
+function b2Mul(const A, B: Tb2Transform): Tb2Transform;
+begin
+   Result.q := b2Mul(A.q, B.q);
+   {$IFDEF OP_OVERLOAD}
+   Result.p := b2Mul(A.q, B.p) + A.p;
+   {$ELSE}
+   Result.p := Add(b2Mul(A.q, B.p), A.p);
+   {$ENDIF}
+end;
+
+// v2 = A.q' * (B.q * v1 + B.p - A.p)
+//    = A.q' * B.q * v1 + A.q' * (B.p - A.p)
 function b2MulT(const A, B: Tb2Transform): Tb2Transform;
 begin
-   Result.R := b2MulT(A.R, B.R);
+   Result.q := b2MulT(A.q, B.q);
    {$IFDEF OP_OVERLOAD}
-   Result.position := B.position - A.position;
+   Result.p := b2MulT(A.q, B.p - A.p);
    {$ELSE}
-   Result.position := Subtract(B.position, A.position);
+   Result.p := b2MulT(A.q, Subtract(B.p, A.p));
    {$ENDIF}
+end;
+
+// Tb2Rot * Tb2Rot
+function b2Mul(const q, r: Tb2Rot): Tb2Rot;
+begin
+   // [qc -qs] * [rc -rs] = [qc*rc-qs*rs -qc*rs-qs*rc]
+   // [qs  qc]   [rs  rc]   [qs*rc+qc*rs -qs*rs+qc*rc]
+   // s = qs * rc + qc * rs
+   // c = qc * rc - qs * rs
+   Result.s := q.s * r.c + q.c * r.s;
+   Result.c := q.c * r.c - q.s * r.s;
+end;
+
+function b2MulT(const q, r: Tb2Rot): Tb2Rot;
+begin
+   // [ qc qs] * [rc -rs] = [qc*rc+qs*rs -qc*rs+qs*rc]
+   // [-qs qc]   [rs  rc]   [-qs*rc+qc*rs qs*rs+qc*rc]
+   // s = qc * rs - qs * rc
+   // c = qc * rc + qs * rs
+   Result.s := q.c * r.s - q.s * r.c;
+   Result.c := q.c * r.c + q.s * r.s;
+end;
+
+function b2Mul(const q: Tb2Rot; const v: TVector2): TVector2;
+begin
+   Result := MakeVector(q.c * v.x - q.s * v.y, q.s * v.x + q.c * v.y);
+end;
+
+function b2MulT(const q: Tb2Rot; const v: TVector2): TVector2;
+begin
+   Result := MakeVector(q.c * v.x + q.s * v.y, -q.s * v.x + q.c * v.y);
 end;
 
 function b2Abs(const a: TVector2): TVector2;
@@ -1594,8 +1736,8 @@ end;
 
 function b2Abs(const a: TMatrix22): TMatrix22;
 begin
-   Result.col1 := b2Abs(a.col1);
-   Result.col2 := b2Abs(a.col2);
+   Result.ex := b2Abs(a.ex);
+   Result.ey := b2Abs(a.ey);
 end;
 
 { TPointF }
@@ -1818,45 +1960,34 @@ end;
 
 procedure TMatrix22.SetZero;
 begin
-   col1 := b2Vec2_Zero;
-   col2 := b2Vec2_Zero;
+   ex := b2Vec2_Zero;
+   ey := b2Vec2_Zero;
 end;
 
 procedure TMatrix22.SetValue(const _col1, _col2: TVector2);
 begin
-   col1 := _col1;
-   col2 := _col2;
-end;
-
-procedure TMatrix22.SetValue(angle: PhysicsFloat);
-var
-   c, s: PhysicsFloat;
-begin
-    SinCos(angle, s, c);
-		col1.x := c;
-    col2.x := -s;
-		col1.y := s;
-    col2.y := c;
+   ex := _col1;
+   ey := _col2;
 end;
 
 function TMatrix22.Invert: TMatrix22;
 var
    a, b, c, d, det: PhysicsFloat;
 begin
-   a := col1.x;
-   b := col2.x;
-   c := col1.y;
-   d := col2.y;
+   a := ex.x;
+   b := ey.x;
+   c := ex.y;
+   d := ey.y;
 
    det := a * d - b * c;
    if det <> 0.0 then
       det := 1.0 / det;
    with Result do
    begin
-      col1.x :=  det * d;
-      col2.x := -det * b;
-      col1.y := -det * c;
-      col2.y :=  det * a;
+      ex.x :=  det * d;
+      ey.x := -det * b;
+      ex.y := -det * c;
+      ey.y :=  det * a;
    end;
 end;
 
@@ -1869,19 +2000,19 @@ function TMatrix22.Solve(const b: TVector2): TVector2;
 var
    det: PhysicsFloat;
 begin
-   det := col1.x * col2.y - col2.x * col1.y;
+   det := ex.x * ey.y - ey.x * ex.y;
    if det <> 0.0 then
       det := 1.0 / det;
-   Result.x := det * (col2.y * b.x - col2.x * b.y);
-   Result.y := det * (col1.x * b.y - col1.y * b.x);
+   Result.x := det * (ey.y * b.x - ey.x * b.y);
+   Result.y := det * (ex.x * b.y - ex.y * b.x);
 end;
 
 class operator TMatrix22.Negative(const AValue: TMatrix22): TMatrix22;
 begin
    with Result do
    begin
-      col1.SetNegative;
-      col2.SetNegative;
+      ex.SetNegative;
+      ey.SetNegative;
    end;
 end;
 
@@ -1889,8 +2020,8 @@ class operator TMatrix22.Add(const Left, Right: TMatrix22): TMatrix22;
 begin
    with Result do
    begin
-      col1 := Left.col1 + Right.col1;
-      col2 := Left.col2 + Right.col2;
+      ex := Left.ex + Right.ex;
+      ey := Left.ey + Right.ey;
    end;
 end;
 
@@ -1898,8 +2029,8 @@ class operator TMatrix22.Subtract(const Left, Right: TMatrix22): TMatrix22;
 begin
    with Result do
    begin
-      col1 := Left.col1 - Right.col1;
-      col2 := Left.col2 - Right.col2;
+      ex := Left.ex - Right.ex;
+      ey := Left.ey - Right.ey;
    end;
 end;
 
@@ -1916,48 +2047,101 @@ end;
 
 procedure TMatrix33.SetZero;
 begin
-   col1 := b2Vec3_Zero;
-   col2 := b2Vec3_Zero;
-   col3 := b2Vec3_Zero;
+   ex := b2Vec3_Zero;
+   ey := b2Vec3_Zero;
+   ez := b2Vec3_Zero;
 end;
 
 procedure TMatrix33.SetValue(const _col1, _col2, _col3: TVector3);
 begin
-   col1 := _col1;
-   col2 := _col2;
-   col3 := _col3;
+   ex := _col1;
+   ey := _col2;
+   ez := _col3;
 end;
 
 function TMatrix33.Solve33(const b: TVector3): TVector3;
 var
    det: PhysicsFloat;
 begin
-   det := b2Dot(col1, b2Cross(col2, col3));
+   det := b2Dot(ex, b2Cross(ey, ez));
    if det <> 0.0 then
       det := 1.0 / det;
-   Result.x := det * b2Dot(b, b2Cross(col2, col3));
-   Result.y := det * b2Dot(col1, b2Cross(b, col3));
-   Result.z := det * b2Dot(col1, b2Cross(col2, b));
+   Result.x := det * b2Dot(b, b2Cross(ey, ez));
+   Result.y := det * b2Dot(ex, b2Cross(b, ez));
+   Result.z := det * b2Dot(ex, b2Cross(ey, b));
 end;
 
 function TMatrix33.Solve22(const b: TVector2): TVector2;
 var
    det: PhysicsFloat;
 begin
-   det := col1.x * col2.y - col2.x * col1.y;
+   det := ex.x * ey.y - ey.x * ex.y;
 	 if det <> 0.0 then
       det := 1.0 / det;
-   Result.x := det * (col2.y * b.x - col2.x * b.y);
-   Result.y := det * (col1.x * b.y - col1.y * b.x);
+   Result.x := det * (ey.y * b.x - ey.x * b.y);
+   Result.y := det * (ex.x * b.y - ex.y * b.x);
+end;
+
+procedure TMatrix33.GetInverse22(var dest: TMatrix33);
+var
+   a, b, c, d, det: PhysicsFloat;
+begin
+   a := ex.x;
+   b := ey.x;
+   c := ex.y;
+   d := ey.y;
+   det := a * d - b * c;
+   if det <> 0.0 then
+      det := 1.0 / det;
+
+   dest.ex.x :=  det * d;
+   dest.ey.x := -det * b;
+   dest.ex.z := 0.0;
+   dest.ex.y := -det * c;
+   dest.ey.y :=  det * a;
+   dest.ey.z := 0.0;
+   dest.ez.x := 0.0;
+   dest.ez.y := 0.0;
+   dest.ez.z := 0.0;
+end;
+
+/// Returns the zero matrix if singular.
+procedure TMatrix33.GetSymInverse33(var dest: TMatrix33);
+var
+   det: PhysicsFloat;
+   a11, a12, a13, a22, a23, a33: PhysicsFloat;
+begin
+   det := b2Dot(ex, b2Cross(ey, ez));
+   if det <> 0.0 then
+      det := 1.0 / det;
+
+   a11 := ex.x;
+   a12 := ey.x;
+   a13 := ez.x;
+   a22 := ey.y;
+   a23 := ez.y;
+   a33 := ez.z;
+
+   dest.ex.x := det * (a22 * a33 - a23 * a23);
+   dest.ex.y := det * (a13 * a23 - a12 * a33);
+   dest.ex.z := det * (a12 * a23 - a13 * a22);
+
+   dest.ey.x := dest.ex.y;
+   dest.ey.y := det * (a11 * a33 - a13 * a13);
+   dest.ey.z := det * (a13 * a12 - a11 * a23);
+
+   dest.ez.x := dest.ex.z;
+   dest.ez.y := dest.ey.z;
+   dest.ez.z := det * (a11 * a22 - a12 * a12);
 end;
 
 class operator TMatrix33.Negative(const AValue: TMatrix33): TMatrix33;
 begin
    with Result do
    begin
-      col1.SetNegative;
-      col2.SetNegative;
-      col3.SetNegative;
+      ex.SetNegative;
+      ey.SetNegative;
+      ez.SetNegative;
    end;
 end;
 
@@ -1965,9 +2149,9 @@ class operator TMatrix33.Add(const Left, Right: TMatrix33): TMatrix33;
 begin
    with Result do
    begin
-      col1 := Left.col1 + Right.col1;
-      col2 := Left.col2 + Right.col2;
-      col3 := Left.col3 + Right.col3;
+      ex := Left.ex + Right.ex;
+      ey := Left.ey + Right.ey;
+      ez := Left.ez + Right.ez;
    end;
 end;
 
@@ -1975,10 +2159,41 @@ class operator TMatrix33.Subtract(const Left, Right: TMatrix33): TMatrix33;
 begin
    with Result do
    begin
-      col1 := Left.col1 - Right.col1;
-      col2 := Left.col2 - Right.col2;
-      col3 := Left.col3 - Right.col3;
+      ex := Left.ex - Right.ex;
+      ey := Left.ey - Right.ey;
+      ez := Left.ez - Right.ez;
    end;
+end;
+
+{$ENDIF}
+
+{ Rotation }
+{$IFDEF OP_OVERLOAD}
+
+procedure Tb2Rot.SetAngle(angle: PhysicsFloat);
+begin
+   SinCos(angle, s, c);
+end;
+
+procedure Tb2Rot.SetIdentity;
+begin
+   s := 0.0;
+   c := 1.0;
+end;
+
+function Tb2Rot.GetAngle: PhysicsFloat;
+begin
+   Result := ArcTan2(s, c);
+end;
+
+function Tb2Rot.GetXAxis: TVector2;
+begin
+   Result := MakeVector(c, s);
+end;
+
+function Tb2Rot.GetYAxis: TVector2;
+begin
+   Result := MakeVector(-s, c);
 end;
 
 {$ENDIF}
@@ -1987,40 +2202,30 @@ end;
 {$IFDEF OP_OVERLOAD}
 procedure Tb2Transform.SetIdentity;
 begin
-   position.SetZero;
-   R.SetIdentity;
+   p.SetZero;
+   q.SetIdentity;
 end;
 
-procedure Tb2Transform.SetValue(const p: TVector2; angle: PhysicsFloat);
+procedure Tb2Transform.SetValue(const position: TVector2; angle: PhysicsFloat);
 begin
-   position := p;
-   R.SetValue(angle);
+   p := position;
+   q.SetAngle(angle);
 end;
 
-function Tb2Transform.GetAngle: PhysicsFloat;
-begin
-   Result := ArcTan2(R.col1.y, R.col1.x);
-end;
-
-class function Tb2Transform.From(const position: TVector2; const R: TMatrix22): Tb2Transform;
-begin
-   Result.position := position;
-   Result.R := R;
-end;
 {$ENDIF}
 
 { Tb2Sweep }
 {$IFDEF OP_OVERLOAD}
-procedure Tb2Sweep.GetTransform(var xf: Tb2Transform; beta: PhysicsFloat);
+procedure Tb2Sweep.GetTransform(var xfb: Tb2Transform; beta: PhysicsFloat);
 var
    angle: PhysicsFloat;
 begin
-   xf.position := (1.0 - beta) * c0 + beta * c;
+   xfb.p := (1.0 - beta) * c0 + beta * c;
    angle := (1.0 - beta) * a0 + beta * a;
-   xf.R.SetValue(angle);
+   xfb.q.SetAngle(angle);
 
    // Shift to origin
-   xf.position.SubtractBy(b2Mul(xf.R, localCenter));
+   xfb.p.SubtractBy(b2Mul(xfb.q, localCenter));
 end;
 
 procedure Tb2Sweep.Advance(alpha: PhysicsFloat);

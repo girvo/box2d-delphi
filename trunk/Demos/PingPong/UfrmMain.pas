@@ -392,7 +392,7 @@ begin
    if Assigned(b2World) then
       b2World.Free; // box2D只需销毁world即可，其中的物体也会被销毁
 
-   b2World := Tb2World.Create(b2Vec2_Zero, True);
+   b2World := Tb2World.Create(b2Vec2_Zero);
    b2World.SetContactListener(b2ContactListener);
 
    bd := Tb2BodyDef.Create;

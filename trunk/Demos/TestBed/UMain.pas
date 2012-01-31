@@ -22,7 +22,6 @@ type
 
   TfrmMain = class(TForm)
     Panel1: TPanel;
-    cboTests: TComboBox;
     Label1: TLabel;
     chkWarmStarting: TCheckBox;
     chkTimeOfImpact: TCheckBox;
@@ -42,13 +41,16 @@ type
     rdoFixedStep: TRadioButton;
     chkAntialiasing: TCheckBox;
     chkSubStepping: TCheckBox;
+    btnDumpWorld: TButton;
+    Bevel1: TBevel;
+    listTestEntries: TListBox;
+    chkEnableSleep: TCheckBox;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure chklstVisibilityClickCheck(Sender: TObject);
     procedure SimulationOptionsChanged(Sender: TObject);
     procedure btnSingleStepClick(Sender: TObject);
     procedure btnPauseClick(Sender: TObject);
-    procedure cboTestsChange(Sender: TObject);
     procedure FormMouseWheelDown(Sender: TObject; Shift: TShiftState;
       MousePos: TPoint; var Handled: Boolean);
     procedure FormMouseWheelUp(Sender: TObject; Shift: TShiftState;
@@ -56,15 +58,23 @@ type
     procedure btnConfirmGravityClick(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure btnResetClick(Sender: TObject);
-    procedure cboTestsCloseUp(Sender: TObject);
     procedure rdoRealTimeClick(Sender: TObject);
     procedure rdoFixedStepClick(Sender: TObject);
     procedure chkAntialiasingClick(Sender: TObject);
     procedure FormKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure btnDumpWorldClick(Sender: TObject);
+    procedure listTestEntriesMouseDown(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure listTestEntriesKeyDown(Sender: TObject; var Key: Word;
+      Shift: TShiftState);
+    procedure listTestEntriesKeyUp(Sender: TObject; var Key: Word;
+      Shift: TShiftState);
+    procedure FormShow(Sender: TObject);
   private
     { Private declarations }
 	   lastp: TGLPointF;
      DrawPanel: TDrawPanel;
+     dumpPool: TStringList;
 
      procedure DrawPanelResize(Sender: TObject);
      procedure DrawPanelMouseDown(Sender: TObject; Button: TMouseButton;
@@ -73,6 +83,10 @@ type
        Shift: TShiftState; X, Y: Integer);
      procedure DrawPanelMouseMove(Sender: TObject; Shift: TShiftState; X,
        Y: Integer);
+
+     procedure AddTests;
+     procedure TestChanged;
+     procedure Dump(Indent: Integer; const Format: string; const Args: array of const);
   public
     { Public declarations }
      procedure TimerProgress(const deltaTime, newTime: Double);
@@ -109,12 +123,14 @@ type
      normal, position: TVector2;
      id: Tb2ContactID;
      state: Tb2PointState;
+     normalImpulse: PhysicsFloat;
+     tangentImpulse: PhysicsFloat;
   end;
 
   TSettings = record
      drawShapes, drawJoints, drawAABBs, drawPairs, drawContactPoints, drawContactNormals,
-     drawContactForces, drawFrictionForces, drawCOMs, drawStats, drawKeyInfo,
-     enableWarmStarting, enableContinuous, enableSubStepping,
+     drawContactImpulse, drawFrictionImpulse, drawCOMs, drawStats, drawKeyInfo,
+     enableSleep, enableWarmStarting, enableContinuous, enableSubStepping,
      pause, singleStep, realTime, customedStep: Boolean;
   end;
 
@@ -183,6 +199,8 @@ var
    Test: TTester;
 
 implementation
+uses
+   UDump;
 
 {$R *.dfm}
 
@@ -201,6 +219,7 @@ var
    TestEntries: array of TTestEntry;
    TestCount: Integer;
    ActiveEntry: PTestEntry;
+   ActiveEntryIndex: Integer;
 
 procedure RegisterTestEntry(name: ShortString; ClassType: TTestClass);
 var
@@ -239,6 +258,23 @@ begin
    end;
 end;
 
+procedure TfrmMain.btnDumpWorldClick(Sender: TObject);
+var
+   dumpForm: TfrmDump;
+begin
+   Settings.pause := True;
+   dumpPool := TStringList.Create;
+   dumpPool.BeginUpdate;
+   Test.m_world.SetDumpMethod(Self.Dump);
+   Test.m_world.Dump;
+   dumpPool.EndUpdate;
+
+   dumpForm := TfrmDump.Create(Self);
+   dumpForm.memoDump.Lines.Assign(dumpPool);
+   dumpForm.ShowModal;
+   dumpPool.Free;
+end;
+
 procedure TfrmMain.btnPauseClick(Sender: TObject);
 begin
    Settings.pause := not Settings.pause;
@@ -263,28 +299,6 @@ begin
 	 Settings.singleStep := True;
 end;
 
-procedure TfrmMain.cboTestsChange(Sender: TObject);
-begin
-   if cboTests.ItemIndex = -1 then
-      ActiveEntry := nil
-   else
-      ActiveEntry := @TestEntries[cboTests.ItemIndex];
-   if Assigned(ActiveEntry) then
-   begin
-      if Assigned(Test) then
-         Test.Free;
-      Test := ActiveEntry^.ClassType.Create;
-      MSCadencer.Reset;
-      MSCadencer.Enabled := True;
-   end;
-end;
-
-procedure TfrmMain.cboTestsCloseUp(Sender: TObject);
-begin
-   if frmMain.ActiveControl = cboTests then
-      frmMain.ActiveControl := nil;
-end;
-
 procedure TfrmMain.chkAntialiasingClick(Sender: TObject);
 begin
    GLCanvas.Antialiasing := chkAntialiasing.Checked;
@@ -297,7 +311,7 @@ var
    flag: Tb2DrawBitsSet;
    i: Integer;
 begin
-   for i := 0 to High(TSettingArray) - 7 do
+   for i := 0 to High(TSettingArray) - 8 do
       TSettingArray(Settings)[i] := chklstVisibility.Checked[i];
 
    flag := [];
@@ -317,6 +331,37 @@ begin
    Drawer.m_drawFlags := flag;
 end;
 
+procedure TfrmMain.AddTests;
+var
+   i: Integer;
+begin
+   for i := 0 to TestCount - 1 do
+      listTestEntries.Items.Add(TestEntries[i].Name);
+end;
+
+procedure TfrmMain.TestChanged;
+begin
+   if listTestEntries.ItemIndex = -1 then
+      ActiveEntry := nil
+   else
+      ActiveEntry := @TestEntries[listTestEntries.ItemIndex];
+   if Assigned(ActiveEntry) then
+   begin
+      ResetView;
+      if Assigned(Test) then
+         Test.Free;
+      Test := ActiveEntry^.ClassType.Create;
+      MSCadencer.Reset;
+      MSCadencer.Enabled := True;
+      ActiveEntryIndex := listTestEntries.ItemIndex;
+   end
+   else
+      ActiveEntryIndex := -1;
+
+   // Do not let listTestEntries get focused.
+   DrawPanel.SetFocus;
+end;
+
 procedure TfrmMain.FormCreate(Sender: TObject);
 var
    i: Integer;
@@ -331,9 +376,7 @@ begin
    DrawPanel.OnMouseUp := DrawPanelMouseUp;
    DrawPanel.OnResize := DrawPanelResize;
 
-   // Add test entries
-   for i := 0 to TestCount - 1 do
-      cboTests.Items.Add(TestEntries[i].Name);
+   AddTests;
 
    FillChar(Settings, SizeOf(Settings), 0);
    with Settings do
@@ -342,6 +385,7 @@ begin
 	 	  drawJoints := True;
       drawStats := True;
       drawKeyInfo := True;
+      enableSleep := True;
 		  enableWarmStarting := True;
 		  enableContinuous := True;
       realTime := True;
@@ -361,12 +405,6 @@ begin
    GLCanvas.DefaultFont.WinColor := clWhite;
    Drawer := TDrawer.Create;
    Drawer.Canvas := GLCanvas;
-
-   ResetView;
-   chklstVisibilityClickCheck(nil);
-   cboTests.ItemIndex := 0;
-   cboTestsChange(nil);
-   SimulationOptionsChanged(nil);
 end;
 
 procedure TfrmMain.FormDestroy(Sender: TObject);
@@ -409,13 +447,45 @@ end;
 procedure TfrmMain.FormMouseWheelDown(Sender: TObject; Shift: TShiftState;
   MousePos: TPoint; var Handled: Boolean);
 begin
-   GLCanvas.SetEqualScale(b2Max(GLCanvas.ScaleX * 0.9, 0.01));
+   if not listTestEntries.Focused then
+      GLCanvas.SetEqualScale(b2Max(GLCanvas.ScaleX * 0.9, 0.01));
 end;
 
 procedure TfrmMain.FormMouseWheelUp(Sender: TObject; Shift: TShiftState;
   MousePos: TPoint; var Handled: Boolean);
 begin
-   GLCanvas.SetEqualScale(b2Min(GLCanvas.ScaleX * 1.1, 1000.0));
+   if not listTestEntries.Focused then
+      GLCanvas.SetEqualScale(b2Min(GLCanvas.ScaleX * 1.1, 1000.0));
+end;
+
+procedure TfrmMain.FormShow(Sender: TObject);
+begin
+   ResetView;
+   chklstVisibilityClickCheck(nil);
+   listTestEntries.ItemIndex := 0;
+   TestChanged;
+   SimulationOptionsChanged(nil);
+end;
+
+procedure TfrmMain.listTestEntriesKeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+   if listTestEntries.ItemIndex <> ActiveEntryIndex then
+      TestChanged;
+end;
+
+procedure TfrmMain.listTestEntriesKeyUp(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+   if listTestEntries.ItemIndex <> ActiveEntryIndex then
+      TestChanged;
+end;
+
+procedure TfrmMain.listTestEntriesMouseDown(Sender: TObject;
+  Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+begin
+   if listTestEntries.ItemIndex <> ActiveEntryIndex then
+      TestChanged;
 end;
 
 procedure TfrmMain.rdoFixedStepClick(Sender: TObject);
@@ -511,11 +581,13 @@ procedure TfrmMain.SimulationOptionsChanged(Sender: TObject);
 begin
    with Settings do
    begin
+      enableSleep := chkEnableSleep.Checked;
       enableWarmStarting := chkWarmStarting.Checked;
       enableContinuous := chkTimeOfImpact.Checked;
       enableSubStepping := chkSubStepping.Checked;
       if Assigned(Test) then
       begin
+         Test.m_world.AllowSleeping := enableSleep;
          Test.m_world.WarmStarting := enableWarmStarting;
          Test.m_world.ContinuousPhysics := enableContinuous;
          Test.m_world.SubStepping := enableSubStepping;
@@ -529,22 +601,38 @@ begin
    begin
       GLCanvas.RenderingBegin(clBlack);
       Test.m_textLine := DrawPanel.ClientHeight - 15;
+      GLCanvas.DefaultFont.WinColor := clYellow;
       Test.DrawText(ActiveEntry^.Name);
       Test.NextLine; // A space line
 
-      {$IFDEF COMPUTE_PHYSICSTIME}
-      Test.DrawText(Format('Delta Time: %.4fs  Physics Time: %.5fs', [deltaTime, Test.m_world.Profile.step]));
-      Test.DrawText(Format('Collide Time: %.4fs  Solve Time: %.5fs  SolveTOI Time: %.5fs',
+      GLCanvas.DefaultFont.WinColor := clAqua;
+      {$IFDEF COMPUTE_PHYSICS_TIME}
+      Test.DrawText(Format('Delta Time: %.5fs  Physics Time: %.5fs', [deltaTime, Test.m_world.Profile.step]));
+      Test.DrawText(Format('Collide Time: %.5fs  Solve Time: %.5fs  SolveTOI Time: %.5fs',
          [Test.m_world.Profile.collide, Test.m_world.Profile.solve, Test.m_world.Profile.solveTOI]));
+      Test.DrawText(Format('Solve Velocity Time: %.5fs  Solve Position Time: %.5fs',
+         [Test.m_world.Profile.solveVelocity, Test.m_world.Profile.solvePosition]));
       Test.DrawText('');
       {$ELSE}
       Test.DrawText(Format('Delta Time: %.4fs', [deltaTime]));
       {$ENDIF}
+      GLCanvas.DefaultFont.WinColor := clWhite;
       Test.Step(settings, deltaTime);
       GLCanvas.RenderingEnd;
    end
    else
       MSCadencer.Enabled := False;
+end;
+
+procedure TfrmMain.Dump(Indent: Integer; const Format: string; const Args: array of const);
+begin
+   case Indent of
+      0: dumpPool.Add(SysUtils.Format(Format, Args));
+      1: dumpPool.Add('   ' + SysUtils.Format(Format, Args));
+      2: dumpPool.Add('      ' + SysUtils.Format(Format, Args));
+      3: dumpPool.Add('         ' + SysUtils.Format(Format, Args));
+      4: dumpPool.Add('            ' + SysUtils.Format(Format, Args));
+   end;
 end;
 
 { TDrawer }
@@ -637,12 +725,12 @@ begin
    end;
    Canvas.SetBrushColor(tmp).FillEllipse(center.x, center.y, radius, radius, True);
 
-  {$IFDEF OP_OVERLOAD}
-	p := center + radius * axis;
-  {$ELSE}
-  p := Add(center, Multiply(axis, radius));
-  {$ENDIF}
-  Canvas.Line(center.x, center.y, p.x, p.y);
+   {$IFDEF OP_OVERLOAD}
+   p := center + radius * axis;
+   {$ELSE}
+   p := Add(center, Multiply(axis, radius));
+   {$ENDIF}
+   Canvas.Line(center.x, center.y, p.x, p.y);
 end;
 
 procedure TDrawer.DrawSegment(const p1, p2: TVector2; const color: RGBA);
@@ -657,16 +745,24 @@ const
    clGreen: TColorVector = (0.0, 1.0, 0.0, 1.0);
 var
    p2: TVector2;
+   xAxis, yAxis: TVector2;
 begin
    with xf do
    begin
-      p2.x := position.x + k_axisScale * R.col1.x;
-      p2.y := position.y + k_axisScale * R.col1.y;
-      Canvas.SetPenColor(clRed).Line(position.x, position.y, p2.x, p2.y);
+      {$IFDEF OP_OVERLOAD}
+      xAxis := q.GetXAxis;
+      yAxis := q.GetYAxis;
+      {$ELSE}
+      xAxis := GetXAxis(q);
+      yAxis := GetYAxis(q);
+      {$ENDIF}
+      p2.x := p.x + k_axisScale * xAxis.x;
+      p2.y := p.y + k_axisScale * xAxis.y;
+      Canvas.SetPenColor(clRed).Line(p.x, p.y, p2.x, p2.y);
 
-      p2.x := position.x + k_axisScale * R.col2.x;
-      p2.y := position.y + k_axisScale * R.col2.y;
-      Canvas.SetPenColor(clGreen).Line(position.x, position.y, p2.x, p2.y);
+      p2.x := p.x + k_axisScale * yAxis.x;
+      p2.y := p.y + k_axisScale * yAxis.y;
+      Canvas.SetPenColor(clGreen).Line(p.x, p.y, p2.x, p2.y);
    end;
 end;
 
@@ -725,7 +821,7 @@ begin
 
    gravity.x := 0.0;
    gravity.y := -10.0;
-   m_world := Tb2World.Create(gravity, True);
+   m_world := Tb2World.Create(gravity);
 
    UpdateGravityText;
 
@@ -765,12 +861,15 @@ end;
 
 procedure TTester.Step(var settings: TSettings; timeStep: PhysicsFloat);
 const
+   k_impulseScale = 0.1;
    k_axisScale = 0.4;
    clPoint: RGBA = (0.0, 1.0, 0.0, 1.0);
    clLine: RGBA = (0.8, 0.8, 0.8, 1.0);
    clAdd: RGBA = (0.3, 0.95, 0.3, 1.0);
    clPersist: RGBA = (0.3, 0.3, 0.95, 1.0);
    clContactNormal: RGBA = (0.9, 0.9, 0.9, 1.0);
+   clContactImpulse: RGBA = (0.9, 0.9, 0.3, 1.0);
+   clFrictionImpulse: RGBA = (0.9, 0.2, 0.2, 1.0);
    clBomb: RGBA = (0.0, 0.0, 1.0, 1.0);
 
 var
@@ -795,7 +894,9 @@ begin
          else
             m_world.Step(0, 8, 3, True);
             //m_world.DrawDebugData;
+         m_debugDraw.Canvas.DefaultFont.WinColor := clRed;
          DrawText('**** PAUSED ****');
+         m_debugDraw.Canvas.DefaultFont.WinColor := clWhite;
       end
       else
       begin
@@ -819,19 +920,23 @@ begin
 
    if settings.drawKeyInfo then
    begin
+      m_debugDraw.Canvas.DefaultFont.WinColor := clRed;
       DrawText('Space: Launch bomb   Arrows: Move view   Home: Reset view');
       DrawText('Right Mouse: Span   Wheel: Scale');
       DrawText('Hold Shift and drag the mouse to spawn a bullet.');
+      m_debugDraw.Canvas.DefaultFont.WinColor := clWhite;
    end;
 
    if settings.drawStats then
    begin
+      m_debugDraw.Canvas.DefaultFont.WinColor := clLime;
       NextLine; // space line
       DrawText(Format('bodies/contacts/joints = %d/%d/%d',
          [m_world.GetBodyCount, m_world.GetContactCount, m_world.GetJointCount]));
       DrawText(Format('proxies/height/balance/quality = %d/%d/%d/%f',
          [m_world.GetProxyCount, m_world.GetTreeHeight, m_world.GetTreeBalance, m_world.GetTreeQuality]));
       NextLine; // space line
+      m_debugDraw.Canvas.DefaultFont.WinColor := clWhite;
    end;
 
    if Assigned(m_mouseJoint) then
@@ -862,9 +967,21 @@ begin
 
             if settings.drawContactNormals then
                {$IFDEF OP_OVERLOAD}
-               m_debugDraw.DrawSegment(position, position + k_axisScale * normal, clContactNormal);
+               m_debugDraw.DrawSegment(position, position + k_axisScale * normal, clContactNormal)
                {$ELSE}
-               m_debugDraw.DrawSegment(position, Add(position, Multiply(normal, k_axisScale)), clContactNormal);
+               m_debugDraw.DrawSegment(position, Add(position, Multiply(normal, k_axisScale)), clContactNormal)
+               {$ENDIF}
+            else if settings.drawContactImpulse then
+               {$IFDEF OP_OVERLOAD}
+               m_debugDraw.DrawSegment(position, position + k_impulseScale * normalImpulse * normal, clContactImpulse)
+               {$ELSE}
+               m_debugDraw.DrawSegment(position, Add(position, Multiply(normal, k_impulseScale * normalImpulse)), clContactImpulse)
+               {$ENDIF}
+            else if settings.drawFrictionImpulse then
+               {$IFDEF OP_OVERLOAD}
+               m_debugDraw.DrawSegment(position, position + k_impulseScale * tangentImpulse * b2Cross(normal, 1.0), clFrictionImpulse);
+               {$ELSE}
+               m_debugDraw.DrawSegment(position, Add(position, Multiply(b2Cross(normal, 1.0), k_impulseScale * tangentImpulse)), clFrictionImpulse);
                {$ENDIF}
          end;
    end;
@@ -1112,6 +1229,8 @@ begin
          position := worldManifold.points[i];
          normal := worldManifold.normal;
          state := state2[i];
+         normalImpulse := contact.m_manifold.points[i].normalImpulse;
+         tangentImpulse := contact.m_manifold.points[i].tangentImpulse;
          Inc(m_pointCount);
          Inc(i);
       end;
@@ -1133,5 +1252,6 @@ finalization
    _QueryCallback.Free;
 
 end.
+
 
 
