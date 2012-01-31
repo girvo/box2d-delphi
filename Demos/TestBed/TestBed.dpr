@@ -34,7 +34,6 @@ uses
   UDominos in 'Tests\UDominos.pas',
   UDynamicTreeTest in 'Tests\UDynamicTreeTest.pas',
   UEdgeShapes in 'Tests\UEdgeShapes.pas',
-  UFixedJoint in 'Tests\UFixedJoint.pas',
   UGears in 'Tests\UGears.pas',
   UMotorsAndLimits in 'Tests\UMotorsAndLimits.pas',
   UOneSidedPlatform in 'Tests\UOneSidedPlatform.pas',
@@ -60,7 +59,12 @@ uses
   URope in 'Tests\URope.pas',
   UCar in 'Tests\UCar.pas',
   URopeJoint in 'Tests\URopeJoint.pas',
-  UWheelJoint in 'Tests\UWheelJoint.pas';
+  UWheelJoint in 'Tests\UWheelJoint.pas',
+  UAddPair in 'Tests\UAddPair.pas',
+  UDump in 'UDump.pas' {frmDump},
+  UTumbler in 'Tests\UTumbler.pas',
+  UConvexHull in 'Tests\UConvexHull.pas',
+  UConveyorBelt in 'Tests\UConveyorBelt.pas';
 
 {$R *.res}
 

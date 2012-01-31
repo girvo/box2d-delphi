@@ -134,7 +134,7 @@ var
    fd: Tb2FixtureDef;
    body: Tb2Body;
 begin
-   idx := RandomRange(0, 4);
+   idx := RandomRange(0, 6);
    case idx of
       0..2:
          begin
@@ -173,7 +173,20 @@ begin
             fd.shape := cshape;
             fd.friction := 0.3;
             fd.density := 20.0;
-            cshape.m_radius := RandomFloat(0.6, 1.3);
+            cshape.m_radius := RandomFloat(0.6, 1.5);
+            SetValue(bodyDef.position, RandomFloat(-18, 18), RandomFloat(4, 13));
+            body := m_world.CreateBody(bodyDef);
+            body.CreateFixture(fd);
+         end;
+      5..6:
+         begin
+            bodyDef := Tb2BodyDef.Create;
+            bodyDef.bodyType := b2_dynamicBody;
+            shape := BuildHexagonShape(RandomFloat(0.5, 1.5));
+            fd := Tb2FixtureDef.Create;
+            fd.shape := shape;
+            fd.friction := 0.3;
+            fd.density := 20.0;
             SetValue(bodyDef.position, RandomFloat(-18, 18), RandomFloat(4, 13));
             body := m_world.CreateBody(bodyDef);
             body.CreateFixture(fd);

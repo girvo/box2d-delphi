@@ -80,9 +80,9 @@ begin
          with Tb2PolygonShape(fixture.GetShape) do
          begin
             //b2Assert(vertexCount <= b2_maxPolygonVertices);
-            for i := 0 to m_vertexCount - 1 do
+            for i := 0 to m_count - 1 do
               vertices[i] := b2Mul(xf^, m_vertices[i]);
-            m_debugDraw.DrawPolygon(vertices, m_vertexCount, color);
+            m_debugDraw.DrawPolygon(vertices, m_count, color);
          end;
    end;
 end;
@@ -186,7 +186,7 @@ begin
    inherited;
    callback := TPolyShapesCallback.Create;
    callback.m_circle.m_radius := 2.0;
-   SetValue(callback.m_circle.m_p, 0.0, 2.1);
+   SetValue(callback.m_circle.m_p, 0.0, 1.1);
    {$IFDEF OP_OVERLOAD}
    callback.m_transform.SetIdentity;
    {$ELSE}
@@ -268,7 +268,7 @@ begin
             while (i < k_maxBodies) do
             begin
 		        	 if Assigned(m_bodies[i]) then
-                  m_bodies[i].SetActive(m_bodies[i].IsActive);
+                  m_bodies[i].SetActive(not m_bodies[i].IsActive);
                Inc(i, 2);
             end;
          end;

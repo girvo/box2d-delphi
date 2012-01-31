@@ -117,7 +117,7 @@ begin
    // Drive the kinematic body.
    if m_platform.GetType = b2_kinematicBody then
    begin
-      p := m_platform.GetTransform^.position;
+      p := m_platform.GetTransform^.p;
       v := m_platform.GetLinearVelocity;
 
       if ((p.x < -10.0) and (v.x < 0.0)) or ((p.x > 10.0) and (v.x > 0.0)) then

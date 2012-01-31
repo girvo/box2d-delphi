@@ -14,6 +14,11 @@ type
 
 implementation
 
+// It is difficult to make a cantilever made of links completely rigid with weld joints.
+// You will have to use a high number of iterations to make them stiff.
+// So why not go ahead and use soft weld joints? They behave like a revolute
+// joint with a rotational spring.
+
 { TCantilever }
 
 constructor TCantilever.Create;
@@ -67,27 +72,34 @@ begin
 
          prevBody := body;
       end;
+      shape.Free;
       bd.Free;
    end;
 
    begin
+      shape := Tb2PolygonShape.Create;
+      shape.SetAsBox(1.0, 0.125);
+
       bd := Tb2BodyDef.Create;
       bd.bodyType := b2_dynamicBody;
 
       prevBody := ground;
 
-      for i := 0 to e_count - 1 do
+      jd.frequencyHz := 5.0;
+			jd.dampingRatio := 0.7;
+      for i := 0 to 3 do
       begin
-         SetValue(bd.position, -14.5 + 1.0 * i, 15.0);
+         SetValue(bd.position, -14.0 + 2.0 * i, 15.0);
          body := m_world.CreateBody(bd, False);
          body.CreateFixture(fd, False, False);
 
-         SetValue(anchor, -15.0 + 1.0 * i, 15.0);
+         SetValue(anchor, -15.0 + 2.0 * i, 15.0);
          jd.Initialize(prevBody, body, anchor);
          m_world.CreateJoint(jd, False);
 
          prevBody := body;
       end;
+      jd.Free;
       bd.Free;
    end;
 
@@ -96,6 +108,7 @@ begin
       bd.bodyType := b2_dynamicBody;
       prevBody := ground;
 
+      jd := Tb2WeldJointDef.Create;
       for i := 0 to e_count - 1 do
       begin
          SetValue(bd.position, -4.5 + 1.0 * i, 8.0);
@@ -118,6 +131,8 @@ begin
       bd := Tb2BodyDef.Create;
       bd.bodyType := b2_dynamicBody;
 
+      jd.frequencyHz := 8.0;
+			jd.dampingRatio := 0.7;
       prevBody := ground;
       for i := 0 to e_count - 1 do
       begin

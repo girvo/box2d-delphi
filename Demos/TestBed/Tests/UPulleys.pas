@@ -28,11 +28,10 @@ var
    body1, body2: Tb2Body;
    circle: Tb2CircleShape;
    pulleyDef: Tb2PulleyJointDef;
-   a, b, y, L: PhysicsFloat;
+   b, y, L: PhysicsFloat;
 begin
    inherited;
 
-   a := 1.0;
    b := 2.0;
    y := 16.0;
    L := 12.0;
@@ -84,7 +83,7 @@ var
    L: PhysicsFloat;
 begin
    inherited;
-   L := m_joint1.GetLength1 + m_joint1.GetRatio * m_joint1.GetLength2;
+   L := m_joint1.GetCurrentLengthA + m_joint1.GetRatio * m_joint1.GetCurrentLengthB;
    DrawText(Format('L1 + %4.2f * L2 = %4.2f', [m_joint1.GetRatio, L]));
 end;
 

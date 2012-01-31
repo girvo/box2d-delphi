@@ -41,7 +41,7 @@ var
 begin
    //ReportMemoryLeaksOnShutdown := True;
    SetValue(gravity, 0, -10);
-   world := Tb2World.Create(gravity, True);
+   world := Tb2World.Create(gravity);
 
    groundDef := Tb2BodyDef.Create;
    SetValue(groundDef.position, 0, -10);
@@ -87,10 +87,6 @@ begin
       // Instruct the world to perform a single step of simulation.
       // It is generally best to keep the time step and iterations fixed.
       world.Step(timeStep, viterations, piterations);
-
-      // Clear applied body forces. We didn't apply any forces, but you
-      // should know about this function.
-      world.ClearForces;
 
       // Now print the position and angle of the body.
       position := body.GetPosition;

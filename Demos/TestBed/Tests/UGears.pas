@@ -31,6 +31,7 @@ var
    jd1, jd2: Tb2RevoluteJointDef;
    jd3: Tb2PrismaticJointDef;
    jd4, jd5: Tb2GearJointDef;
+   joint1, joint2: Tb2Joint;
 begin
    inherited;
    begin
@@ -48,6 +49,44 @@ begin
       circle2 := Tb2CircleShape.Create;
       circle2.m_radius := 2.0;
 
+      box := Tb2PolygonShape.Create;
+      box.SetAsBox(0.5, 5.0);
+
+      bd1 := Tb2bodyDef.Create;
+			bd1.bodyType := b2_staticBody;
+			SetValue(bd1.position, 10.0, 9.0);
+			body1 := m_world.CreateBody(bd1);
+			body1.CreateFixture(circle1, 5.0, False);
+
+      bd2 := Tb2BodyDef.Create;
+			bd2.bodyType := b2_dynamicBody;
+			SetValue(bd2.position, 10.0, 8.0);
+      body2 := m_world.CreateBody(bd2);
+			body2.CreateFixture(box, 5.0);
+
+      bd3 := Tb2BodyDef.Create;
+			bd3.bodyType := b2_dynamicBody;
+			SetValue(bd3.position, 10.0, 6.0);
+			body3 := m_world.CreateBody(bd3);
+			body3.CreateFixture(circle2, 5.0, False);
+
+      jd1 := Tb2RevoluteJointDef.Create;
+			jd1.Initialize(body2, body1, bd1.position);
+			joint1 := m_world.CreateJoint(jd1);
+
+			jd2 := Tb2RevoluteJointDef.Create;
+			jd2.Initialize(body2, body3, bd3.position);
+			joint2 := m_world.CreateJoint(jd2);
+
+      jd4 := Tb2GearJointDef.Create;
+			jd4.bodyA := body1;
+			jd4.bodyB := body3;
+			jd4.joint1 := joint1;
+			jd4.joint2 := joint2;
+			jd4.ratio := circle2.m_radius / circle1.m_radius;
+			m_world.CreateJoint(jd4);
+
+      /////////////////////////
       box := Tb2PolygonShape.Create;
       box.SetAsBox(0.5, 5.0);
 

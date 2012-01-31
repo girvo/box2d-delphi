@@ -96,9 +96,9 @@ begin
    {$ELSE}
    GetTransform(sweepA, transformA, 0.0);
    {$ENDIF}
-   for i := 0 to m_shapeA.m_vertexCount - 1 do
+   for i := 0 to m_shapeA.m_count - 1 do
       vertices[i] := b2Mul(transformA, m_shapeA.m_vertices[i]);
-   m_debugDraw.DrawPolygon(vertices, m_shapeA.m_vertexCount, clVertices);
+   m_debugDraw.DrawPolygon(vertices, m_shapeA.m_count, clVertices);
 
    {$IFDEF OP_OVERLOAD}
    sweepB.GetTransform(transformB, 0.0);
@@ -108,27 +108,27 @@ begin
 
    //v := (sweepB.c - sweepB.c0) + b2Cross(sweepB.a - sweepB.a0, b2Mul(transformB, MakeVector(2.0, -0.1)) - sweepB.c0);
 
-   for i := 0 to m_shapeB.m_vertexCount - 1 do
+   for i := 0 to m_shapeB.m_count - 1 do
       vertices[i] := b2Mul(transformB, m_shapeB.m_vertices[i]);
-   m_debugDraw.DrawPolygon(vertices, m_shapeB.m_vertexCount, clVertices2);
+   m_debugDraw.DrawPolygon(vertices, m_shapeB.m_count, clVertices2);
 
    {$IFDEF OP_OVERLOAD}
    sweepB.GetTransform(transformB, output.t);
    {$ELSE}
    GetTransform(sweepB, transformB, output.t);
    {$ENDIF}
-   for i := 0 to m_shapeB.m_vertexCount - 1 do
+   for i := 0 to m_shapeB.m_count - 1 do
       vertices[i] := b2Mul(transformB, m_shapeB.m_vertices[i]);
-   m_debugDraw.DrawPolygon(vertices, m_shapeB.m_vertexCount, clVertices3);
+   m_debugDraw.DrawPolygon(vertices, m_shapeB.m_count, clVertices3);
 
    {$IFDEF OP_OVERLOAD}
    sweepB.GetTransform(transformB, 1.0);
    {$ELSE}
    GetTransform(sweepB, transformB, 1.0);
    {$ENDIF}
-   for i := 0 to m_shapeB.m_vertexCount - 1 do
+   for i := 0 to m_shapeB.m_count - 1 do
       vertices[i] := b2Mul(transformB, m_shapeB.m_vertices[i]);
-   m_debugDraw.DrawPolygon(vertices, m_shapeB.m_vertexCount, clVertices4);
+   m_debugDraw.DrawPolygon(vertices, m_shapeB.m_count, clVertices4);
 end;
 
 { TTimeOfImpact2 }

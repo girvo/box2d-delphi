@@ -124,7 +124,7 @@ begin
    inherited;
 
    // Traverse the contact results. Apply a force on shapes that overlap the sensor.
-   for i := 0 to m_pointCount - 1 do
+   for i := 0 to e_count - 1 do
       with m_points[i] do
       begin
          if not m_touching[i] then

@@ -34,7 +34,7 @@ var
    ground, leftFlipper, rightFlipper: Tb2Body;
    bd: Tb2BodyDef;
    fd: Tb2FixtureDef;
-   loop: Tb2LoopShape;
+   loop: Tb2ChainShape;
    box: Tb2PolygonShape;
    shape: Tb2CircleShape;
    jd: Tb2RevoluteJointDef;
@@ -45,7 +45,7 @@ begin
       bd := Tb2BodyDef.Create;
       ground := m_world.CreateBody(bd);
 
-      loop := Tb2LoopShape.Create(@vs[0], 5);
+      loop := Tb2ChainShape.CreateLoop(@vs[0], 5);
 
       fd := Tb2FixtureDef.Create;
       fd.shape := loop;

@@ -34,7 +34,7 @@ begin
       {$ELSE}
       SetIdentity(m_transformA);
       {$ENDIF}
-      SetValue(m_transformA.position, 0.0, -0.2);
+      SetValue(m_transformA.p, 0.0, -0.2);
       m_polygonA := Tb2PolygonShape.Create;
       m_polygonA.SetAsBox(10.0, 0.2);
    end;
@@ -91,13 +91,13 @@ begin
    DrawText(Format('iterations := %d', [output.iterations]));
 
    begin
-      for i := 0 to m_polygonA.m_vertexCount - 1 do
+      for i := 0 to m_polygonA.m_count - 1 do
          v[i] := b2Mul(m_transformA, m_polygonA.m_vertices[i]);
-      m_debugDraw.DrawPolygon(v, m_polygonA.m_vertexCount, color1);
+      m_debugDraw.DrawPolygon(v, m_polygonA.m_count, color1);
 
-      for i := 0 to m_polygonB.m_vertexCount - 1 do
+      for i := 0 to m_polygonB.m_count - 1 do
          v[i] := b2Mul(m_transformB, m_polygonB.m_vertices[i]);
-      m_debugDraw.DrawPolygon(v, m_polygonB.m_vertexCount, color1);
+      m_debugDraw.DrawPolygon(v, m_polygonB.m_count, color1);
    end;
 
    m_debugDraw.DrawPoint(output.pointA, 4.0, color2);

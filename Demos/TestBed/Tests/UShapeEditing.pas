@@ -15,6 +15,7 @@ type
    public
       m_body: Tb2Body;
       m_fixture1, m_fixture2: Tb2Fixture;
+      m_sensor: Boolean;
 
       constructor Create; override;
 
@@ -50,12 +51,18 @@ begin
    shape.SetAsBox(1.0, 1.0, MakeVector(0.0, 0.0), 0.0);
    m_fixture1 := m_body.CreateFixture(shape, 10.0);
    m_fixture2 := nil;
+
+   m_sensor := False;
 end;
 
 procedure TShapeEditing.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
    inherited;
-	 DrawText('Press C create a shape, D destroy a shape.');
+	 DrawText('Press C create a shape, D destroy a shape and S to switch sensor.');
+   if m_sensor then
+      DrawText('sensor: YES')
+   else
+      DrawText('sensor: NO');
 end;
 
 procedure TShapeEditing.Keyboard(key: Byte);
@@ -79,6 +86,12 @@ begin
             m_body.DestroyFixture(m_fixture2);
             m_fixture2 := nil;
             m_body.SetAwake(True);
+         end;
+      Ord('S'):
+         if Assigned(m_fixture2) then
+         begin
+				    m_sensor := not m_sensor;
+            m_fixture2.IsSensor := m_sensor;
          end;
    end;
 end;
