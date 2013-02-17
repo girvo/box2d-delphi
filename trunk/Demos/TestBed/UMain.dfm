@@ -67,7 +67,7 @@ object frmMain: TfrmMain
       Caption = 'Warm Starting'
       Checked = True
       State = cbChecked
-      TabOrder = 0
+      TabOrder = 2
       OnClick = SimulationOptionsChanged
     end
     object chkTimeOfImpact: TCheckBox
@@ -79,7 +79,7 @@ object frmMain: TfrmMain
       Caption = 'Time of Impact'
       Checked = True
       State = cbChecked
-      TabOrder = 1
+      TabOrder = 3
       OnClick = SimulationOptionsChanged
     end
     object chklstVisibility: TCheckListBox
@@ -103,7 +103,7 @@ object frmMain: TfrmMain
         'Center of Masses'
         'Statistics'
         'Key Information')
-      TabOrder = 2
+      TabOrder = 5
     end
     object btnPause: TButton
       Left = 7
@@ -112,7 +112,7 @@ object frmMain: TfrmMain
       Height = 25
       Anchors = [akLeft, akBottom]
       Caption = 'Pause'
-      TabOrder = 3
+      TabOrder = 6
       OnClick = btnPauseClick
     end
     object btnSingleStep: TButton
@@ -122,7 +122,7 @@ object frmMain: TfrmMain
       Height = 25
       Anchors = [akLeft, akBottom]
       Caption = 'Single Step'
-      TabOrder = 4
+      TabOrder = 7
       OnClick = btnSingleStepClick
     end
     object GroupBox1: TGroupBox
@@ -132,7 +132,7 @@ object frmMain: TfrmMain
       Height = 70
       Anchors = [akLeft, akBottom]
       Caption = 'Gravity'
-      TabOrder = 5
+      TabOrder = 11
       object Label3: TLabel
         Left = 11
         Top = 21
@@ -180,7 +180,7 @@ object frmMain: TfrmMain
       Height = 25
       Anchors = [akLeft, akBottom]
       Caption = 'Reset'
-      TabOrder = 6
+      TabOrder = 8
       OnClick = btnResetClick
     end
     object GroupBox2: TGroupBox
@@ -190,7 +190,7 @@ object frmMain: TfrmMain
       Height = 57
       Anchors = [akLeft, akBottom]
       Caption = 'Mode'
-      TabOrder = 7
+      TabOrder = 12
       object rdoRealTime: TRadioButton
         Left = 8
         Top = 16
@@ -221,7 +221,7 @@ object frmMain: TfrmMain
       Caption = 'Antialiasing'
       Checked = True
       State = cbChecked
-      TabOrder = 8
+      TabOrder = 10
       OnClick = chkAntialiasingClick
     end
     object chkSubStepping: TCheckBox
@@ -231,7 +231,7 @@ object frmMain: TfrmMain
       Height = 17
       Anchors = [akLeft, akBottom]
       Caption = 'Sub-Stepping'
-      TabOrder = 9
+      TabOrder = 4
       OnClick = SimulationOptionsChanged
     end
     object btnDumpWorld: TButton
@@ -241,7 +241,7 @@ object frmMain: TfrmMain
       Height = 25
       Anchors = [akLeft, akBottom]
       Caption = 'Dump World'
-      TabOrder = 10
+      TabOrder = 9
       OnClick = btnDumpWorldClick
     end
     object listTestEntries: TListBox
@@ -251,7 +251,7 @@ object frmMain: TfrmMain
       Height = 86
       Anchors = [akLeft, akTop, akBottom]
       ItemHeight = 13
-      TabOrder = 11
+      TabOrder = 0
       OnKeyDown = listTestEntriesKeyDown
       OnKeyUp = listTestEntriesKeyUp
       OnMouseDown = listTestEntriesMouseDown
@@ -265,7 +265,7 @@ object frmMain: TfrmMain
       Caption = 'Enable Sleep'
       Checked = True
       State = cbChecked
-      TabOrder = 12
+      TabOrder = 1
       OnClick = SimulationOptionsChanged
     end
   end
