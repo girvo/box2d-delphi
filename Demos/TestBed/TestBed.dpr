@@ -61,10 +61,12 @@ uses
   URopeJoint in 'Tests\URopeJoint.pas',
   UWheelJoint in 'Tests\UWheelJoint.pas',
   UAddPair in 'Tests\UAddPair.pas',
-  UDump in 'UDump.pas' {frmDump},
   UTumbler in 'Tests\UTumbler.pas',
   UConvexHull in 'Tests\UConvexHull.pas',
-  UConveyorBelt in 'Tests\UConveyorBelt.pas';
+  UConveyorBelt in 'Tests\UConveyorBelt.pas',
+  UDump in 'UDump.pas' {frmDump},
+  UMobile in 'Tests\UMobile.pas',
+  UMobileBalanced in 'Tests\UMobileBalanced.pas';
 
 {$R *.res}
 
