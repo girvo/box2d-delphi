@@ -846,9 +846,8 @@ type
    ////////////////////////////////////////////////////
    Pb2Pair = ^Tb2Pair;
    Tb2Pair = record
-      proxyIdA,
-      proxyIdB,
-      next: Int32;
+      proxyIdA: Int32;
+      proxyIdB: Int32;
    end;
 
 {$DEFINE B2_USE_DYNAMIC_TREE}
@@ -1692,7 +1691,7 @@ type
 
       /// Set the sleep state of the body. A sleeping body has very
       /// low CPU cost.
-      /// @param flag set to True to put body to sleep, false to wake it.
+      /// @param flag set to true to wake the body, false to put it to sleep.
       procedure SetAwake(flag: Boolean);
 
       /// Get the sleeping state of this body.
@@ -1810,14 +1809,14 @@ type
       function ComputeSubmergedArea(const normal: TVector2; offset: PhysicsFloat;
          const xf: Tb2Transform; var c: TVector2): PhysicsFloat; override;
 
-      /// Create a convex hull from the given array of points.
+      /// Create a convex hull from the given array of local points.
       /// The count must be in the range [3, b2_maxPolygonVertices].
       /// @warning the points may be re-ordered, even if they form a convex polygon
       /// @warning collinear points are handled but not removed. Collinear points
       /// may lead to poor stacking behavior.
       procedure SetVertices(vertices: PVector2; count: Int32);
 
-      /// Build vertices to represent an axis-aligned box.
+      /// Build vertices to represent an axis-aligned box centered on the local origin.
       /// @param hx the half-width.
       /// @param hy the half-height.
       procedure SetAsBox(hx, hy: PhysicsFloat); overload;
@@ -11506,12 +11505,21 @@ begin
 end;
 
 procedure Tb2Body.SetFixedRotation(flag: Boolean);
+var
+   status: Boolean;
 begin
-   if flag then
-      m_flags := m_flags or e_body_fixedRotationFlag
-   else
+	 status := (m_flags and e_body_fixedRotationFlag) = e_body_fixedRotationFlag;
+	 if status = flag then
+      Exit;
+
+	 if flag then
+		  m_flags := m_flags or e_body_fixedRotationFlag
+	 else
       m_flags := m_flags and (not e_body_fixedRotationFlag);
-   ResetMassData;
+
+   m_angularVelocity := 0.0;
+
+	 ResetMassData;
 end;
 
 function Tb2Body.IsFixedRotation: Boolean;
