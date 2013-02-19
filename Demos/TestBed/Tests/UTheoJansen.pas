@@ -123,7 +123,7 @@ begin
       {$ENDIF}
       jd.collideConnected := False;
       jd.motorSpeed := m_motorSpeed;
-      jd.maxMotorTorque := 400.0;
+      jd.maxMotorTorque := 2000.0;
       jd.enableMotor := m_motorOn;
       m_motorJoint := Tb2RevoluteJoint(m_world.CreateJoint(jd));
    end;
