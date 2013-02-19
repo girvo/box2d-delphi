@@ -511,6 +511,11 @@ type
       /// Get the flag that controls automatic clearing of forces after each time step.
       function GetAutoClearForces: Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
+      /// Shift the world origin. Useful for large worlds.
+      /// The body shift formula is: position -= newOrigin
+      /// @param newOrigin the new origin with respect to the old origin
+      procedure ShiftOrigin(const newOrigin: TVector2);
+
       //////////////////////////////////////////////////////////////////////
       property DestructionListener: Tb2DestructionListener read m_destructionListener write m_destructionListener;
       property Draw: Tb2Draw read m_debugDraw write m_debugDraw;
@@ -955,6 +960,11 @@ type
 
       /// Build an optimal tree. Very expensive. For testing.
 	    procedure RebuildBottomUp;
+
+      /// Shift the world origin. Useful for large worlds.
+      /// The shift formula is: position -= newOrigin
+      /// @param newOrigin the new origin with respect to the old origin
+      procedure ShiftOrigin(const newOrigin: TVector2);
    end;
 {$ENDIF}
 
@@ -1095,6 +1105,11 @@ type
       function GetTreeHeight: Int32; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Get the height of the embedded tree.
       function GetTreeBalance: Int32; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Get the balance of the embedded tree.
       function GetTreeQuality: PhysicsFloat; {$IFDEF INLINE_AVAIL}inline;{$ENDIF} /// Get the quality metric of the embedded tree.
+
+      /// Shift the world origin. Useful for large worlds.
+      /// The shift formula is: position -= newOrigin
+      /// @param newOrigin the new origin with respect to the old origin
+      procedure ShiftOrigin(const newOrigin: TVector2); {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
       property GetProxyCount: Int32 read m_proxyCount; /// Get the number of proxies.
    end;
@@ -1349,6 +1364,9 @@ type
       {$IFDEF ENABLE_DUMP}
       procedure Dump; virtual;
       {$ENDIF}
+
+      /// Shift the origin for any points stored in world coordinates.
+      procedure ShiftOrigin(const newOrigin: TVector2); virtual;
 
       /// Get the anchor point on bodyA in world coordinates.
       function GetAnchorA: TVector2; virtual; abstract;
@@ -2122,6 +2140,8 @@ type
    public
       constructor Create(def: Tb2MouseJointDef);
 
+      procedure ShiftOrigin(const newOrigin: TVector2); override;
+
       function GetAnchorA: TVector2; override;
       function GetAnchorB: TVector2; override;
 
@@ -2191,6 +2211,8 @@ type
       {$IFDEF ENABLE_DUMP}
       procedure Dump; override;
       {$ENDIF}
+
+      procedure ShiftOrigin(const newOrigin: TVector2); override;
 
       function GetAnchorA: TVector2; override;
       function GetAnchorB: TVector2; override;
@@ -6708,6 +6730,40 @@ begin
    Result := (m_flags and e_world_clearForces) = e_world_clearForces;
 end;
 
+procedure Tb2World.ShiftOrigin(const newOrigin: TVector2);
+var
+   b: Tb2Body;
+   j: Tb2Joint;
+begin
+   //b2Assert((m_flags & e_locked) == 0);
+   if (m_flags and e_world_locked) = e_world_locked then
+      Exit;
+
+   b := m_bodyList;
+   while Assigned(b) do
+   begin
+      {$IFDEF OP_OVERLOAD}
+      b.m_xf.p.SubtractBy(newOrigin);
+      b.m_sweep.c0.SubtractBy(newOrigin);
+      b.m_sweep.c.SubtractBy(newOrigin);
+      {$ELSE}
+      SubtractBy(b.m_xf.p, newOrigin);
+      SubtractBy(b.m_sweep.c0, newOrigin);
+      SubtractBy(b.m_sweep.c, newOrigin);
+      {$ENDIF}
+      b := b.m_next;
+   end;
+
+   j := m_jointList;
+   while Assigned(j) do
+   begin
+      j.ShiftOrigin(newOrigin);
+      j := j.m_next;
+   end;
+
+   m_contactManager.m_broadPhase.ShiftOrigin(newOrigin);
+end;
+
 ////////////////////////////////////////////////////
 // Contact
 
@@ -9674,6 +9730,23 @@ begin
    m_root := nodes[0];
 end;
 
+procedure Tb2DynamicTree.ShiftOrigin(const newOrigin: TVector2);
+var
+   i: Integer;
+begin
+   // Build array of leaves. Free the rest.
+   for i := 0 to m_nodeCapacity - 1 do
+   begin
+      {$IFDEF OP_OVERLOAD}
+      m_nodes[i].aabb.lowerBound.SubtractBy(newOrigin);
+      m_nodes[i].aabb.upperBound.SubtractBy(newOrigin);
+      {$ELSE}
+      SubtractBy(m_nodes[i].aabb.lowerBound, newOrigin);
+      SubtractBy(m_nodes[i].aabb.upperBound, newOrigin);
+      {$ENDIF}
+   end;
+end;
+
 {$ENDIF}
 
 {$IFDEF B2_USE_BRUTE_FORCE}
@@ -10167,6 +10240,11 @@ begin
    Result := m_tree.GetAreaRatio;
 end;
 
+procedure Tb2BroadPhase.ShiftOrigin(const newOrigin: TVector2);
+begin
+   m_tree.ShiftOrigin(newOrigin);
+end;
+
 //////////////////////////////////////////////////////////////
 /// Fixture & Shapes
 
@@ -10519,6 +10597,11 @@ begin
    b2DumpMethod(1, 'end;', []);
 end;
 {$ENDIF}
+
+procedure Tb2Joint.ShiftOrigin(const newOrigin: TVector2);
+begin
+   //B2_NOT_USED(newOrigin);
+end;
 
 function Tb2Joint.IsActive: Boolean;
 begin
@@ -15376,6 +15459,15 @@ begin
    m_gamma := 0.0;
 end;
 
+procedure Tb2MouseJoint.ShiftOrigin(const newOrigin: TVector2);
+begin
+   {$IFDEF OP_OVERLOAD}
+   m_targetA.SubtractBy(newOrigin);
+   {$ELSE}
+   SubtractBy(m_targetA, newOrigin);
+   {$ENDIF}
+end;
+
 function Tb2MouseJoint.GetAnchorA: TVector2;
 begin
    Result := m_targetA;
@@ -15646,6 +15738,17 @@ begin
    b2DumpMethod(1, 'end;', []);
 end;
 {$ENDIF}
+
+procedure Tb2PulleyJoint.ShiftOrigin(const newOrigin: TVector2);
+begin
+   {$IFDEF OP_OVERLOAD}
+   m_groundAnchorA.SubtractBy(newOrigin);
+   m_groundAnchorB.SubtractBy(newOrigin);
+   {$ELSE}
+   SubtractBy(m_groundAnchorA, newOrigin);
+   SubtractBy(m_groundAnchorB, newOrigin);
+   {$ENDIF}
+end;
 
 function Tb2PulleyJoint.GetAnchorA: TVector2;
 begin
