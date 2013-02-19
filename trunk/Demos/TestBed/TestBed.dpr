@@ -3,6 +3,7 @@ program TestBed;
 uses
   Forms,
   UMain in 'UMain.pas' {frmMain},
+  UDump in 'UDump.pas' {frmDump},
   UPolyShapes in 'Tests\UPolyShapes.pas',
   UPrismatic in 'Tests\UPrismatic.pas',
   UPulleys in 'Tests\UPulleys.pas',
@@ -64,7 +65,6 @@ uses
   UTumbler in 'Tests\UTumbler.pas',
   UConvexHull in 'Tests\UConvexHull.pas',
   UConveyorBelt in 'Tests\UConveyorBelt.pas',
-  UDump in 'UDump.pas' {frmDump},
   UMobile in 'Tests\UMobile.pas',
   UMobileBalanced in 'Tests\UMobileBalanced.pas';
 

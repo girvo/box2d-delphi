@@ -182,6 +182,8 @@ type
      // Callbacks for derived classes.
      procedure PreSolve(var contact: Tb2Contact; const oldManifold: Tb2Manifold); override;
 
+     procedure ShiftOrigin(const newOrigin: TVector2);
+
      procedure UpdateGravityText;
   end;
 
@@ -421,15 +423,31 @@ procedure TfrmMain.FormKeyDown(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 begin
    case Key of
-      VK_ESCAPE: Close;
       Ord('P'): btnPauseClick(nil);
+      VK_ESCAPE: Close;
       VK_SPACE:
          if Assigned(Test) then
             Test.LaunchBomb;
-      VK_LEFT: GLCanvas.SetTranslateX(GLCanvas.TranslateX - 1.0);
-      VK_RIGHT: GLCanvas.SetTranslateX(GLCanvas.TranslateX + 1.0);
-      VK_UP: GLCanvas.SetTranslateY(GLCanvas.TranslateY + 1.0);
-      VK_DOWN: GLCanvas.SetTranslateY(GLCanvas.TranslateY - 1.0);
+      VK_LEFT:
+         if ssCtrl in Shift then
+            Test.ShiftOrigin(MakeVector(2.0, 0))
+         else
+            GLCanvas.SetTranslateX(GLCanvas.TranslateX - 1.0);
+      VK_RIGHT:
+         if ssCtrl in Shift then
+            Test.ShiftOrigin(MakeVector(-2.0, 0))
+         else
+            GLCanvas.SetTranslateX(GLCanvas.TranslateX + 1.0);
+      VK_UP:
+         if ssCtrl in Shift then
+            Test.ShiftOrigin(MakeVector(0.0, -2.0))
+         else
+            GLCanvas.SetTranslateY(GLCanvas.TranslateY + 1.0);
+      VK_DOWN:
+         if ssCtrl in Shift then
+            Test.ShiftOrigin(MakeVector(0.0, 2.0))
+         else
+            GLCanvas.SetTranslateY(GLCanvas.TranslateY - 1.0);
       VK_HOME: ResetView;
    else
       if Assigned(Test) then
@@ -921,7 +939,8 @@ begin
    if settings.drawKeyInfo then
    begin
       m_debugDraw.Canvas.DefaultFont.WinColor := clRed;
-      DrawText('Space: Launch bomb   Arrows: Move view   Home: Reset view');
+      DrawText('Space: Launch bomb   Home: Reset view');
+      DrawText('Arrows: Move view   Ctrl & Arrows: Move world');
       DrawText('Right Mouse: Span   Wheel: Scale');
       DrawText('Hold Shift and drag the mouse to spawn a bullet.');
       m_debugDraw.Canvas.DefaultFont.WinColor := clWhite;
@@ -1234,6 +1253,11 @@ begin
          Inc(m_pointCount);
          Inc(i);
       end;
+end;
+
+procedure TTester.ShiftOrigin(const newOrigin: TVector2);
+begin
+   m_world.ShiftOrigin(newOrigin);
 end;
 
 procedure TTester.UpdateGravityText;
