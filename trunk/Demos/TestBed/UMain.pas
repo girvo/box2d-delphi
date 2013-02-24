@@ -267,8 +267,10 @@ begin
    Settings.pause := True;
    dumpPool := TStringList.Create;
    dumpPool.BeginUpdate;
+   {$IFDEF ENABLE_DUMP}
    Test.m_world.SetDumpMethod(Self.Dump);
    Test.m_world.Dump;
+   {$ENDIF}
    dumpPool.EndUpdate;
 
    dumpForm := TfrmDump.Create(Self);
