@@ -18,6 +18,7 @@ type
       m_platform, m_character: Tb2Fixture;
 
       constructor Create; override;
+      procedure Step(var settings: TSettings; timeStep: PhysicsFloat); override;
    end;
 
 implementation
@@ -85,14 +86,28 @@ begin
 
       if (m_fixtureB <> m_platform) and (m_fixtureB <> m_character) then
          Exit;
-
+      {$IF TRUE}
       if m_character.GetBody.GetPosition.y < m_top + m_radius - 3.0 * b2_linearSlop then
          {$IFDEF OP_OVERLOAD}
          contact.SetEnabled(False);
          {$ELSE}
          SetEnabled(contact, False);
          {$ENDIF}
+      {$ELSE}
+      if m_character.GetBody.GetLinearVelocity.y > 0.0 then
+         {$IFDEF OP_OVERLOAD}
+         contact.SetEnabled(False);
+         {$ELSE}
+         SetEnabled(contact, False);
+         {$ENDIF}
+      {$IFEND}
    end;
+end;
+
+procedure TOneSidedPlatform.Step(var settings: TSettings; timeStep: PhysicsFloat);
+begin
+   inherited;
+   DrawText(Format('Character Linear Velocity: %.5f', [m_character.GetBody.GetLinearVelocity.y]));
 end;
 
 initialization

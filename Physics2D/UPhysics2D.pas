@@ -1307,7 +1307,7 @@ type
    // Joints
    Tb2JointType = (e_unknownJoint, e_revoluteJoint, e_prismaticJoint,
       e_distanceJoint, e_pulleyJoint, e_mouseJoint, e_gearJoint, e_wheelJoint,
-      e_weldJoint, e_frictionJoint, e_ropeJoint);
+      e_weldJoint, e_frictionJoint, e_ropeJoint, e_motorJoint);
    Tb2LimitState = (e_inactiveLimit, e_atLowerLimit, e_atUpperLimit, e_equalLimits);
 
    Tb2Jacobian = record
@@ -1330,7 +1330,7 @@ type
    /// Joint definitions are used to construct joints.
    Tb2JointDef = class
    public
-      JointType: Tb2JointType; /// The joint type is set automatically for concrete joint types.
+      jointType: Tb2JointType; /// The joint type is set automatically for concrete joint types.
       userData: Pointer; /// Use this to attach application specific data to your joints.
 
       bodyA, bodyB: Tb2Body ; /// The attached bodies.
@@ -2709,6 +2709,78 @@ type
       property GetLocalAnchorB: TVector2 read m_localAnchorB;
    end;
 
+   /// Motor joint definition.
+   Tb2MotorJointDef = class(Tb2JointDef)
+   public
+      /// Position of bodyB minus the position of bodyA, in bodyA's frame, in meters.
+      linearOffset: TVector2;
+
+      /// The bodyB angle minus bodyA angle in radians.
+      angularOffset: PhysicsFloat;
+
+      /// The maximum motor force in N.
+      maxForce: PhysicsFloat;
+
+      /// The maximum motor torque in N-m.
+      maxTorque: PhysicsFloat;
+
+      /// Position correction factor in the range [0,1].
+      correctionFactor: PhysicsFloat;
+
+      constructor Create;
+
+      /// Initialize the bodies and offsets using the current transforms.
+      procedure Initialize(bodyA, bodyB: Tb2Body);
+   end;
+
+   /// A motor joint is used to control the relative motion
+   /// between two bodies. A typical usage is to control the movement
+   /// of a dynamic body with respect to the ground.
+   Tb2MotorJoint = class(Tb2Joint)
+   protected
+      // Solver shared
+      m_linearOffset, m_linearImpulse: TVector2;
+      m_angularOffset, m_angularImpulse: PhysicsFloat;
+      m_maxForce, m_maxTorque: PhysicsFloat;
+      m_correctionFactor: PhysicsFloat;
+
+      // Solver temp
+      m_indexA, m_indexB: Int32;
+      m_rA, m_rB: TVector2;
+      m_localCenterA, m_localCenterB: TVector2;
+      m_linearError: TVector2;
+      m_angularError: PhysicsFloat;
+      m_invMassA, m_invMassB: PhysicsFloat;
+      m_invIA, m_invIB: PhysicsFloat;
+      m_linearMass: TMatrix22;
+      m_angularMass: PhysicsFloat;
+
+      procedure InitVelocityConstraints(const data: Tb2SolverData); override;
+      procedure SolveVelocityConstraints(const data: Tb2SolverData); override;
+      function SolvePositionConstraints(const data: Tb2SolverData): Boolean; override;
+   public
+      constructor Create(def: Tb2MotorJointDef);
+
+      {$IFDEF ENABLE_DUMP}
+      procedure Dump; override;
+      {$ENDIF}
+
+      function GetAnchorA: TVector2; override;
+      function GetAnchorB: TVector2; override;
+
+      function GetReactionForce(inv_dt: PhysicsFloat): TVector2; override;
+      function GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat; override;
+
+      procedure SetLinearOffset(const linearOffset: TVector2);
+      procedure SetAngularOffset(angularOffset: PhysicsFloat);
+
+      property MaxForce: PhysicsFloat read m_maxForce write m_maxForce;
+      property MaxTorque: PhysicsFloat read m_maxTorque write m_maxTorque;
+      property GetLinearOffset: TVector2 read m_linearOffset;
+      property GetAngularOffset: PhysicsFloat read m_angularOffset;
+   end;
+
+   /////////////////////////////////////////////////////
    Tb2RopeDef = class
    public
       vertices: TVectorArray;
@@ -6429,7 +6501,7 @@ begin
    end;
 
    Result := nil;
-   case def.JointType of
+   case def.jointType of
       e_unknownJoint: Exit;
       e_revoluteJoint: j := Tb2RevoluteJoint.Create(Tb2RevoluteJointDef(def));
       e_prismaticJoint: j := Tb2PrismaticJoint.Create(Tb2PrismaticJointDef(def));
@@ -6441,6 +6513,7 @@ begin
       e_weldJoint: j := Tb2WeldJoint.Create(Tb2WeldJointDef(def));
       e_frictionJoint: j := Tb2FrictionJoint.Create(Tb2FrictionJointDef(def));
       e_ropeJoint: j := Tb2RopeJoint.Create(Tb2RopeJointDef(def));
+      e_motorJoint: j := Tb2MotorJoint.Create(Tb2MotorJointDef(def));
    end;
 
    // Connect to the world list.
@@ -10557,7 +10630,7 @@ end;
 
 constructor Tb2JointDef.Create;
 begin
-		JointType := e_unknownJoint;
+		jointType := e_unknownJoint;
 		userData := nil;
 		bodyA := nil;
 		bodyB := nil;
@@ -10569,7 +10642,7 @@ end;
 constructor Tb2Joint.Create(def: Tb2JointDef);
 begin
    //b2Assert(def->bodyA != def->bodyB);
-   m_type := def.JointType;
+   m_type := def.jointType;
    m_prev := nil;
    m_next := nil;
    m_bodyA := def.bodyA;
@@ -14338,7 +14411,7 @@ end;
 constructor Tb2DistanceJointDef.Create;
 begin
    inherited;
-   JointType := e_distanceJoint;
+   jointType := e_distanceJoint;
    localAnchorA := b2Vec2_Zero;
    localAnchorB := b2Vec2_Zero;
    length := 1.0;
@@ -14720,7 +14793,7 @@ end;
 constructor Tb2PrismaticJointDef.Create;
 begin
    inherited;
-   JointType := e_prismaticJoint;
+   jointType := e_prismaticJoint;
    localAnchorA := b2Vec2_Zero;
    localAnchorB := b2Vec2_Zero;
    SetValue(localAxisA, 1.0, 0.0);
@@ -15429,7 +15502,7 @@ end;
 constructor Tb2MouseJointDef.Create;
 begin
     inherited;
-		JointType := e_mouseJoint;
+		jointType := e_mouseJoint;
     target := b2Vec2_Zero;
 		maxForce := 0.0;
 		frequencyHz := 5.0;
@@ -15663,7 +15736,7 @@ const
 constructor Tb2PulleyJointDef.Create;
 begin
    inherited;
-   JointType := e_pulleyJoint;
+   jointType := e_pulleyJoint;
    SetValue(groundAnchorA, -1.0, 1.0);
    SetValue(groundAnchorB, 1.0, 1.0);
    SetValue(localAnchorA, -1.0, 0.0);
@@ -16108,7 +16181,7 @@ end;
 constructor Tb2RevoluteJointDef.Create;
 begin
    inherited;
-   JointType := e_revoluteJoint;
+   jointType := e_revoluteJoint;
    localAnchorA := b2Vec2_Zero;
    localAnchorB := b2Vec2_Zero;
    referenceAngle := 0.0;
@@ -16700,7 +16773,7 @@ end;
 constructor Tb2GearJointDef.Create;
 begin
    inherited;
-	 JointType := e_gearJoint;
+	 jointType := e_gearJoint;
 	 joint1 := nil;
 	 joint2 := nil;
 	 ratio := 1.0;
@@ -17209,7 +17282,7 @@ end;
 constructor Tb2FrictionJointDef.Create;
 begin
    inherited;
-   JointType := e_frictionJoint;
+   jointType := e_frictionJoint;
    localAnchorA := b2Vec2_Zero;
    localAnchorB := b2Vec2_Zero;
    maxForce := 0.0;
@@ -17490,7 +17563,7 @@ end;
 constructor Tb2WheelJointDef.Create;
 begin
    inherited;
-   JointType := e_wheelJoint;
+   jointType := e_wheelJoint;
    localAnchorA := b2Vec2_Zero;
    localAnchorB := b2Vec2_Zero;
    SetValue(localAxisA, 1.0, 0.0);
@@ -17989,7 +18062,7 @@ end;
 constructor Tb2WeldJointDef.Create;
 begin
    inherited;
-   JointType := e_weldJoint;
+   jointType := e_weldJoint;
    localAnchorA := b2Vec2_Zero;
    localAnchorB := b2Vec2_Zero;
    referenceAngle := 0.0;
@@ -18436,7 +18509,7 @@ end;
 
 constructor Tb2RopeJointDef.Create;
 begin
-		JointType := e_ropeJoint;
+		jointType := e_ropeJoint;
 		SetValue(localAnchorA, -1.0, 0.0);
 		SetValue(localAnchorB, 1.0, 0.0);
 		maxLength := 0.0;
@@ -18724,6 +18797,325 @@ function Tb2RopeJoint.GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat;
 begin
 	 //B2_NOT_USED(inv_dt);
 	 Result := 0.0;
+end;
+
+{ Tb2MotorJointDef }
+
+constructor Tb2MotorJointDef.Create;
+begin
+   jointType := e_motorJoint;
+   linearOffset := b2Vec2_Zero;
+   angularOffset := 0.0;
+   maxForce := 1.0;
+   maxTorque := 1.0;
+   correctionFactor := 0.3;
+end;
+
+procedure Tb2MotorJointDef.Initialize(bodyA, bodyB: Tb2Body);
+begin
+   Self.bodyA := bodyA;
+   Self.bodyB := bodyB;
+   linearOffset := bodyA.GetLocalPoint(bodyB.GetPosition);
+   angularOffset := bodyB.GetAngle - bodyA.GetAngle;
+end;
+
+{ Tb2MotorJoint }
+
+// Point-to-point constraint
+// Cdot = v2 - v1
+//      = v2 + cross(w2, r2) - v1 - cross(w1, r1)
+// J = [-I -r1_skew I r2_skew ]
+// Identity used:
+// w k % (rx i + ry j) = w * (-ry i + rx j)
+
+// Angle constraint
+// Cdot = w2 - w1
+// J = [0 0 -1 0 0 1]
+// K = invI1 + invI2
+
+constructor Tb2MotorJoint.Create(def: Tb2MotorJointDef);
+begin
+   inherited Create(def);
+   m_linearOffset := def.linearOffset;
+   m_angularOffset := def.angularOffset;
+
+   m_linearImpulse := b2Vec2_Zero;
+   m_angularImpulse := 0.0;
+
+   m_maxForce := def.maxForce;
+   m_maxTorque := def.maxTorque;
+   m_correctionFactor := def.correctionFactor;
+end;
+
+{$IFDEF ENABLE_DUMP}
+procedure Tb2MotorJoint.Dump;
+var
+   indexA, indexB: Int32;
+begin
+   indexA := m_bodyA.m_islandIndex;
+   indexB := m_bodyB.m_islandIndex;
+
+   b2DumpMethod(1, 'begin', []);
+   b2DumpMethod(2, 'motor_jd := Tb2MotorJointDef.Create;', []);
+   b2DumpMethod(2, 'motor_jd.bodyA := bodies[%d];', [indexA]);
+   b2DumpMethod(2, 'motor_jd.bodyB := bodies[%d];', [indexB]);
+   b2DumpMethod(2, 'motor_jd.collideConnected := %s;', [b2BoolToStr(m_collideConnected)]);
+   b2DumpMethod(2, 'motor_jd.linearOffset := MakeVector(%s, %s);', [b2FloatToStr(m_linearOffset.x), b2FloatToStr(m_linearOffset.y)]);
+   b2DumpMethod(2, 'motor_jd.angularOffset := %s;', [b2FloatToStr(m_angularOffset)]);
+   b2DumpMethod(2, 'motor_jd.maxForce := %s;', [b2FloatToStr(m_maxForce)]);
+   b2DumpMethod(2, 'motor_jd.maxTorque := %s;', [b2FloatToStr(m_maxTorque)]);
+   b2DumpMethod(2, 'motor_jd.correctionFactor := %s;', [b2FloatToStr(m_correctionFactor)]);
+   b2DumpMethod(2, 'joints[%d] := m_world.CreateJoint(motor_jd);', [m_index]);
+   b2DumpMethod(1, 'end;', []);
+end;
+{$ENDIF}
+
+procedure Tb2MotorJoint.InitVelocityConstraints(const data: Tb2SolverData);
+var
+   cA, vA, cB, vB: TVector2;
+   aA, wA, aB, wB: PhysicsFloat;
+   qA, qB: Tb2Rot;
+   mA, mB, iA, iB: PhysicsFloat;
+   K: TMatrix22;
+begin
+   m_indexA := m_bodyA.m_islandIndex;
+   m_indexB := m_bodyB.m_islandIndex;
+   m_localCenterA := m_bodyA.m_sweep.localCenter;
+   m_localCenterB := m_bodyB.m_sweep.localCenter;
+   m_invMassA := m_bodyA.m_invMass;
+   m_invMassB := m_bodyB.m_invMass;
+   m_invIA := m_bodyA.m_invI;
+   m_invIB := m_bodyB.m_invI;
+
+   cA := data.positions[m_indexA].c;
+   aA := data.positions[m_indexA].a;
+   vA := data.velocities[m_indexA].v;
+   wA := data.velocities[m_indexA].w;
+
+   cB := data.positions[m_indexB].c;
+   aB := data.positions[m_indexB].a;
+   vB := data.velocities[m_indexB].v;
+   wB := data.velocities[m_indexB].w;
+
+   {$IFDEF OP_OVERLOAD}
+   qA.SetAngle(aA);
+   qB.SetAngle(aB);
+
+   // Compute the effective mass matrix.
+   m_rA := b2Mul(qA, -m_localCenterA);
+   m_rB := b2Mul(qB, -m_localCenterB);
+   {$ELSE}
+   SetAngle(qA, aA);
+   SetAngle(qB, aB);
+
+   // Compute the effective mass matrix.
+   m_rA := b2Mul(qA, Negative(m_localCenterA));
+   m_rB := b2Mul(qB, Negative(m_localCenterB));
+   {$ENDIF}
+
+   // J := [-I -r1_skew I r2_skew]
+   //     [ 0       -1 0       1]
+   // r_skew := [-ry; rx]
+
+   // Matlab
+   // K := [ mA+r1y^2*iA+mB+r2y^2*iB,  -r1y*iA*r1x-r2y*iB*r2x,          -r1y*iA-r2y*iB]
+   //     [  -r1y*iA*r1x-r2y*iB*r2x, mA+r1x^2*iA+mB+r2x^2*iB,           r1x*iA+r2x*iB]
+   //     [          -r1y*iA-r2y*iB,           r1x*iA+r2x*iB,                   iA+iB]
+
+   mA := m_invMassA;
+   mB := m_invMassB;
+   iA := m_invIA;
+   iB := m_invIB;
+
+   K.ex.x := mA + mB + iA * m_rA.y * m_rA.y + iB * m_rB.y * m_rB.y;
+   K.ex.y := -iA * m_rA.x * m_rA.y - iB * m_rB.x * m_rB.y;
+   K.ey.x := K.ex.y;
+   K.ey.y := mA + mB + iA * m_rA.x * m_rA.x + iB * m_rB.x * m_rB.x;
+
+   {$IFDEF OP_OVERLOAD}
+   m_linearMass := K.GetInverse;
+   {$ELSE}
+   m_linearMass := GetInverse(K);
+   {$ENDIF}
+
+   m_angularMass := iA + iB;
+   if m_angularMass > 0.0 then
+      m_angularMass := 1.0 / m_angularMass;
+
+   {$IFDEF OP_OVERLOAD}
+   m_linearError := cB + m_rB - cA - m_rA - b2Mul(qA, m_linearOffset);
+   {$ELSE}
+   m_linearError := Subtract(Add(cB, m_rB), Add(cA, m_rA, b2Mul(qA, m_linearOffset)));
+   {$ENDIF}
+   m_angularError := aB - aA - m_angularOffset;
+
+   if data.step.warmStarting then
+   begin
+      // Scale impulses to support a variable time step.
+      {$IFDEF OP_OVERLOAD}
+      m_linearImpulse.MultiplyBy(data.step.dtRatio);
+      {$ELSE}
+      MultiplyBy(m_linearImpulse, data.step.dtRatio);
+      {$ENDIF}
+      m_angularImpulse := m_angularImpulse * data.step.dtRatio;
+
+      {$IFDEF OP_OVERLOAD}
+      vA.SubtractBy(mA * m_linearImpulse);
+      vB.AddBy(mB * m_linearImpulse);
+      {$ELSE}
+      SubtractBy(vA, Multiply(m_linearImpulse, mA));
+      AddBy(vB, Multiply(m_linearImpulse, mB));
+      {$ENDIF}
+      wA := wA - iA * (b2Cross(m_rA, m_linearImpulse) + m_angularImpulse);
+      wB := wB + iB * (b2Cross(m_rB, m_linearImpulse) + m_angularImpulse);
+   end
+   else
+   begin
+      m_linearImpulse := b2Vec2_Zero;
+      m_angularImpulse := 0.0;
+   end;
+
+   data.velocities[m_indexA].v := vA;
+   data.velocities[m_indexA].w := wA;
+   data.velocities[m_indexB].v := vB;
+   data.velocities[m_indexB].w := wB;
+end;
+
+procedure Tb2MotorJoint.SolveVelocityConstraints(const data: Tb2SolverData);
+var
+   vA, vB: TVector2;
+   wA, wB: PhysicsFloat;
+   mA, mB, iA, iB: PhysicsFloat;
+   h, inv_h: PhysicsFloat;
+   Cdot, impulse, oldImpulse, maxImpulse: PhysicsFloat;
+   Cdot2, impulse2, oldImpulse2: TVector2;
+begin
+   vA := data.velocities[m_indexA].v;
+   wA := data.velocities[m_indexA].w;
+   vB := data.velocities[m_indexB].v;
+   wB := data.velocities[m_indexB].w;
+
+   mA := m_invMassA;
+   mB := m_invMassB;
+   iA := m_invIA;
+   iB := m_invIB;
+
+   h := data.step.dt;
+   inv_h := data.step.inv_dt;
+
+   // Solve angular friction
+   begin
+      Cdot := wB - wA + inv_h * m_correctionFactor * m_angularError;
+      impulse := -m_angularMass * Cdot;
+
+      oldImpulse := m_angularImpulse;
+      maxImpulse := h * m_maxTorque;
+      m_angularImpulse := b2Clamp(m_angularImpulse + impulse, -maxImpulse, maxImpulse);
+      impulse := m_angularImpulse - oldImpulse;
+
+      wA := wA - iA * impulse;
+      wB := wB + iB * impulse;
+   end;
+
+   // Solve linear friction
+   begin
+      {$IFDEF OP_OVERLOAD}
+      Cdot2 := vB + b2Cross(wB, m_rB) - vA - b2Cross(wA, m_rA) + inv_h * m_correctionFactor * m_linearError;
+
+      impulse2 := -b2Mul(m_linearMass, Cdot2);
+      oldImpulse2 := m_linearImpulse;
+      m_linearImpulse.AddBy(impulse2);
+
+      maxImpulse := h * m_maxForce;
+
+      if m_linearImpulse.SqrLength > maxImpulse * maxImpulse then
+      begin
+         m_linearImpulse.Normalize();
+         m_linearImpulse.MultiplyBy(maxImpulse);
+      end;
+
+      impulse2 := m_linearImpulse - oldImpulse2;
+
+      vA.SubtractBy(mA * impulse2);
+      vB.AddBy(mB * impulse2);
+      {$ELSE}
+      Cdot2 := Subtract(Add(vB, b2Cross(wB, m_rB), Multiply(m_linearError, inv_h * m_correctionFactor)), Add(vA, b2Cross(wA, m_rA)));
+
+      impulse2 := Negative(b2Mul(m_linearMass, Cdot2));
+      oldImpulse2 := m_linearImpulse;
+      AddBy(m_linearImpulse, impulse2);
+
+      maxImpulse := h * m_maxForce;
+
+      if SqrLength(m_linearImpulse) > maxImpulse * maxImpulse then
+      begin
+         Normalize(m_linearImpulse);
+         MultiplyBy(m_linearImpulse, maxImpulse);
+      end;
+
+      impulse2 := Subtract(m_linearImpulse, oldImpulse2);
+
+      SubtractBy(vA, Multiply(impulse2, mA));
+      AddBy(vB, Multiply(impulse2, mB));
+      {$ENDIF}
+      wA := wA - iA * b2Cross(m_rA, impulse2);
+      wB := wB + iB * b2Cross(m_rB, impulse2);
+   end;
+
+   data.velocities[m_indexA].v := vA;
+   data.velocities[m_indexA].w := wA;
+   data.velocities[m_indexB].v := vB;
+   data.velocities[m_indexB].w := wB;
+end;
+
+function Tb2MotorJoint.SolvePositionConstraints(const data: Tb2SolverData): Boolean;
+begin
+   //B2_NOT_USED(data);
+   Result := True;
+end;
+
+function Tb2MotorJoint.GetAnchorA: TVector2;
+begin
+   Result := m_bodyA.GetPosition;
+end;
+
+function Tb2MotorJoint.GetAnchorB: TVector2;
+begin
+   Result := m_bodyB.GetPosition;
+end;
+
+function Tb2MotorJoint.GetReactionForce(inv_dt: PhysicsFloat): TVector2;
+begin
+   {$IFDEF OP_OVERLOAD}
+   Result := inv_dt * m_linearImpulse;
+   {$ELSE}
+   Result := Multiply(m_linearImpulse, inv_dt);
+   {$ENDIF}
+end;
+
+function Tb2MotorJoint.GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat;
+begin
+   Result := inv_dt * m_angularImpulse;
+end;
+
+procedure Tb2MotorJoint.SetLinearOffset(const linearOffset: TVector2);
+begin
+   if (linearOffset.x <> m_linearOffset.x) or (linearOffset.y <> m_linearOffset.y) then
+   begin
+      m_bodyA.SetAwake(True);
+      m_bodyB.SetAwake(True);
+      m_linearOffset := linearOffset;
+   end;
+end;
+
+procedure Tb2MotorJoint.SetAngularOffset(angularOffset: PhysicsFloat);
+begin
+   if angularOffset <> m_angularOffset then
+   begin
+      m_bodyA.SetAwake(True);
+      m_bodyB.SetAwake(True);
+      m_angularOffset := angularOffset;
+   end;
 end;
 
 { Tb2RopeDef }

@@ -66,7 +66,8 @@ uses
   UConvexHull in 'Tests\UConvexHull.pas',
   UConveyorBelt in 'Tests\UConveyorBelt.pas',
   UMobile in 'Tests\UMobile.pas',
-  UMobileBalanced in 'Tests\UMobileBalanced.pas';
+  UMobileBalanced in 'Tests\UMobileBalanced.pas',
+  UMotorJoint in 'Tests\UMotorJoint.pas';
 
 {$R *.res}
 
