@@ -62,6 +62,9 @@ interface
 {$I Physics2D.inc}
 {$IFDEF D2009UP}
 {$POINTERMATH ON}
+{$DEFINE SUPPORT_POINTER_MATH}
+{$ELSE}
+{$UNDEF SUPPORT_POINTER_MATH}
 {$ENDIF}
 
 uses
@@ -80,6 +83,9 @@ type
    {$IFDEF ENABLE_DUMP}
    Tb2DumpMethod = procedure(Indent: Integer; const Format: string; const Args: array of const) of object;
    {$ENDIF}
+
+   Tb2Exception = class(Exception)
+   end;
 
    Tb2BodyDef = class;
    Pb2Body = ^Tb2Body;
@@ -1885,6 +1891,8 @@ type
    /// Connectivity information is used to create smooth collisions.
    /// WARNING: The chain will not collide properly if there are self-intersections.
    Tb2ChainShape = class(Tb2Shape)
+   private
+      class function IsValidVertices(pv: PVector2; count: Int32; loop: Boolean): Boolean;
    public
       m_loop: Boolean;
       m_vertices: TVectorArray;
@@ -3092,7 +3100,7 @@ end;
 procedure FreeContact(pc: Pb2Contact);
 begin
    with pc^ do
-      if m_manifold.pointCount > 0 then
+      if (m_manifold.pointCount > 0) and (not m_fixtureA.IsSensor) and (not m_fixtureB.IsSensor) then
       begin
          m_fixtureA.m_body.SetAwake(True);
          m_fixtureB.m_body.SetAwake(True);
@@ -3567,10 +3575,10 @@ function Tb2DistanceProxy.GetSupport(const d: TVector2): Int32;
 var
    i: Integer;
    bestValue, value: PhysicsFloat;
-   {$IFNDEF D2009UP}p: PVector2;{$ENDIF}
+   {$IFNDEF SUPPORT_POINTER_MATH}p: PVector2;{$ENDIF}
 begin
    Result := 0;
-   {$IFDEF D2009UP}
+   {$IFDEF SUPPORT_POINTER_MATH}
    bestValue := b2Dot(m_vertices[0], d);
    for i := 1 to m_count - 1 do
    begin
@@ -3601,10 +3609,10 @@ function Tb2DistanceProxy.GetSupportVertex(const d: TVector2): PVector2;
 var
    i, bestIndex: Integer;
    bestValue, value: PhysicsFloat;
-   {$IFNDEF D2009UP}p: PVector2;{$ENDIF}
+   {$IFNDEF SUPPORT_POINTER_MATH}p: PVector2;{$ENDIF}
 begin
    bestIndex := 0;
-   {$IFDEF D2009UP}
+   {$IFDEF SUPPORT_POINTER_MATH}
    bestValue := b2Dot(m_vertices[0], d);
    for i := 1 to m_count - 1 do
    begin
@@ -3680,12 +3688,12 @@ function GetSupport(const dp: Tb2DistanceProxy; const d: TVector2): Int32;
 var
    i: Integer;
    bestValue, value: PhysicsFloat;
-   {$IFNDEF D2009UP}p: PVector2;{$ENDIF}
+   {$IFNDEF SUPPORT_POINTER_MATH}p: PVector2;{$ENDIF}
 begin
    with dp do
    begin
       Result := 0;
-      {$IFDEF D2009UP}
+      {$IFDEF SUPPORT_POINTER_MATH}
       bestValue := b2Dot(m_vertices[0], d);
       for i := 1 to m_count - 1 do
       begin
@@ -3717,12 +3725,12 @@ function GetSupportVertex(const dp: Tb2DistanceProxy; const d: TVector2): PVecto
 var
    i, bestIndex: Integer;
    bestValue, value: PhysicsFloat;
-   {$IFNDEF D2009UP}p: PVector2;{$ENDIF}
+   {$IFNDEF SUPPORT_POINTER_MATH}p: PVector2;{$ENDIF}
 begin
    with dp do
    begin
       bestIndex := 0;
-      {$IFDEF D2009UP}
+      {$IFDEF SUPPORT_POINTER_MATH}
       bestValue := b2Dot(m_vertices[0], d);
       for i := 1 to m_count - 1 do
       begin
@@ -3779,7 +3787,7 @@ function Tb2SeparationFunction.Initialize(const cache: Tb2SimplexCache;
 var
    xfA, xfB: Tb2Transform;
    localPointB1, localPointB2, localPointA1, localPointA2, normal: TVector2;
-   {$IFNDEF D2009UP}pA, pB: PVector2;{$ENDIF}
+   {$IFNDEF SUPPORT_POINTER_MATH}pA, pB: PVector2;{$ENDIF}
 begin
    m_proxyA := @proxyA;
    m_proxyB := @proxyB;
@@ -3799,7 +3807,7 @@ begin
    if cache.count = 1 then
    begin
       m_type := e_separation_points;
-      {$IFNDEF D2009UP}
+      {$IFNDEF SUPPORT_POINTER_MATH}
       pA := proxyA.m_vertices;
       pB := proxyB.m_vertices;
       Inc(pA, cache.indexA[0]);
@@ -3807,7 +3815,7 @@ begin
       {$ENDIF}
 
       {$IFDEF OP_OVERLOAD}
-         {$IFDEF D2009UP}
+         {$IFDEF SUPPORT_POINTER_MATH}
          m_axis := b2Mul(xfB, proxyB.m_vertices[cache.indexB[0]]) -
             b2Mul(xfA, proxyA.m_vertices[cache.indexA[0]]);
          {$ELSE}
@@ -3815,7 +3823,7 @@ begin
          {$ENDIF}
          Result := m_axis.Normalize;
       {$ELSE}
-         {$IFDEF D2009UP}
+         {$IFDEF SUPPORT_POINTER_MATH}
          m_axis := Subtract(b2Mul(xfB, proxyB.m_vertices[cache.indexB[0]]),
             b2Mul(xfA, proxyA.m_vertices[cache.indexA[0]]));
          {$ELSE}
@@ -3828,7 +3836,7 @@ begin
    begin
       // Two points on B and one on A.
       m_type := e_separation_faceB;
-      {$IFDEF D2009UP}
+      {$IFDEF SUPPORT_POINTER_MATH}
       localPointB1 := proxyB.m_vertices[cache.indexB[0]];
       localPointB2 := proxyB.m_vertices[cache.indexB[1]];
       {$ELSE}
@@ -3852,20 +3860,20 @@ begin
       normal := b2Mul(xfB.q, m_axis);
       m_localPoint := b2MiddlePoint(localPointB1, localPointB2);
 
-      {$IFNDEF D2009UP}
+      {$IFNDEF SUPPORT_POINTER_MATH}
       pA := proxyA.m_vertices;
       Inc(pA, cache.indexA[0]);
       {$ENDIF}
 
       {$IFDEF OP_OVERLOAD}
-         {$IFDEF D2009UP}
+         {$IFDEF SUPPORT_POINTER_MATH}
          Result := b2Dot(b2Mul(xfA, proxyA.m_vertices[cache.indexA[0]]) -
             b2Mul(xfB, m_localPoint), normal);
          {$ELSE}
          Result := b2Dot(b2Mul(xfA, pA^) - b2Mul(xfB, m_localPoint), normal);
          {$ENDIF}
       {$ELSE}
-         {$IFDEF D2009UP}
+         {$IFDEF SUPPORT_POINTER_MATH}
          Result := b2Dot(Subtract(b2Mul(xfA, proxyA.m_vertices[cache.indexA[0]]),
             b2Mul(xfB, m_localPoint)), normal);
          {$ELSE}
@@ -3888,7 +3896,7 @@ begin
       // Two points on A and one or two points on B.
       m_type := e_separation_faceA;
 
-      {$IFDEF D2009UP}
+      {$IFDEF SUPPORT_POINTER_MATH}
       localPointA1 := proxyA.m_vertices[cache.indexA[0]];
       localPointA2 := proxyA.m_vertices[cache.indexA[1]];
       {$ELSE}
@@ -3912,20 +3920,20 @@ begin
       normal := b2Mul(xfA.q, m_axis);
       m_localPoint := b2MiddlePoint(localPointA1, localPointA2);
 
-      {$IFNDEF D2009UP}
+      {$IFNDEF SUPPORT_POINTER_MATH}
       pB := proxyB.m_vertices;
       Inc(pB, cache.indexB[0]);
       {$ENDIF}
 
       {$IFDEF OP_OVERLOAD}
-         {$IFDEF D2009UP}
+         {$IFDEF SUPPORT_POINTER_MATH}
          Result := b2Dot(b2Mul(xfB, proxyB.m_vertices[cache.indexB[0]]) -
             b2Mul(xfA, m_localPoint), normal);
          {$ELSE}
          Result := b2Dot(b2Mul(xfB, pB^) - b2Mul(xfA, m_localPoint), normal);
          {$ENDIF}
       {$ELSE}
-         {$IFDEF D2009UP}
+         {$IFDEF SUPPORT_POINTER_MATH}
          Result := b2Dot(Subtract(b2Mul(xfB, proxyB.m_vertices[cache.indexB[0]]),
             b2Mul(xfA, m_localPoint)), normal);
          {$ELSE}
@@ -3948,7 +3956,7 @@ function Tb2SeparationFunction.FindMinSeparation(var indexA, indexB: Int32; t: P
 var
    xfA, xfB: Tb2Transform;
    normal: TVector2;
-   {$IFNDEF D2009UP}pA, pB: PVector2;{$ENDIF}
+   {$IFNDEF SUPPORT_POINTER_MATH}pA, pB: PVector2;{$ENDIF}
 begin
    {$IFDEF OP_OVERLOAD}
    m_sweepA.GetTransform(xfA, t);
@@ -3969,7 +3977,7 @@ begin
             indexB := GetSupport(m_proxyB^, b2MulT(xfB.q, Negative(m_axis)));
             {$ENDIF}
 
-            {$IFNDEF D2009UP}
+            {$IFNDEF SUPPORT_POINTER_MATH}
             pA := m_proxyA^.m_vertices;
             pB := m_proxyB^.m_vertices;
             Inc(pA, indexA);
@@ -3977,14 +3985,14 @@ begin
             {$ENDIF}
 
             {$IFDEF OP_OVERLOAD}
-               {$IFDEF D2009UP}
+               {$IFDEF SUPPORT_POINTER_MATH}
                Result := b2Dot(b2Mul(xfB, m_proxyB^.m_vertices[indexB]) -
                   b2Mul(xfA, m_proxyA^.m_vertices[indexA]), m_axis);
                {$ELSE}
                Result := b2Dot(b2Mul(xfB, pB^) - b2Mul(xfA, pA^), m_axis);
                {$ENDIF}
             {$ELSE}
-               {$IFDEF D2009UP}
+               {$IFDEF SUPPORT_POINTER_MATH}
                Result:= b2Dot(Subtract(b2Mul(xfB, m_proxyB^.m_vertices[indexB]),
                   b2Mul(xfA, m_proxyA^.m_vertices[indexA])), m_axis);
                {$ELSE}
@@ -4002,20 +4010,20 @@ begin
             indexB := GetSupport(m_proxyB^, b2MulT(xfB.q, Negative(normal)));
             {$ENDIF}
 
-            {$IFNDEF D2009UP}
+            {$IFNDEF SUPPORT_POINTER_MATH}
             pB := m_proxyB^.m_vertices;
             Inc(pB, indexB);
             {$ENDIF}
 
             {$IFDEF OP_OVERLOAD}
-               {$IFDEF D2009UP}
+               {$IFDEF SUPPORT_POINTER_MATH}
                Result := b2Dot(b2Mul(xfB, m_proxyB^.m_vertices[indexB]) -
                   b2Mul(xfA, m_localPoint), normal);
                {$ELSE}
                Result := b2Dot(b2Mul(xfB, pB^) - b2Mul(xfA, m_localPoint), normal);
                {$ENDIF}
             {$ELSE}
-               {$IFDEF D2009UP}
+               {$IFDEF SUPPORT_POINTER_MATH}
                Result := b2Dot(Subtract(b2Mul(xfB, m_proxyB^.m_vertices[indexB]),
                   b2Mul(xfA, m_localPoint)), normal);
                {$ELSE}
@@ -4034,20 +4042,20 @@ begin
             indexA := GetSupport(m_proxyA^, b2MulT(xfA.q, Negative(normal)));
             {$ENDIF}
 
-            {$IFNDEF D2009UP}
+            {$IFNDEF SUPPORT_POINTER_MATH}
             pA := m_proxyA^.m_vertices;
             Inc(pA, indexA);
             {$ENDIF}
 
             {$IFDEF OP_OVERLOAD}
-               {$IFDEF D2009UP}
+               {$IFDEF SUPPORT_POINTER_MATH}
                Result := b2Dot(b2Mul(xfA, m_proxyA.m_vertices[indexA]) -
                   b2Mul(xfB, m_localPoint), normal);
                {$ELSE}
                Result := b2Dot(b2Mul(xfA, pA^) - b2Mul(xfB, m_localPoint), normal);
                {$ENDIF}
             {$ELSE}
-               {$IFDEF D2009UP}
+               {$IFDEF SUPPORT_POINTER_MATH}
                Result := b2Dot(Subtract(b2Mul(xfA, m_proxyA.m_vertices[indexA]),
                   b2Mul(xfB, m_localPoint)), normal);
                {$ELSE}
@@ -4066,7 +4074,7 @@ end;
 function Tb2SeparationFunction.Evaluate(indexA, indexB: Int32; t: PhysicsFloat): PhysicsFloat;
 var
    xfA, xfB: Tb2Transform;
-   {$IFNDEF D2009UP}pA, pB: PVector2;{$ENDIF}
+   {$IFNDEF SUPPORT_POINTER_MATH}pA, pB: PVector2;{$ENDIF}
 begin
    {$IFDEF OP_OVERLOAD}
    m_sweepA.GetTransform(xfA, t);
@@ -4079,7 +4087,7 @@ begin
    case m_type of
       e_separation_points:
          begin
-            {$IFNDEF D2009UP}
+            {$IFNDEF SUPPORT_POINTER_MATH}
             pA := m_proxyA^.m_vertices;
             pB := m_proxyB^.m_vertices;
             Inc(pA, indexA);
@@ -4087,14 +4095,14 @@ begin
             {$ENDIF}
 
             {$IFDEF OP_OVERLOAD}
-               {$IFDEF D2009UP}
+               {$IFDEF SUPPORT_POINTER_MATH}
                Result := b2Dot(b2Mul(xfB, m_proxyB^.m_vertices[indexB]) -
                   b2Mul(xfA, m_proxyA^.m_vertices[indexA]), m_axis);
                {$ELSE}
                Result := b2Dot(b2Mul(xfB, pB^) - b2Mul(xfA, pA^), m_axis);
                {$ENDIF}
             {$ELSE}
-               {$IFDEF D2009UP}
+               {$IFDEF SUPPORT_POINTER_MATH}
                Result := b2Dot(Subtract(b2Mul(xfB, m_proxyB^.m_vertices[indexB]),
                   b2Mul(xfA, m_proxyA.m_vertices[indexA])), m_axis);
                {$ELSE}
@@ -4104,20 +4112,20 @@ begin
          end;
       e_separation_faceA:
          begin
-            {$IFNDEF D2009UP}
+            {$IFNDEF SUPPORT_POINTER_MATH}
             pB := m_proxyB^.m_vertices;
             Inc(pB, indexB);
             {$ENDIF}
 
             {$IFDEF OP_OVERLOAD}
-               {$IFDEF D2009UP}
+               {$IFDEF SUPPORT_POINTER_MATH}
                Result := b2Dot(b2Mul(xfB, m_proxyB^.m_vertices[indexB]) -
                   b2Mul(xfA, m_localPoint), b2Mul(xfA.q, m_axis));
                {$ELSE}
                Result := b2Dot(b2Mul(xfB, pB^) - b2Mul(xfA, m_localPoint), b2Mul(xfA.q, m_axis));
                {$ENDIF}
             {$ELSE}
-               {$IFDEF D2009UP}
+               {$IFDEF SUPPORT_POINTER_MATH}
                Result := b2Dot(Subtract(b2Mul(xfB, m_proxyB^.m_vertices[indexB]),
                   b2Mul(xfA, m_localPoint)), b2Mul(xfA.q, m_axis));
                {$ELSE}
@@ -4128,20 +4136,20 @@ begin
          end;
       e_separation_faceB:
          begin
-            {$IFNDEF D2009UP}
+            {$IFNDEF SUPPORT_POINTER_MATH}
             pA := m_proxyA^.m_vertices;
             Inc(pA, indexA);
             {$ENDIF}
 
             {$IFDEF OP_OVERLOAD}
-               {$IFDEF D2009UP}
+               {$IFDEF SUPPORT_POINTER_MATH}
                Result := b2Dot(b2Mul(xfA, m_proxyA^.m_vertices[indexA]) -
                   b2Mul(xfB, m_localPoint), b2Mul(xfB.q, m_axis));
                {$ELSE}
                Result := b2Dot(b2Mul(xfA, pA^) - b2Mul(xfB, m_localPoint), b2Mul(xfB.q, m_axis));
                {$ENDIF}
             {$ELSE}
-               {$IFDEF D2009UP}
+               {$IFDEF SUPPORT_POINTER_MATH}
                Result := b2Dot(Subtract(b2Mul(xfA, m_proxyA^.m_vertices[indexA]),
                   b2Mul(xfB, m_localPoint)), b2Mul(xfB.q, m_axis));
                {$ELSE}
@@ -4407,7 +4415,7 @@ var
    vertices, v: Pb2SimplexVertex;
    i: Integer;
    metric1, metric2: PhysicsFloat;
-   {$IFNDEF D2009UP}pA, pB: PVector2;{$ENDIF}
+   {$IFNDEF SUPPORT_POINTER_MATH}pA, pB: PVector2;{$ENDIF}
 begin
    //b2Assert(cache.count <= 3);
 
@@ -4424,7 +4432,7 @@ begin
          indexA := cache.indexA[i];
          indexB := cache.indexB[i];
 
-         {$IFDEF D2009UP}
+         {$IFDEF SUPPORT_POINTER_MATH}
          wA := b2Mul(transformA, proxyA.m_vertices[indexA]);
          wB := b2Mul(transformB, proxyB.m_vertices[indexB]);
          {$ELSE}
@@ -4464,7 +4472,7 @@ begin
       begin
          indexA := 0;
          indexB := 0;
-         {$IFDEF D2009UP}
+         {$IFDEF SUPPORT_POINTER_MATH}
          wA := b2Mul(transformA, proxyA.m_vertices[0]);
          wB := b2Mul(transformB, proxyB.m_vertices[0]);
          {$ELSE}
@@ -4807,7 +4815,7 @@ var
    distanceSqr1, distanceSqr2, rA, rB: PhysicsFloat;
    d, normal: TVector2;
    duplicate: Boolean;
-   {$IFNDEF D2009UP}pA, pB: PVector2;{$ENDIF}
+   {$IFNDEF SUPPORT_POINTER_MATH}pA, pB: PVector2;{$ENDIF}
 begin
    Inc(b2_gjkCalls);
 
@@ -4900,7 +4908,7 @@ begin
          indexB := GetSupport(input.proxyB, b2MulT(input.transformB.q, d));
          {$ENDIF}
 
-         {$IFDEF D2009UP}
+         {$IFDEF SUPPORT_POINTER_MATH}
          wA := b2Mul(input.transformA, input.proxyA.m_vertices[indexA]);
          wB := b2Mul(input.transformB, input.proxyB.m_vertices[indexB]);
          {$ELSE}
@@ -8046,8 +8054,11 @@ begin
    end;
 
    // Wake up the bodies
-   bodyA.SetAwake(True);
-   bodyB.SetAwake(True);
+   if (not fixtureA.IsSensor) and (not fixtureB.IsSensor) then
+   begin
+      bodyA.SetAwake(True);
+      bodyB.SetAwake(True);
+   end;
 
    Inc(m_contactCount);
 end;
@@ -13825,7 +13836,7 @@ end;
 procedure Tb2PolygonShape.SetVertices(vertices: PVector2; count: Int32);
 var
    i, j: Integer;
-   {$IFNDEF D2009UP}pv: PVector2;{$ENDIF}
+   {$IFNDEF SUPPORT_POINTER_MATH}pv: PVector2;{$ENDIF}
    n, m, i0, ih, ie: Int32;
    x0, x, c: PhysicsFloat;
    ps: Tb2PolyVertices;
@@ -13844,7 +13855,7 @@ begin
 
    // Copy vertices into local buffer
    for i := 0 to n - 1 do
-      {$IFNDEF D2009UP}
+      {$IFNDEF SUPPORT_POINTER_MATH}
       begin
          pv := vertices;
          Inc(pv, i);
@@ -14238,14 +14249,67 @@ end;
 
 { Tb2ChainShape }
 
+class function Tb2ChainShape.IsValidVertices(pv: PVector2; count: Int32; loop: Boolean): Boolean;
+var
+   i: Integer;
+   {$IFDEF SUPPORT_POINTER_MATH}
+   v1, v2: TVector2;
+   {$ELSE}
+   pv1, pv2: PVector2;
+   {$ENDIF}
+   e: TVector2;
+   sqrSlop: PhysicsFloat;
+begin
+   if (not Assigned(pv)) or (loop and (count < 3)) or ((not loop) and (count < 2)) then
+   begin
+      Result := False;
+      Exit;
+   end;
+
+   sqrSlop := b2_linearSlop * b2_linearSlop;
+   for i := 1 to count - 1 do
+   begin
+      {$IFDEF SUPPORT_POINTER_MATH}
+      v1 := pv[i - 1];
+      v2 := pv[i];
+      {$IFDEF OP_OVERLOAD}
+      e := v2 - v1;
+      {$ELSE}
+      e := Subtract(v2, v1);
+      {$ENDIF}
+      {$ELSE}
+      pv1 := pv; Inc(pv1, i - 1);
+      pv2 := pv; Inc(pv2, i);
+      {$IFDEF OP_OVERLOAD}
+      e := pv2^ - pv1^;
+      {$ELSE}
+      e := Subtract(pv2^, pv1^);
+      {$ENDIF}
+      {$ENDIF}
+
+      // If the code crashes here, it means your vertices are too close together.
+      {$IFDEF OP_OVERLOAD}
+      if e.SqrLength <= sqrSlop then
+      {$ELSE}
+      if SqrLength(e) <= sqrSlop then
+      {$ENDIF}
+      begin
+         Result := False;
+         Exit;
+      end;
+   end;
+
+   Result := True;
+end;
+
 constructor Tb2ChainShape.CreateLoop(pv: PVector2; count: Int32);
 begin
+   if not IsValidVertices(pv, count, True) then
+      raise Tb2Exception.Create('Invalid loop shape.');
+
    m_loop := True;
    m_type := e_chainShape;
    m_radius := b2_polygonRadius;
-
-   //b2Assert(m_vertices == NULL && m_count == 0);
-   //b2Assert(count >= 3);
    m_count := count + 1;
    SetLength(m_vertices, m_count);
    Move(pv^, m_vertices[0], count * SizeOf(TVector2));
@@ -14258,12 +14322,12 @@ end;
 
 constructor Tb2ChainShape.CreateChain(pv: PVector2; count: Int32);
 begin
+   if not IsValidVertices(pv, count, False) then
+      raise Tb2Exception.Create('Invalid chain shape.');
+
    m_loop := False;
    m_type := e_chainShape;
    m_radius := b2_polygonRadius;
-
-   //b2Assert(m_vertices == NULL && m_count == 0);
-   //b2Assert(count >= 2);
    m_count := count;
    SetLength(m_vertices, m_count);
    Move(pv^, m_vertices[0], m_count * SizeOf(TVector2));
