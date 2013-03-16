@@ -268,7 +268,7 @@ begin
          {$ELSE}
          buoyancyForce := Multiply(gravity, -density * area);
          {$ENDIF}
-         ApplyForce(buoyancyForce, massc);
+         ApplyForce(buoyancyForce, massc, True);
 
          //Linear drag
          {$IFDEF OP_OVERLOAD}
@@ -278,10 +278,10 @@ begin
          dragForce := Subtract(GetLinearVelocityFromWorldPoint(areac), velocity);
          MultiplyBy(dragForce, -linearDrag * area);
          {$ENDIF}
-         ApplyForce(dragForce, areac);
+         ApplyForce(dragForce, areac, True);
          //Angular drag
          //TODO: Something that makes more physical sense?
-         ApplyTorque(-GetInertia / GetMass * area * GetAngularVelocity * angularDrag);
+         ApplyTorque(-GetInertia / GetMass * area * GetAngularVelocity * angularDrag, True);
          i := i^.nextBody;
       end;
 end;
@@ -330,7 +330,7 @@ begin
       with i^.body do
       begin
          if IsAwake then
-            ApplyForce(F, GetWorldCenter);
+            ApplyForce(F, GetWorldCenter, True);
          i := i^.nextBody;
       end;
 end;
@@ -389,11 +389,11 @@ begin
                f := Negative(f);
                {$ENDIF}
 
-            body1.ApplyForce(f, body1.GetWorldCenter);
+            body1.ApplyForce(f, body1.GetWorldCenter, True);
             {$IFDEF OP_OVERLOAD}
-            body2.ApplyForce(-1.0 * f, body2.GetWorldCenter);
+            body2.ApplyForce(-1.0 * f, body2.GetWorldCenter, True);
             {$ELSE}
-            body2.ApplyForce(Negative(f), body2.GetWorldCenter);
+            body2.ApplyForce(Negative(f), body2.GetWorldCenter, True);
             {$ENDIF}
             j := j^.nextBody;
          end;
@@ -436,11 +436,11 @@ begin
                f := Negative(f);
                {$ENDIF}
 
-            body1.ApplyForce(f, body1.GetWorldCenter);
+            body1.ApplyForce(f, body1.GetWorldCenter, True);
             {$IFDEF OP_OVERLOAD}
-            body2.ApplyForce(-1.0 * f, body2.GetWorldCenter);
+            body2.ApplyForce(-1.0 * f, body2.GetWorldCenter, True);
             {$ELSE}
-            body2.ApplyForce(Negative(f), body2.GetWorldCenter);
+            body2.ApplyForce(Negative(f), body2.GetWorldCenter, True);
             {$ENDIF}
             j := j^.nextBody;
          end;
@@ -547,7 +547,7 @@ begin
             shape := shape.GetNext;
          end;
 
-         ApplyForce(appliedforce, GetWorldCenter); // apply wind force
+         ApplyForce(appliedforce, GetWorldCenter, True); // apply wind force
          i := i^.nextBody;
       end;
 end;
@@ -715,14 +715,14 @@ begin
                ang_impulse := -ang_impulse;             
 
             // Use this method to keep principle of momentum conservation
-            body1.ApplyLinearImpulse(lin_impulse, body1.GetWorldCenter);
+            body1.ApplyLinearImpulse(lin_impulse, body1.GetWorldCenter, True);
             {$IFDEF OP_OVERLOAD}
-            body2.ApplyLinearImpulse(-lin_impulse, body2.GetWorldCenter);
+            body2.ApplyLinearImpulse(-lin_impulse, body2.GetWorldCenter, True);
             {$ELSE}
-            body2.ApplyLinearImpulse(Negative(lin_impulse), body2.GetWorldCenter);
+            body2.ApplyLinearImpulse(Negative(lin_impulse), body2.GetWorldCenter, True);
             {$ENDIF}
-            body1.ApplyAngularImpulse(ang_impulse);
-            body2.ApplyAngularImpulse(-ang_impulse);             
+            body1.ApplyAngularImpulse(ang_impulse, True);
+            body2.ApplyAngularImpulse(-ang_impulse, True);
             j := j^.nextBody;
          end;
          i := i^.nextBody;

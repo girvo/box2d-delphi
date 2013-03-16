@@ -129,7 +129,7 @@ begin
       rjd.enableLimit := True;
       m_world.CreateJoint(rjd);
 
-      body.ApplyAngularImpulse(100.0);
+      body.ApplyAngularImpulse(100.0, True);
    end;
 
    // Bridge

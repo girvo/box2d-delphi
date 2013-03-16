@@ -179,10 +179,10 @@ begin
          begin
             f := m_body.GetWorldVector(MakeVector(0.0, -70.0));
             p := m_body.GetWorldPoint(MakeVector(0.0, 2.0));
-            m_body.ApplyForce(f, p);
+            m_body.ApplyForce(f, p, True);
          end;
-      Ord('A'): m_body.ApplyTorque(50.0);
-      Ord('D'): m_body.ApplyTorque(-50.0);
+      Ord('A'): m_body.ApplyTorque(50.0, True);
+      Ord('D'): m_body.ApplyTorque(-50.0, True);
    end;
 end;
 
