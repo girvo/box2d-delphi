@@ -1629,27 +1629,32 @@ type
       /// affect the angular velocity. This wakes up the body.
       /// @param force the world force vector, usually in Newtons (N).
       /// @param point the world position of the point of application.
-      procedure ApplyForce(const force, point: TVector2);
+      /// @param wake also wake up the body
+      procedure ApplyForce(const force, point: TVector2; wake: Boolean);
 
       /// Apply a force to the center of mass. This wakes up the body.
       /// @param force the world force vector, usually in Newtons (N).
-      procedure ApplyForceToCenter(const force: TVector2);
+      /// @param wake also wake up the body
+      procedure ApplyForceToCenter(const force: TVector2; wake: Boolean);
 
       /// Apply a torque. This affects the angular velocity
       /// without affecting the linear velocity of the center of mass.
       /// This wakes up the body.
       /// @param torque about the z-axis (out of the screen), usually in N-m.
-      procedure ApplyTorque(torque: PhysicsFloat);
+      /// @param wake also wake up the body
+      procedure ApplyTorque(torque: PhysicsFloat; wake: Boolean);
 
       /// Apply an impulse at a point. This immediately modifies the velocity.
       /// It also modifies the angular velocity if the point of application
       /// is not at the center of mass. This wakes up the body.
       /// @param impulse the world impulse vector, usually in N-seconds or kg-m/s.
       /// @param point the world position of the point of application.
-      procedure ApplyLinearImpulse(const impulse, point: TVector2);
+      /// @param wake also wake up the body
+      procedure ApplyLinearImpulse(const impulse, point: TVector2; wake: Boolean);
       /// Apply an angular impulse.
       /// @param impulse the angular impulse in units of kg*m*m/s
-      procedure ApplyAngularImpulse(impulse: PhysicsFloat);
+      /// @param wake also wake up the body
+      procedure ApplyAngularImpulse(impulse: PhysicsFloat; wake: Boolean);
 
     	/// Get the mass data of the body.
 	    /// @return a struct containing the mass, inertia and center of the body.
@@ -2910,7 +2915,8 @@ function MakeColor(r, g, b: Single; a: Single = 1.0): RGBA;
 
 var
    b2_gjkCalls, b2_gjkIters, b2_gjkMaxIters: Int32;
-   b2_toiCalls, b2_toiIters, b2_toiMaxIters,
+   b2_toiCalls, b2_toiIters, b2_toiMaxIters: Int32;
+   b2_toiTime, b2_toiMaxTime: Double;
    b2_toiRootIters, b2_toiMaxRootIters: Int32;
 
 const
@@ -4184,7 +4190,13 @@ var
    xfA, xfB: Tb2Transform;
    done: Boolean;
    indexA, indexB, rootIterCount: Int32;
+   {$IFDEF COMPUTE_PHYSICS_TIME}
+   time0: Double;
+   {$ENDIF}
 begin
+   {$IFDEF COMPUTE_PHYSICS_TIME}
+   time0 := GetRawReferenceTime();
+   {$ENDIF}
    Inc(b2_toiCalls);
 
    output.state := e_toi_unknown;
@@ -4323,6 +4335,9 @@ begin
                t := 0.5 * (a1 + a2);
             end;
 
+            Inc(rootIterCount);
+            Inc(b2_toiRootIters);
+
             s := toi_separation_fcn.Evaluate(indexA, indexB, t);
 
             if Abs(s - target) < tolerance then
@@ -4343,9 +4358,6 @@ begin
                a2 := t;
                s2 := s;
             end;
-
-            Inc(rootIterCount);
-            Inc(b2_toiRootIters);
 
             if rootIterCount = 50 then
                Break;
@@ -4374,6 +4386,11 @@ begin
    end;
 
    b2_toiMaxIters := b2Max(b2_toiMaxIters, iter);
+   {$IFDEF COMPUTE_PHYSICS_TIME}
+   time0 := GetRawReferenceTime() - time0;
+   b2_toiMaxTime := Max(b2_toiMaxTime, time0);
+   b2_toiTime := b2_toiTime + time0;
+   {$ENDIF}
 end;
 
 { b2Distance.cpp }
@@ -4485,6 +4502,7 @@ begin
          {$ELSE}
          w := Subtract(wB, wA);
          {$ENDIF}
+         a := 1.0;
          m_count := 1;
       end;
 end;
@@ -4830,12 +4848,8 @@ begin
    // can check for duplicates and prevent cycling.
    //saveCount := 0;
 
-   {$IFDEF OP_OVERLOAD}
-   distanceSqr1 := distance_simplex.GetClosestPoint.SqrLength;
-   {$ELSE}
-   distanceSqr1 := SqrLength(distance_simplex.GetClosestPoint);
-   {$ENDIF}
-   //distanceSqr2 := distanceSqr1;
+   distanceSqr1 := FLT_MAX;
+   distanceSqr2 := distanceSqr1;
 
    // Main iteration loop.
    iter := 0;
@@ -11254,70 +11268,93 @@ begin
    m_angularVelocity := omega;
 end;
 
-procedure Tb2Body.ApplyForce(const force, point: TVector2);
+procedure Tb2Body.ApplyForce(const force, point: TVector2; wake: Boolean);
 begin
    if m_type <> b2_dynamicBody then
       Exit;
-   if not IsAwake then
+
+   if wake and (not IsAwake) then
       SetAwake(True);
-   {$IFDEF OP_OVERLOAD}
-	 m_force.AddBy(force);
-   m_torque := m_torque + b2Cross(point - m_sweep.c, force);
-   {$ELSE}
-   AddBy(m_force, force);
-   m_torque := m_torque + b2Cross(Subtract(point, m_sweep.c), force);
-   {$ENDIF}
+
+   // Don't accumulate a force if the body is sleeping.
+   if IsAwake then
+   begin
+      {$IFDEF OP_OVERLOAD}
+      m_force.AddBy(force);
+      m_torque := m_torque + b2Cross(point - m_sweep.c, force);
+      {$ELSE}
+      AddBy(m_force, force);
+      m_torque := m_torque + b2Cross(Subtract(point, m_sweep.c), force);
+      {$ENDIF}
+   end;
 end;
 
-procedure Tb2Body.ApplyForceToCenter(const force: TVector2);
+procedure Tb2Body.ApplyForceToCenter(const force: TVector2; wake: Boolean);
 begin
    if m_type <> b2_dynamicBody then
       Exit;
 
-   if not IsAwake then
+   if wake and (not IsAwake) then
       SetAwake(True);
 
-   {$IFDEF OP_OVERLOAD}
-   m_force.AddBy(force);
-   {$ELSE}
-   AddBy(m_force, force);
-   {$ENDIF}
+   // Don't accumulate a force if the body is sleeping.
+   if IsAwake then
+   begin
+      {$IFDEF OP_OVERLOAD}
+      m_force.AddBy(force);
+      {$ELSE}
+      AddBy(m_force, force);
+      {$ENDIF}
+   end;
 end;
 
-procedure Tb2Body.ApplyTorque(torque: PhysicsFloat);
+procedure Tb2Body.ApplyTorque(torque: PhysicsFloat; wake: Boolean);
 begin
    if m_type <> b2_dynamicBody then
       Exit;
-   if not IsAwake then
+
+   if wake and (not IsAwake) then
       SetAwake(True);
-	 m_torque := m_torque + torque;
+
+   // Don't accumulate a force if the body is sleeping
+   if IsAwake then
+      m_torque := m_torque + torque;
 end;
 
-procedure Tb2Body.ApplyLinearImpulse(const impulse, point: TVector2);
+procedure Tb2Body.ApplyLinearImpulse(const impulse, point: TVector2; wake: Boolean);
 begin
    if m_type <> b2_dynamicBody then
       Exit;
-   if not IsAwake then
+
+   if wake and (not IsAwake) then
       SetAwake(True);
-   {$IFDEF OP_OVERLOAD}
-   m_linearVelocity.AddBy(m_invMass * impulse);
-   m_angularVelocity := m_angularVelocity + m_invI * b2Cross(point -
-      m_sweep.c, impulse);
-   {$ELSE}
-   AddBy(m_linearVelocity, Multiply(impulse, m_invMass));
-   m_angularVelocity := m_angularVelocity + m_invI * b2Cross(Subtract(point,
-      m_sweep.c), impulse);
-   {$ENDIF}
+
+   // Don't accumulate velocity if the body is sleeping
+   if IsAwake then
+   begin
+      {$IFDEF OP_OVERLOAD}
+      m_linearVelocity.AddBy(m_invMass * impulse);
+      m_angularVelocity := m_angularVelocity + m_invI * b2Cross(point -
+         m_sweep.c, impulse);
+      {$ELSE}
+      AddBy(m_linearVelocity, Multiply(impulse, m_invMass));
+      m_angularVelocity := m_angularVelocity + m_invI * b2Cross(Subtract(point,
+         m_sweep.c), impulse);
+      {$ENDIF}
+   end;
 end;
 
-procedure Tb2Body.ApplyAngularImpulse(impulse: PhysicsFloat);
+procedure Tb2Body.ApplyAngularImpulse(impulse: PhysicsFloat; wake: Boolean);
 begin
    if m_type <> b2_dynamicBody then
       Exit;
 
-   if not IsAwake then
+   if wake and (not IsAwake) then
       SetAwake(True);
-   m_angularVelocity := m_angularVelocity + m_invI * impulse;
+
+   // Don't accumulate velocity if the body is sleeping
+   if IsAwake then
+      m_angularVelocity := m_angularVelocity + m_invI * impulse;
 end;
 
 procedure Tb2Body.GetMassData(var data: Tb2MassData);
@@ -16337,7 +16374,6 @@ end;
 
 procedure Tb2RevoluteJoint.InitVelocityConstraints(const data: Tb2SolverData);
 var
-   cA, cB: TVector2;
    vA, vB: TVector2;
    aA, aB: PhysicsFloat;
    wA, wB: PhysicsFloat;
@@ -16356,12 +16392,10 @@ begin
    m_invIA := m_bodyA.m_invI;
    m_invIB := m_bodyB.m_invI;
 
-   cA := data.positions[m_indexA].c;
    aA := data.positions[m_indexA].a;
    vA := data.velocities[m_indexA].v;
    wA := data.velocities[m_indexA].w;
 
-   cB := data.positions[m_indexB].c;
    aB := data.positions[m_indexB].a;
    vB := data.velocities[m_indexB].v;
    wB := data.velocities[m_indexB].w;
@@ -16995,7 +17029,7 @@ end;
 
 procedure Tb2GearJoint.InitVelocityConstraints(const data: Tb2SolverData);
 var
-   cA, vA, cB, vB, cC, vC, cD, vD: TVector2;
+   vA, vB, vC, vD: TVector2;
    aA, wA, aB, wB, aC, wC, aD, wD: PhysicsFloat;
    qA, qB, qC, qD: Tb2Rot;
    u, rC, rA, rD, rB: TVector2;
@@ -17017,22 +17051,18 @@ begin
    m_iC := m_bodyC.m_invI;
    m_iD := m_bodyD.m_invI;
 
-   cA := data.positions[m_indexA].c;
    aA := data.positions[m_indexA].a;
    vA := data.velocities[m_indexA].v;
    wA := data.velocities[m_indexA].w;
 
-   cB := data.positions[m_indexB].c;
    aB := data.positions[m_indexB].a;
    vB := data.velocities[m_indexB].v;
    wB := data.velocities[m_indexB].w;
 
-   cC := data.positions[m_indexC].c;
    aC := data.positions[m_indexC].a;
    vC := data.velocities[m_indexC].v;
    wC := data.velocities[m_indexC].w;
 
-   cD := data.positions[m_indexD].c;
    aD := data.positions[m_indexD].a;
    vD := data.velocities[m_indexD].v;
    wD := data.velocities[m_indexD].w;
@@ -18202,7 +18232,6 @@ end;
 
 procedure Tb2WeldJoint.InitVelocityConstraints(const data: Tb2SolverData);
 var
-   cA, cB: TVector2;
    vA, vB: TVector2;
    aA, aB: PhysicsFloat;
    wA, wB: PhysicsFloat;
@@ -18222,12 +18251,10 @@ begin
    m_invIA := m_bodyA.m_invI;
    m_invIB := m_bodyB.m_invI;
 
-   cA := data.positions[m_indexA].c;
    aA := data.positions[m_indexA].a;
    vA := data.velocities[m_indexA].v;
    wA := data.velocities[m_indexA].w;
 
-   cB := data.positions[m_indexB].c;
    aB := data.positions[m_indexB].a;
    vB := data.velocities[m_indexB].v;
    wB := data.velocities[m_indexB].w;

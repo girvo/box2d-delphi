@@ -61,13 +61,15 @@ begin
       m_body.SetLinearVelocity(MakeVector(0.0, -100.0));
       m_body.SetAngularVelocity(m_angularVelocity);
    end;
+
+   b2_gjkCalls := 0; b2_gjkIters := 0; b2_gjkMaxIters := 0;
+   b2_toiCalls := 0; b2_toiIters := 0;
+   b2_toiRootIters := 0; b2_toiMaxRootIters := 0;
+   b2_toiTime := 0.0; b2_toiMaxTime := 0.0;
 end;
 
 procedure TContinuousTest.Step(var settings: TSettings; timeStep: PhysicsFloat);
 begin
-  { if (m_stepCount	= 12)
-      m_stepCount += 0; }
-
    inherited;
 
    if b2_gjkCalls > 0 then
@@ -76,11 +78,16 @@ begin
 
    if b2_toiCalls > 0 then
    begin
-      DrawText(Format('toi calls = %d, ave toi iters = %3.1f, max toi iters = %d',
+      DrawText(Format('toi calls = %d, ave [max] toi iters = %3.1f [%d]',
                 [b2_toiCalls, b2_toiIters / b2_toiCalls, b2_toiMaxRootIters]));
 
-      DrawText(Format('ave toi root iters = %3.1f, max toi root iters = %d',
+      DrawText(Format('ave [max] toi root iters = %3.1f [%d]',
         [b2_toiRootIters / b2_toiCalls, b2_toiMaxRootIters]));
+
+      {$IFDEF COMPUTE_PHYSICS_TIME}
+      DrawText(Format('ave [max] toi time = %.1f [%.1f] (microseconds)',
+        [1000.0 * 1000.0 * b2_toiTime / b2_toiCalls, 1000.0 * 1000.0 * b2_toiMaxTime]));
+      {$ENDIF}
    end;
 
    if m_stepCount mod 60 = 0 then
@@ -89,6 +96,11 @@ end;
 
 procedure TContinuousTest.Launch;
 begin
+   b2_gjkCalls := 0; b2_gjkIters := 0; b2_gjkMaxIters := 0;
+   b2_toiCalls := 0; b2_toiIters := 0;
+   b2_toiRootIters := 0; b2_toiMaxRootIters := 0;
+   b2_toiTime := 0.0; b2_toiMaxTime := 0.0;
+
    m_body.SetTransform(MakeVector(0.0, 20.0), 0.0);
    m_angularVelocity := RandomFloat(-50, 50);
    m_body.SetLinearVelocity(MakeVector(0.0, -100.0));

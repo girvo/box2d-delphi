@@ -141,13 +141,13 @@ begin
          if d.SqrLength < FLT_EPSILON * FLT_EPSILON then
             Continue;
          d.Normalize;
-         body.ApplyForce(100 * d, body.GetPosition);
+         body.ApplyForce(100 * d, body.GetPosition, True);
          {$ELSE}
          d := Subtract(center, body.GetPosition);
          if SqrLength(d) < FLT_EPSILON * FLT_EPSILON then
             Continue;
          Normalize(d);
-         body.ApplyForce(Multiply(d, 100), body.GetPosition);
+         body.ApplyForce(Multiply(d, 100), body.GetPosition, True);
          {$ENDIF}
       end;
 end;
