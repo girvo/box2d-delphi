@@ -385,14 +385,6 @@ procedure glGenTextures(n: GLsizei; textures: PGLuint); {$IFDEF MSWINDOWS} stdca
 procedure glBindTexture(target: GLEnum; texture: GLuint); {$IFDEF MSWINDOWS} stdcall; {$ENDIF} {$IFDEF UNIX} cdecl; {$ENDIF} external opengl32;
 procedure glDeleteTextures(n: GLsizei; textures: PGLuint); {$IFDEF MSWINDOWS} stdcall; {$ENDIF} {$IFDEF UNIX} cdecl; {$ENDIF} external opengl32;
 
-procedure SinCos(const Theta: Single; var Sin, Cos: Single);
-asm
-   FLD  Theta
-   FSINCOS
-   FSTP DWORD PTR [EDX]    // cosine
-   FSTP DWORD PTR [EAX]    // sine
-end;
-
 function MakeColor(r, g, b: Byte): ARGB; overload;
 begin
    with TARGB(Result) do

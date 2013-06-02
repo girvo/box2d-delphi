@@ -565,48 +565,10 @@ function b2MulT(const q: Tb2Rot; const v: TVector2): TVector2; overload; {$IFDEF
 function b2Abs(const a: TVector2): TVector2; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function b2Abs(const a: TMatrix22): TMatrix22; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
-{$IFDEF EXTENDED_PRECISION}
-procedure SinCos(const Theta: Extended; var Sin, Cos: Extended);
-{$ELSE}
-{$IFDEF DOUBLE_PRECISION}
-procedure SinCos(const Theta: Double; var Sin, Cos: Double);
-{$ELSE}
-procedure SinCos(const Theta: Single; var Sin, Cos: Single);
-{$ENDIF}
-{$ENDIF}
-
 function RandomFloat: PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function RandomFloat(lo, hi: PhysicsFloat): PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
 implementation
-
-{$IFDEF EXTENDED_PRECISION}
-procedure SinCos(const Theta: Extended; var Sin, Cos: Extended);
-asm
-   FLD  Theta
-   FSINCOS
-   FSTP TBYTE PTR [EDX]    // cosine
-   FSTP TBYTE PTR [EAX]    // sine
-end;
-{$ELSE}
-{$IFDEF DOUBLE_PRECISION}
-procedure SinCos(const Theta: Double; var Sin, Cos: Double);
-asm
-   FLD  Theta
-   FSINCOS
-   FSTP QWORD PTR [EDX]    // cosine
-   FSTP QWORD PTR [EAX]    // sine
-end;
-{$ELSE}
-procedure SinCos(const Theta: Single; var Sin, Cos: Single);
-asm
-   FLD  Theta
-   FSINCOS
-   FSTP DWORD PTR [EDX]    // cosine
-   FSTP DWORD PTR [EAX]    // sine
-end;
-{$ENDIF}
-{$ENDIF}
 
 function RandomFloat: PhysicsFloat;
 begin
