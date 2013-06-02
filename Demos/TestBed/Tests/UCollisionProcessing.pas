@@ -51,7 +51,7 @@ begin
    vertices[1] := MakeVector(1.0, 0.0);
    vertices[2] := MakeVector(0.0, 2.0);
 
-   polygon := Tb2PolygonShape.Create;;
+   polygon := Tb2PolygonShape.Create;
    polygon.SetVertices(@vertices[0], 3);
 
    triangleShapeDef := Tb2FixtureDef.Create;
@@ -83,6 +83,7 @@ begin
    body2.CreateFixture(triangleShapeDef);
 
    // Small box
+   polygon := Tb2PolygonShape.Create;
    polygon.SetAsBox(1.0, 0.5);
 
    boxShapeDef := Tb2FixtureDef.Create;

@@ -126,6 +126,7 @@ begin
    end;
 
    // Small box
+   polygon := Tb2PolygonShape.Create;
    polygon.SetAsBox(1.0, 0.5);
    boxShapeDef := Tb2FixtureDef.Create;
    boxShapeDef.shape := polygon;

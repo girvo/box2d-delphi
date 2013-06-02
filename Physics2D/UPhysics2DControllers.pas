@@ -249,11 +249,15 @@ begin
          end;
 
          {$IFDEF OP_OVERLOAD}
-         areac.DivideBy(area);
-         massc.DivideBy(mass);
+         if area <> 0.0 then
+            areac.DivideBy(area);
+         if mass <> 0.0 then
+            massc.DivideBy(mass);
          {$ELSE}
-         DivideBy(areac, area);
-         DivideBy(massc, mass);
+         if area <> 0.0 then
+            DivideBy(areac, area);
+         if mass <> 0.0 then
+            DivideBy(massc, mass);
          {$ENDIF}
          localCentroid := b2MulT(GetTransform^, areac);
          if area < FLT_EPSILON then
