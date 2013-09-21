@@ -1384,8 +1384,8 @@ begin
    begin
       //b2Assert(alpha0 < 1.0f);
       beta := (alpha - alpha0) / (1.0 - alpha0);
-      c0 := Add(Multiply(c0, 1.0 - beta), Multiply(c, beta));
-      a0 := (1.0 - beta) * a0 + beta * a;
+      AddBy(c0, Multiply(Subtract(c, c0), beta));
+      a0 := a0 + beta * (a - a0);
       alpha0 := alpha;
    end;
 end;
@@ -2196,8 +2196,8 @@ var
 begin
    //b2Assert(alpha0 < 1.0f);
    beta := (alpha - alpha0) / (1.0 - alpha0);
-   c0 := (1.0 - beta) * c0 + beta * c;
-   a0 := (1.0 - beta) * a0 + beta * a;
+   c0.AddBy(beta * (c - c0));
+	 a0 := a0 + beta * (a - a0);
    alpha0 := alpha;
 end;
 
@@ -2207,7 +2207,7 @@ const
 var
    d: PhysicsFloat;
 begin
-   d :=  Pi2 * Floor(a0 / Pi2);
+   d := Pi2 * Floor(a0 / Pi2);
    a0 := a0 - d;
    a := a - d;
 end;
