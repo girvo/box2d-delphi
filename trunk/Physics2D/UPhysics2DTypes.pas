@@ -568,7 +568,18 @@ function b2Abs(const a: TMatrix22): TMatrix22; overload; {$IFDEF INLINE_AVAIL}in
 function RandomFloat: PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 function RandomFloat(lo, hi: PhysicsFloat): PhysicsFloat; overload; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
+procedure SinCos(const Theta: PhysicsFloat; var Sin, Cos: PhysicsFloat);
+
 implementation
+
+procedure SinCos(const Theta: PhysicsFloat; var Sin, Cos: PhysicsFloat);
+var
+   S, C: Extended;
+begin
+   Math.SinCos(Theta, S, C);
+   Sin := S;
+   Cos := C;
+end;
 
 function RandomFloat: PhysicsFloat;
 begin

@@ -385,6 +385,15 @@ procedure glGenTextures(n: GLsizei; textures: PGLuint); {$IFDEF MSWINDOWS} stdca
 procedure glBindTexture(target: GLEnum; texture: GLuint); {$IFDEF MSWINDOWS} stdcall; {$ENDIF} {$IFDEF UNIX} cdecl; {$ENDIF} external opengl32;
 procedure glDeleteTextures(n: GLsizei; textures: PGLuint); {$IFDEF MSWINDOWS} stdcall; {$ENDIF} {$IFDEF UNIX} cdecl; {$ENDIF} external opengl32;
 
+procedure SinCos(const Theta: Single; var Sin, Cos: Single);
+var
+   S, C: Extended;
+begin
+   Math.SinCos(Theta, S, C);
+   Sin := S;
+   Cos := C;
+end;
+
 function MakeColor(r, g, b: Byte): ARGB; overload;
 begin
    with TARGB(Result) do
