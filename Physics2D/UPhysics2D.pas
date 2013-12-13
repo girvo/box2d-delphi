@@ -249,6 +249,7 @@ type
    Tb2WorldManifold = record
     	normal: TVector2;						///< world vector pointing from A to B
       points: array[0..b2_maxManifoldPoints - 1] of TVector2; ///< world contact point (point of intersection)
+      separations: array[0..b2_maxManifoldPoints - 1] of PhysicsFloat; ///< a negative value indicates overlap, in meters
 
       {$IFDEF OP_OVERLOAD}
       /// Evaluate the manifold with supplied transforms. This assumes
@@ -1605,8 +1606,8 @@ type
       procedure DestroyFixtures(ResetMass: Boolean);
 
       /// Set the position of the body's origin and rotation.
-      /// This breaks any contacts and wakes the other bodies.
       /// Manipulating a body's transform may cause non-physical behavior.
+      /// Note: contacts are updated on the next call to b2World::Step.
       /// @param position the world position of the body's local origin.
       /// @param angle the world rotation in radians.
       procedure SetTransform(const position: TVector2; angle: PhysicsFloat);
@@ -1724,7 +1725,7 @@ type
       procedure SetAwake(flag: Boolean);
 
       /// Get the sleeping state of this body.
-      /// @return True if the body is sleeping.
+      /// @return true if the body is awake.
       function IsAwake: Boolean; {$IFDEF INLINE_AVAIL}inline;{$ENDIF}
 
       /// Set the active state of the body. An inactive body is not
@@ -2768,6 +2769,8 @@ type
       m_linearMass: TMatrix22;
       m_angularMass: PhysicsFloat;
 
+      procedure FSetCorrectionFactor(value: PhysicsFloat);
+
       procedure InitVelocityConstraints(const data: Tb2SolverData); override;
       procedure SolveVelocityConstraints(const data: Tb2SolverData); override;
       function SolvePositionConstraints(const data: Tb2SolverData): Boolean; override;
@@ -2784,6 +2787,7 @@ type
       function GetReactionForce(inv_dt: PhysicsFloat): TVector2; override;
       function GetReactionTorque(inv_dt: PhysicsFloat): PhysicsFloat; override;
 
+      /// Set/get the target linear offset, in frame A, in meters.
       procedure SetLinearOffset(const linearOffset: TVector2);
       procedure SetAngularOffset(angularOffset: PhysicsFloat);
 
@@ -2791,6 +2795,7 @@ type
       property MaxTorque: PhysicsFloat read m_maxTorque write m_maxTorque;
       property GetLinearOffset: TVector2 read m_linearOffset;
       property GetAngularOffset: PhysicsFloat read m_angularOffset;
+      property CorrectionFactor: PhysicsFloat read m_correctionFactor write FSetCorrectionFactor; // in the range [0,1]
    end;
 
    /////////////////////////////////////////////////////
@@ -3293,6 +3298,7 @@ begin
                cA := Add(pointA, Multiply(normal, radiusA));
                cB := Subtract(pointB, Multiply(normal, radiusB));
                points[0] := b2MiddlePoint(cA, cB);
+               separations[0] := b2Dot(Subtract(cB, cA), normal);
             end;
          e_manifold_faceA:
             begin
@@ -3306,6 +3312,7 @@ begin
                      (radiusA - b2Dot(Subtract(clipPoint, planePoint), normal))));
                   cB := Subtract(clipPoint, Multiply(normal, radiusB));
                   points[i] := b2MiddlePoint(cA, cB);
+                  separations[i] := b2Dot(Subtract(cB, cA), normal);
                end;
             end;
          e_manifold_faceB:
@@ -3320,6 +3327,7 @@ begin
                      (radiusB - b2Dot(Subtract(clipPoint, planePoint), normal))));
                   cA := Subtract(clipPoint, Multiply(normal, radiusA));
                   points[i] := b2MiddlePoint(cA, cB);
+                  separations[i] := b2Dot(Subtract(cA, cB), normal);
                end;
 
                // Ensure normal points from A to B.
@@ -5090,6 +5098,7 @@ begin
                cA := pointA + radiusA * normal;
                cB := pointB - radiusB * normal;
                Self.points[0] := 0.5 * (cA + cB);
+               Self.separations[0] := b2Dot(cB - cA, normal);
             end;
          e_manifold_faceA:
             begin
@@ -5102,6 +5111,7 @@ begin
                   cA := clipPoint + (radiusA - b2Dot(clipPoint - planePoint, normal)) * normal;
                   cB := clipPoint - radiusB * normal;
                   Self.points[i] := 0.5 * (cA + cB);
+                  Self.separations[i] := b2Dot(cB - cA, normal);
                end;
             end;
          e_manifold_faceB:
@@ -5115,6 +5125,7 @@ begin
                   cB := clipPoint + (radiusB - b2Dot(clipPoint - planePoint, normal)) * normal;
                   cA := clipPoint - radiusA * normal;
                   Self.points[i] := 0.5 * (cA + cB);
+                  Self.separations[i] := b2Dot(cA - cB, normal);
                end;
 
                // Ensure normal points from A to B.
@@ -8443,14 +8454,14 @@ begin
             // Solution: v(t) = v0 * exp(-c * t)
             // Time step: v(t + dt) = v0 * exp(-c * (t + dt)) = v0 * exp(-c * t) * exp(-c * dt) = v * exp(-c * dt)
             // v2 = exp(-c * dt) * v1
-            // Taylor expansion:
-            // v2 = (1.0f - c * dt) * v1
+            // Pade approximation:
+            // v2 = v1 * 1 / (1 + c * dt)
             {$IFDEF OP_OVERLOAD}
-            v.MultiplyBy(b2Clamp(1.0 - h * m_linearDamping, 0.0, 1.0));
+            v.DivideBy(1.0 + h * m_linearDamping);
             {$ELSE}
-            MultiplyBy(v, b2Clamp(1.0 - h * m_linearDamping, 0.0, 1.0));
+            DivideBy(v, 1.0 + h * m_linearDamping);
             {$ENDIF}
-            w := w * b2Clamp(1.0 - h * m_angularDamping, 0.0, 1.0);
+            w := w / (1.0 + h * m_angularDamping);
          end;
 
          m_positions[i].c := c;
@@ -11233,7 +11244,6 @@ begin
       f.Synchronize(m_world.m_contactManager.m_broadPhase, m_xf, m_xf);
       f := f.m_next;
    end;
-   m_world.m_contactManager.FindNewContacts;
 end;
 
 function Tb2Body.GetTransform: Pb2Transform;
@@ -12948,143 +12958,44 @@ begin
 	 b2CollideEdgeAndPolygon(contact,	manifold, static_edge_shape, poly, xfA, xfB, False);
 end;
 
-// Find the separation between poly1 and poly2 for a give edge normal on poly1.
-function b2EdgeSeparation(poly1, poly2: Tb2PolygonShape; const xf1,
-   xf2: Tb2Transform; edge1: Int32): PhysicsFloat;
-var
-   i: Integer;
-   index: Int32;
-   minDot, dot: PhysicsFloat;
-   normal1World, normal1: TVector2;
-   v1, v2: TVector2;
-begin
-   //b2Assert(0 <= edge1 && edge1 < poly1->m_vertexCount);
-
-   // Convert normal from poly1's frame into poly2's frame.
-   normal1World := b2Mul(xf1.q, poly1.m_normals[edge1]);
-   normal1 := b2MulT(xf2.q, normal1World);
-
-   // Find support vertex on poly2 for -normal.
-   index := 0;
-   minDot := FLT_MAX;
-
-   for i := 0 to poly2.m_count - 1 do
-   begin
-      dot := b2Dot(poly2.m_vertices[i], normal1);
-      if dot < minDot then
-      begin
-         minDot := dot;
-         index := i;
-      end;
-   end;
-
-   v1 := b2Mul(xf1, poly1.m_vertices[edge1]);
-   v2 := b2Mul(xf2, poly2.m_vertices[index]);
-   {$IFDEF OP_OVERLOAD}
-   Result := b2Dot(v2 - v1, normal1World);
-   {$ELSE}
-   Result := b2Dot(Subtract(v2, v1), normal1World);
-   {$ENDIF}
-end;
-
 // Find the max separation between poly1 and poly2 using edge normals from poly1.
 function b2FindMaxSeparation(var edgeIndex: Int32;
    poly1, poly2: Tb2PolygonShape; const xf1, xf2: Tb2Transform): PhysicsFloat;
 var
-   i: Integer;
-   edge, prevEdge, nextEdge, bestEdge, increment: Int32;
-   d, dLocal1: TVector2;
-   maxDot, dot, s, sPrev, sNext, bestSeparation: PhysicsFloat;
+   i, j: Integer;
+   xf: Tb2Transform;
+   bestIndex: Int32;
+   n, v1: TVector2;
+   maxSeparation, si, sij: PhysicsFloat;
 begin
-   // Vector pointing from the centroid of poly1 to the centroid of poly2.
-   {$IFDEF OP_OVERLOAD}
-   d := b2Mul(xf2, poly2.m_centroid) - b2Mul(xf1, poly1.m_centroid);
-   {$ELSE}
-   d := Subtract(b2Mul(xf2, poly2.m_centroid), b2Mul(xf1, poly1.m_centroid));
-   {$ENDIF}
-   dLocal1 := b2MulT(xf1.q, d);
+   xf := b2MulT(xf2, xf1);
 
-   // Find edge normal on poly1 that has the largest projection onto d.
-   edge := 0;
-   maxDot := -FLT_MAX;
+   bestIndex := 0;
+   maxSeparation := -FLT_MAX;
    for i := 0 to poly1.m_count - 1 do
    begin
-      dot := b2Dot(poly1.m_normals[i], dLocal1);
-      if dot > maxDot then
+      // Get poly1 normal in frame2.
+      n := b2Mul(xf.q, poly1.m_normals[i]);
+      v1 := b2Mul(xf, poly1.m_vertices[i]);
+
+      // Find deepest point for normal i.
+      si := FLT_MAX;
+      for j := 0 to poly2.m_count - 1 do
       begin
-         maxDot := dot;
-         edge := i;
+         sij := b2Dot(n, poly2.m_vertices[j] - v1);
+         if sij < si then
+            si := sij;
+      end;
+
+      if si > maxSeparation then
+      begin
+         maxSeparation := si;
+         bestIndex := i;
       end;
    end;
 
-   // Get the separation for the edge normal.
-   s := b2EdgeSeparation(poly1, poly2, xf1, xf2, edge);
-
-   // Check the separation for the previous edge normal.
-   if edge - 1 >= 0 then
-      prevEdge := edge - 1
-   else
-      prevEdge := poly1.m_count - 1;
-
-   sPrev := b2EdgeSeparation(poly1, poly2, xf1, xf2, prevEdge);
-
-   // Check the separation for the next edge normal.
-   if edge + 1 < poly1.m_count then
-      nextEdge := edge + 1
-   else
-      nextEdge := 0;
-
-   sNext := b2EdgeSeparation(poly1, poly2, xf1, xf2, nextEdge);
-
-   // Find the best edge and the search direction.
-   if (sPrev > s) and (sPrev > sNext) then
-   begin
-      increment := -1;
-      bestEdge := prevEdge;
-      bestSeparation := sPrev;
-   end
-   else if sNext > s then
-   begin
-      increment := 1;
-      bestEdge := nextEdge;
-      bestSeparation := sNext;
-   end
-   else
-   begin
-      edgeIndex := edge;
-      Result := s;
-      Exit;
-   end;
-
-   // Perform a local search for the best edge normal.
-   while True do
-   begin
-      if increment = -1 then
-      begin
-         if bestEdge - 1 >= 0 then
-            edge := bestEdge - 1
-         else
-            edge := poly1.m_count - 1;
-      end
-      else
-         if bestEdge + 1 < poly1.m_count then
-            edge := bestEdge + 1
-         else
-            edge := 0;
-
-      s := b2EdgeSeparation(poly1, poly2, xf1, xf2, edge);
-
-      if s > bestSeparation then
-      begin
-         bestEdge := edge;
-         bestSeparation := s;
-      end
-      else
-         Break;
-   end;
-
-   edgeIndex := bestEdge;
-   Result := bestSeparation;
+   edgeIndex := bestIndex;
+   Result := maxSeparation;
 end;
 
 procedure b2FindIncidentEdge(var c: Tb2ClipVertices; poly1, poly2: Tb2PolygonShape;
@@ -13156,7 +13067,7 @@ var
    totalRadius, separationA, separationB: PhysicsFloat;
    poly1, poly2: Tb2PolygonShape; // reference poly and incident poly
    xf1, xf2: Tb2Transform;
-   k_relativeTol, k_absoluteTol: PhysicsFloat;
+   k_tol: PhysicsFloat;
    incidentEdge, clipPoints1, clipPoints2: Tb2ClipVertices;
    v11, v12, localTangent, localNormal, planePoint, tangent, normal: TVector2;
    frontOffset, sideOffset1, sideOffset2: PhysicsFloat;
@@ -13187,10 +13098,8 @@ begin
    if separationB > totalRadius then
       Exit;
 
-   k_relativeTol := 0.98;
-   k_absoluteTol := 0.001;
-
-   if separationB > k_relativeTol * separationA + k_absoluteTol then
+   k_tol := 0.1 * b2_linearSlop;
+   if separationB > separationA + k_tol then
    begin
       poly1 := polyB;
       poly2 := polyA;
@@ -13874,7 +13783,8 @@ procedure Tb2PolygonShape.SetVertices(vertices: PVector2; count: Int32);
 var
    i, j: Integer;
    {$IFNDEF SUPPORT_POINTER_MATH}pv: PVector2;{$ENDIF}
-   n, m, i0, ih, ie: Int32;
+   tempCount, n, m, i0, ih, ie: Int32;
+   unique: Boolean;
    x0, x, c: PhysicsFloat;
    ps: Tb2PolyVertices;
    hull: array[0..b2_maxPolygonVertices - 1] of Int32;
@@ -13890,17 +13800,41 @@ begin
 
    n := b2Min(count, b2_maxPolygonVertices);
 
-   // Copy vertices into local buffer
+   // Perform welding and copy vertices into local buffer.
+   tempCount := 0;
    for i := 0 to n - 1 do
+   begin
       {$IFNDEF SUPPORT_POINTER_MATH}
-      begin
-         pv := vertices;
-         Inc(pv, i);
-         ps[i] := pv^;
-      end;
+      pv := vertices;
+      Inc(pv, i);
+      v := pv^;
       {$ELSE}
-      ps[i] := vertices[i];
+      v := vertices[i];
       {$ENDIF}
+      unique := True;
+      for j := 0 to tempCount - 1 do
+      begin
+         if b2DistanceSquared(v, ps[j]) < b2_linearSlop then
+         begin
+            unique := False;
+            Break;
+         end;
+      end;
+
+      if unique then
+      begin
+         ps[tempCount] := v;
+         Inc(tempCount);
+      end;
+   end;
+
+   n := tempCount;
+	 if n < 3 then
+   begin
+      // Polygon is degenerate.
+      SetAsBox(1.0, 1.0);
+		  Exit;
+   end;
 
    // Create the convex hull using the Gift wrapping algorithm
    // http://en.wikipedia.org/wiki/Gift_wrapping_algorithm
@@ -13908,7 +13842,7 @@ begin
    // Find the right most point on the hull
    i0 := 0;
    x0 := ps[0].x;
-   for i := 1 to count - 1 do
+   for i := 1 to n - 1 do
    begin
       x := ps[i].x;
       if (x > x0) or ((x = x0) and (ps[i].y < ps[i0].y)) then
@@ -14370,6 +14304,8 @@ begin
    Move(pv^, m_vertices[0], m_count * SizeOf(TVector2));
    m_hasPrevVertex := False;
    m_hasNextVertex := False;
+   SetZero(m_prevVertex);
+   SetZero(m_nextVertex);
 end;
 
 procedure Tb2ChainShape.SetPrevVertex(const prevVertex: TVector2);
@@ -18960,6 +18896,12 @@ begin
    b2DumpMethod(1, 'end;', []);
 end;
 {$ENDIF}
+
+procedure Tb2MotorJoint.FSetCorrectionFactor(value: PhysicsFloat);
+begin
+   if (value >= 0.0) and (value <= 1.0) then
+      m_correctionFactor := value;
+end;
 
 procedure Tb2MotorJoint.InitVelocityConstraints(const data: Tb2SolverData);
 var

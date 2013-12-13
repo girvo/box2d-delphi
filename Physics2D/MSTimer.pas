@@ -299,7 +299,7 @@ procedure TMSTimer.SetCurrentTime(const Value: Double);
 begin
   { LastTime := Value - (FCurrentTime - LastTime);
    FOriginTime := FOriginTime + (FCurrentTime - Value);
-   FCurrentTime := Value;   }
+   FCurrentTime :=Value;   }
    Reset;
    FBaseTime := Value;
 end;

@@ -125,6 +125,7 @@ type
      state: Tb2PointState;
      normalImpulse: PhysicsFloat;
      tangentImpulse: PhysicsFloat;
+     separation: PhysicsFloat;
   end;
 
   TSettings = record
@@ -1252,6 +1253,7 @@ begin
          state := state2[i];
          normalImpulse := contact.m_manifold.points[i].normalImpulse;
          tangentImpulse := contact.m_manifold.points[i].tangentImpulse;
+         separation := worldManifold.separations[i];
          Inc(m_pointCount);
          Inc(i);
       end;

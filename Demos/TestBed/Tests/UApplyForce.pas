@@ -111,8 +111,8 @@ begin
 
       bd := Tb2BodyDef.Create;
       bd.bodyType := b2_dynamicBody;
-      bd.angularDamping := 5.0;
-      bd.linearDamping := 0.1;
+      bd.angularDamping := 2.0;
+      bd.linearDamping := 0.5;
 
       SetValue(bd.position, 0.0, 2.0);
       bd.angle := Pi;
