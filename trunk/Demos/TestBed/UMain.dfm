@@ -209,6 +209,7 @@ object frmMain: TfrmMain
         Height = 17
         Caption = 'Fixed Step(1/60s)'
         TabOrder = 1
+        TabStop = True
         OnClick = rdoFixedStepClick
       end
     end
