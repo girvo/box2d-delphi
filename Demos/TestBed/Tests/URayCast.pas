@@ -23,6 +23,7 @@ type
       m_userData: array[0..e_maxBodies - 1] of Int32;
       m_polygons: array[0..3] of Tb2PolygonShape;
       m_circle: Tb2CircleShape;
+      m_edge: Tb2EdgeShape;
 
       m_angle: PhysicsFloat;
       m_mode: TMode;
@@ -212,6 +213,9 @@ begin
    m_circle := Tb2CircleShape.Create;
    m_circle.m_radius := 0.5;
 
+   m_edge := Tb2EdgeShape.Create;
+   m_edge.SetVertices(MakeVector(-1.0, 0.0), MakeVector(1.0, 0.0));
+
    m_bodyIndex := 0;
    for i := 0 to e_maxBodies - 1 do
       m_bodies[i] := nil;
@@ -227,6 +231,7 @@ begin
    for i := 0 to 3 do
       m_polygons[i].Free;
    m_circle.Free;
+   m_edge.Free;
    inherited;
 end;
 
@@ -256,8 +261,10 @@ begin
    fd.friction := 0.3;
    if index < 4 then
       fd.shape := m_polygons[index]
+   else if index < 5 then
+      fd.shape := m_circle
    else
-      fd.shape := m_circle;
+      fd.shape := m_edge;
    m_bodies[m_bodyIndex].CreateFixture(fd, True, False);
 
    m_bodyIndex := (m_bodyIndex + 1) mod e_maxBodies;
@@ -279,7 +286,7 @@ end;
 procedure TRayCast.Keyboard(key: Byte);
 begin
    case key of
-      Ord('1')..Ord('5'): CreateBody(key - Ord('1'));
+      Ord('1')..Ord('6'): CreateBody(key - Ord('1'));
       Ord('D'): DestroyBody;
       Ord('M'):
          if m_mode = e_closest then
@@ -293,7 +300,7 @@ end;
 
 procedure TRayCast.Step(var settings: TSettings; timeStep: PhysicsFloat);
 const
-   L = 11.0;
+   L = 15.0;
    point1: TVector2 = (X: 0.0; Y: 10.0);
    color1: RGBA = (0.4, 0.9, 0.4, 1.0);
    color2: RGBA = (0.8, 0.8, 0.8, 1.0);
@@ -308,7 +315,7 @@ var
 begin
    nextstep := (not settings.pause) or (settings.singleStep);
    inherited;
-   DrawText('Press 1-5 to drop stuff, M to change the mode');
+   DrawText('Press 1-6 to drop stuff, M to change the mode');
    if m_mode = e_closest then
       DrawText('Ray-cast mode: any - check for obstruction')
    else if m_mode = e_any then
