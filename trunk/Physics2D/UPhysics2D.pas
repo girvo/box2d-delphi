@@ -13814,7 +13814,7 @@ begin
       unique := True;
       for j := 0 to tempCount - 1 do
       begin
-         if b2DistanceSquared(v, ps[j]) < b2_linearSlop then
+         if b2DistanceSquared(v, ps[j]) <  0.5 * b2_linearSlop then
          begin
             unique := False;
             Break;
@@ -14157,12 +14157,12 @@ begin
    output.fraction := t;
    if numerator > 0.0 then
       {$IFDEF OP_OVERLOAD}
-      output.normal := -normal
+      output.normal := -b2Mul(transform.q, normal)
       {$ELSE}
-      output.normal := Negative(normal)
+      output.normal := Negative(b2Mul(transform.q, normal))
       {$ENDIF}
    else
-      output.normal := normal;
+      output.normal := b2Mul(transform.q, normal);
 
    Result := True;
 end;
